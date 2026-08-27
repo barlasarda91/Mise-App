@@ -10,8 +10,23 @@ UX reference: [`docs/boxx-routines-hub-mockups.html`](docs/boxx-routines-hub-moc
 
 ## Status
 
-Milestone 1 — scaffold: FastAPI app, single-user auth gate, Postgres wiring,
-Boxx dashboard shell, Railway deploy skeleton.
+- Milestone 1 — scaffold: FastAPI app, single-user auth gate, Postgres wiring,
+  Boxx dashboard shell, Railway deploy skeleton. ✅
+- Milestone 2 — data model + Alembic migrations (all 12 tables from spec §6). ✅
+
+## Migrations
+
+Schema lives in `app/models/`, migrations in `migrations/versions/`.
+
+```bash
+alembic upgrade head          # apply (uses DATABASE_URL)
+alembic revision -m "..."     # new migration (write by hand, mirror the models)
+```
+
+The deploy start command runs `alembic upgrade head` before the server boots,
+so Railway deploys migrate automatically. A test
+(`test_migration_matches_models`) asserts the migration chain produces the
+same tables/columns as the models — keep it green when changing either side.
 
 ## Local development
 
@@ -47,7 +62,7 @@ app/
   settings.py    # env-driven settings
   db.py          # engine/session, health probe
   auth.py        # password check + signed session cookie
-  models/        # SQLAlchemy base (models + migrations: milestone 2)
+  models/        # SQLAlchemy models (leads, tasks, runs, drafts, sync, dedup)
   engine/        # run lifecycle + Anthropic client (milestone 4)
   tools/         # gmail / calendar / hubdb model-facing tools (milestone 3+)
   routines/      # system prompts + routine config (milestones 7–8)
