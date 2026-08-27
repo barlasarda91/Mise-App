@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Today{% endblock %}
+{% block heading %}Good morning, Arda.{% endblock %}
+{% block content %}
+<div class="grid4" style="margin-bottom:18px">
+  <div class="stat"><div class="k">Open leads</div><div class="v">—</div></div>
+  <div class="stat"><div class="k">Overdue</div><div class="v">—</div></div>
+  <div class="stat"><div class="k">Tasks due today</div><div class="v">—</div></div>
+  <div class="stat"><div class="k">Drafts ready</div><div class="v">—</div></div>
+</div>
+
+<div class="box">
+  <div class="box-hd"><span class="lbl">Scaffold</span><span class="ix">MILESTONE 1</span></div>
+  <div class="box-bd">
+    <p style="font-size:14px">The hub shell is up: auth gate, Postgres wiring, and the Boxx dashboard frame.
+    Priority items, Waiting-On, and live stats arrive with the data model and routines (milestones 2+).</p>
+    <div class="note">
+      DB: {% if db_status == "ok" %}<span class="pill green">connected</span>{% elif db_status == "absent" %}<span class="pill ghost">not configured</span>{% else %}<span class="pill ember">{{ db_status }}</span>{% endif %}
+      &nbsp;·&nbsp; TZ: AMERICA/LOS_ANGELES
+    </div>
+  </div>
+</div>
+{% endblock %}

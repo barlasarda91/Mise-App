@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block heading %}{{ title }}{% endblock %}
+{% block content %}
+<div class="box">
+  <div class="box-hd"><span class="lbl">{{ title }}</span><span class="ix">NOT BUILT YET</span></div>
+  <div class="box-bd">
+    <p style="font-size:14px">This page lands in milestone {{ milestone }}.</p>
+  </div>
+</div>
+{% endblock %}

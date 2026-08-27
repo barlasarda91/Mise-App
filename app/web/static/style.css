@@ -1,0 +1,126 @@
+/* Mise — Boxx "roaster's control room" system (from docs/boxx-routines-hub-mockups.html) */
+:root{
+  --paper:#E8E4DB;
+  --panel:#DFDACF;
+  --panel-2:#D5CFC2;
+  --ink:#17150F;
+  --ink-soft:#6B6559;
+  --line:#BEB8AA;
+  --rail:#17150F;
+  --rail-soft:#9A9384;
+  --ember:#DC4B1B;   /* signal only: overdue / awaiting / live */
+  --green:#4E6B3E;   /* confirmed / found / done */
+  --font-display:"Space Grotesk",sans-serif;
+  --font-body:"Hanken Grotesk",sans-serif;
+  --font-mono:"IBM Plex Mono",monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:var(--font-body);
+  background:var(--paper);
+  color:var(--ink);
+  line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--ember);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ---------- layout ---------- */
+.app{display:grid;grid-template-columns:210px 1fr;min-height:100vh}
+.rail{
+  background:var(--rail);color:var(--paper);
+  border-right:1px solid var(--ink);
+  display:flex;flex-direction:column;position:sticky;top:0;height:100vh;
+}
+.brand{padding:22px 20px 18px;border-bottom:1px solid #2a2820}
+.mark{display:flex;align-items:center;gap:9px}
+.mark .glyph{width:22px;height:22px;border:2px solid var(--paper);position:relative;flex:none}
+.mark .glyph::after{content:"";position:absolute;inset:4px;border:2px solid var(--ember)}
+.mark .word{font-family:var(--font-display);font-weight:700;font-size:20px;letter-spacing:.14em}
+.brand .sub{font-family:var(--font-mono);font-size:10px;letter-spacing:.24em;color:var(--rail-soft);margin-top:7px;text-transform:uppercase}
+nav{padding:14px 0;flex:1}
+.navbtn{
+  width:100%;text-align:left;background:none;border:0;color:var(--rail-soft);
+  font-family:var(--font-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;
+  padding:11px 20px;display:flex;align-items:baseline;gap:12px;cursor:pointer;
+  border-left:3px solid transparent;transition:color .15s,background .15s;
+  text-decoration:none;
+}
+.navbtn .ix{font-size:10px;color:#4f4c42;min-width:16px}
+.navbtn:hover{color:var(--paper);background:#211f18}
+.navbtn.active{color:var(--paper);border-left-color:var(--ember);background:#211f18}
+.navbtn.active .ix{color:var(--ember)}
+.rail .foot{padding:16px 20px;border-top:1px solid #2a2820;font-family:var(--font-mono);font-size:10px;color:var(--rail-soft);letter-spacing:.1em}
+.rail .foot b{color:var(--paper);font-weight:500}
+.rail .foot form{margin-top:10px}
+
+main{padding:26px 30px 60px;max-width:1180px}
+.topbar{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:24px;flex-wrap:wrap;gap:12px}
+.topbar h1{font-family:var(--font-display);font-weight:500;font-size:26px;letter-spacing:-.01em}
+.topbar .clock{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;color:var(--ink-soft);text-transform:uppercase}
+.topbar .clock b{color:var(--ink);font-weight:500}
+
+/* ---------- box primitive ---------- */
+.box{background:var(--panel);border:1px solid var(--ink)}
+.box + .box{margin-top:18px}
+.box-hd{display:flex;justify-content:space-between;align-items:center;padding:8px 14px;border-bottom:1px solid var(--ink)}
+.box-hd .lbl{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.22em;text-transform:uppercase}
+.box-hd .ix{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.14em;color:var(--ink-soft)}
+.box-bd{padding:16px 14px}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+
+.stat{background:var(--panel);border:1px solid var(--ink);padding:14px}
+.stat .k{font-family:var(--font-mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-soft)}
+.stat .v{font-family:var(--font-display);font-weight:700;font-size:38px;line-height:1;margin-top:10px}
+.stat.alert .v{color:var(--ember)}
+
+.pill{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:3px 7px;border:1px solid var(--ink);display:inline-block;white-space:nowrap}
+.pill.ember{background:var(--ember);color:#fff;border-color:var(--ember)}
+.pill.green{background:var(--green);color:#fff;border-color:var(--green)}
+.pill.ghost{background:none}
+
+.linkish{font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--ink);padding:5px 9px;background:none;cursor:pointer;color:var(--ink)}
+.linkish:hover{background:var(--ink);color:var(--paper)}
+.rail .linkish{border-color:var(--rail-soft);color:var(--rail-soft)}
+.rail .linkish:hover{background:var(--paper);color:var(--ink)}
+
+.note{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);letter-spacing:.03em;margin-top:10px;line-height:1.6}
+
+/* ---------- login ---------- */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.login-box{width:340px;background:var(--panel);border:1px solid var(--ink)}
+.login-box .box-bd{padding:20px 18px}
+.login-box .brandline{display:flex;align-items:center;gap:9px;margin-bottom:4px;color:var(--ink)}
+.login-box .glyph{width:22px;height:22px;border:2px solid var(--ink);position:relative;flex:none}
+.login-box .glyph::after{content:"";position:absolute;inset:4px;border:2px solid var(--ember)}
+.login-box .word{font-family:var(--font-display);font-weight:700;font-size:20px;letter-spacing:.14em}
+.login-box label{font-family:var(--font-mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-soft);display:block;margin:16px 0 6px}
+.login-box input[type=password]{
+  width:100%;border:1px solid var(--ink);background:var(--paper);
+  padding:11px 12px;font-family:var(--font-body);font-size:14px;color:var(--ink)
+}
+.login-box input[type=password]:focus{outline:2px solid var(--ember);outline-offset:-2px}
+.login-box button{
+  width:100%;margin-top:14px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);
+  font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  padding:11px 0;cursor:pointer
+}
+.login-box button:hover{background:var(--ember);border-color:var(--ember)}
+.login-error{font-family:var(--font-mono);font-size:11px;color:var(--ember);margin-top:12px;letter-spacing:.03em}
+
+/* ---------- responsive ---------- */
+@media(max-width:860px){
+  .app{grid-template-columns:1fr}
+  .rail{position:static;height:auto;flex-direction:column}
+  nav{display:flex;flex-wrap:wrap;padding:6px}
+  .navbtn{width:auto;border-left:0;border-bottom:3px solid transparent;padding:9px 12px}
+  .navbtn.active{border-left:0;border-bottom-color:var(--ember)}
+  .rail .foot{display:none}
+  .grid2{grid-template-columns:1fr}
+  .grid4{grid-template-columns:1fr 1fr}
+  main{padding:20px 16px 50px}
+}

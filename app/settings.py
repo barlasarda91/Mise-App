@@ -1,0 +1,36 @@
+"""Application settings, read from environment variables (Railway service vars)."""
+
+from functools import lru_cache
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    app_password: str | None = None
+    session_secret: str = "dev-secret-change-me"
+    database_url: str | None = None
+    default_tz: str = "America/Los_Angeles"
+    # DEV_MODE=1 relaxes the Secure flag on the session cookie for local http.
+    dev_mode: bool = False
+
+    session_cookie_name: str = "mise_session"
+    session_max_age_seconds: int = 60 * 60 * 24 * 30  # 30 days
+
+    @property
+    def sqlalchemy_url(self) -> str | None:
+        """Railway hands out postgres:// URLs; SQLAlchemy + psycopg3 wants postgresql+psycopg://."""
+        url = self.database_url
+        if not url:
+            return None
+        if url.startswith("postgres://"):
+            return url.replace("postgres://", "postgresql+psycopg://", 1)
+        if url.startswith("postgresql://"):
+            return url.replace("postgresql://", "postgresql+psycopg://", 1)
+        return url
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()

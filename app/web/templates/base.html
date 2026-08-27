@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}Mise{% endblock %} — Boxx</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+  <aside class="rail">
+    <div class="brand">
+      <div class="mark"><span class="glyph"></span><span class="word">BOXX</span></div>
+      <div class="sub">MISE · DAILY OPS</div>
+    </div>
+    <nav>
+      {% for item in nav %}
+      <a class="navbtn{% if active_view == item.view %} active{% endif %}" href="{{ item.path }}"><span class="ix">{{ item.ix }}</span>{{ item.label }}</a>
+      {% endfor %}
+    </nav>
+    <div class="foot">
+      ARTS DISTRICT · LA<br><b>hello@boxxcoffee.com</b>
+      <form method="post" action="/logout"><button class="linkish" type="submit">Log out</button></form>
+    </div>
+  </aside>
+  <main>
+    <div class="topbar">
+      <h1>{% block heading %}{% endblock %}</h1>
+      <div class="clock">{{ clock }}</div>
+    </div>
+    {% block content %}{% endblock %}
+  </main>
+</div>
+</body>
+</html>
