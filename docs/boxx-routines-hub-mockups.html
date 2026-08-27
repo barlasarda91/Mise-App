@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mise — Boxx Ops · UX Mockups</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#E8E4DB;      /* concrete-paper base */
+    --panel:#DFDACF;      /* raised panel */
+    --panel-2:#D5CFC2;    /* inset / hover */
+    --ink:#17150F;        /* near-black, text + hairlines */
+    --ink-soft:#6B6559;   /* secondary text */
+    --line:#BEB8AA;       /* light hairline on paper */
+    --rail:#17150F;       /* dark nav rail */
+    --rail-soft:#9A9384;  /* rail muted text */
+    --ember:#DC4B1B;      /* SIGNAL ONLY: overdue / awaiting / live */
+    --green:#4E6B3E;      /* confirmed / found / done */
+    --font-display:"Space Grotesk",sans-serif;
+    --font-body:"Hanken Grotesk",sans-serif;
+    --font-mono:"IBM Plex Mono",monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    font-family:var(--font-body);
+    background:var(--paper);
+    color:var(--ink);
+    line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  /* ---------- layout ---------- */
+  .app{display:grid;grid-template-columns:210px 1fr;min-height:100vh}
+  .rail{
+    background:var(--rail);color:var(--paper);
+    border-right:1px solid var(--ink);
+    display:flex;flex-direction:column;position:sticky;top:0;height:100vh;
+  }
+  .brand{padding:22px 20px 18px;border-bottom:1px solid #2a2820}
+  .mark{display:flex;align-items:center;gap:9px}
+  .mark .glyph{width:22px;height:22px;border:2px solid var(--paper);position:relative;flex:none}
+  .mark .glyph::after{content:"";position:absolute;inset:4px;border:2px solid var(--ember)}
+  .mark .word{font-family:var(--font-display);font-weight:700;font-size:20px;letter-spacing:.14em}
+  .brand .sub{font-family:var(--font-mono);font-size:10px;letter-spacing:.24em;color:var(--rail-soft);margin-top:7px;text-transform:uppercase}
+  nav{padding:14px 0;flex:1}
+  .navbtn{
+    width:100%;text-align:left;background:none;border:0;color:var(--rail-soft);
+    font-family:var(--font-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;
+    padding:11px 20px;display:flex;align-items:baseline;gap:12px;cursor:pointer;
+    border-left:3px solid transparent;transition:color .15s,background .15s;
+  }
+  .navbtn .ix{font-size:10px;color:#4f4c42;min-width:16px}
+  .navbtn:hover{color:var(--paper);background:#211f18}
+  .navbtn.active{color:var(--paper);border-left-color:var(--ember);background:#211f18}
+  .navbtn.active .ix{color:var(--ember)}
+  .rail .foot{padding:16px 20px;border-top:1px solid #2a2820;font-family:var(--font-mono);font-size:10px;color:var(--rail-soft);letter-spacing:.1em}
+  .rail .foot b{color:var(--paper);font-weight:500}
+
+  main{padding:26px 30px 60px;max-width:1180px}
+  .topbar{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:24px;flex-wrap:wrap;gap:12px}
+  .topbar h1{font-family:var(--font-display);font-weight:500;font-size:26px;letter-spacing:-.01em}
+  .topbar .clock{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;color:var(--ink-soft);text-transform:uppercase}
+  .topbar .clock b{color:var(--ink);font-weight:500}
+
+  /* ---------- box primitive ---------- */
+  .box{background:var(--panel);border:1px solid var(--ink)}
+  .box + .box{margin-top:18px}
+  .box-hd{display:flex;justify-content:space-between;align-items:center;padding:8px 14px;border-bottom:1px solid var(--ink)}
+  .box-hd .lbl{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.22em;text-transform:uppercase}
+  .box-hd .ix{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.14em;color:var(--ink-soft)}
+  .box-bd{padding:16px 14px}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+
+  /* stat */
+  .stat{background:var(--panel);border:1px solid var(--ink);padding:14px}
+  .stat .k{font-family:var(--font-mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-soft)}
+  .stat .v{font-family:var(--font-display);font-weight:700;font-size:38px;line-height:1;margin-top:10px}
+  .stat.alert .v{color:var(--ember)}
+
+  /* pills / badges */
+  .pill{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:3px 7px;border:1px solid var(--ink);display:inline-block;white-space:nowrap}
+  .pill.ember{background:var(--ember);color:#fff;border-color:var(--ember)}
+  .pill.green{background:var(--green);color:#fff;border-color:var(--green)}
+  .pill.ghost{background:none}
+  .dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex:none}
+  .dot.ember{background:var(--ember)}
+  .dot.green{background:var(--green)}
+  .dot.soft{background:var(--ink-soft)}
+
+  /* run + agenda rows */
+  .row{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line)}
+  .row:last-child{border-bottom:0}
+  .row .code{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);letter-spacing:.08em;min-width:64px}
+  .row .name{font-weight:600;font-size:14.5px}
+  .row .meta{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);letter-spacing:.05em}
+  .row .spacer{flex:1}
+  .linkish{font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--ink);padding:5px 9px;background:none;cursor:pointer;color:var(--ink)}
+  .linkish:hover{background:var(--ink);color:var(--paper)}
+
+  /* checklist */
+  .check{display:flex;gap:11px;align-items:flex-start;padding:11px 14px;border-bottom:1px solid var(--line)}
+  .check:last-child{border-bottom:0}
+  .check .bx{width:15px;height:15px;border:1.5px solid var(--ink);flex:none;margin-top:2px}
+  .check .bx.on{background:var(--ink)}
+  .check .t{font-size:14px}
+  .check .t .sub{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);letter-spacing:.04em;display:block;margin-top:2px}
+
+  /* tables */
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-soft);text-align:left;padding:6px 10px;border-bottom:1px solid var(--ink)}
+  td{padding:9px 10px;border-bottom:1px solid var(--line)}
+  tr:last-child td{border-bottom:0}
+  td .mono{font-family:var(--font-mono);font-size:12px}
+
+  /* views */
+  .view{display:none;animation:fade .18s ease}
+  .view.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+  /* category tabs (board) */
+  .tabbar{display:flex;flex-wrap:wrap;border:1px solid var(--ink);margin-bottom:16px}
+  .tab{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;padding:9px 13px;cursor:pointer;border-right:1px solid var(--ink);background:var(--panel);color:var(--ink-soft)}
+  .tab:last-child{border-right:0}
+  .tab.on{background:var(--ink);color:var(--paper)}
+  .tab:hover:not(.on){background:var(--panel-2);color:var(--ink)}
+  .catboard{display:none}
+  .catboard.on{display:block}
+
+  /* run conversation layout */
+  .runwrap{display:grid;grid-template-columns:230px 1fr;gap:18px}
+  .runlist .item{padding:11px 13px;border-bottom:1px solid var(--line);cursor:pointer}
+  .runlist .item:last-child{border-bottom:0}
+  .runlist .item.sel{background:var(--panel-2);border-left:3px solid var(--ember);padding-left:10px}
+  .runlist .item .h{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .runlist .item .rn{font-weight:600;font-size:13.5px}
+  .runlist .item .tm{font-family:var(--font-mono);font-size:10.5px;color:var(--ink-soft);letter-spacing:.06em;margin-top:3px}
+
+  .msg{padding:14px;border:1px solid var(--line);background:var(--paper);margin-bottom:14px}
+  .msg.user{background:var(--panel-2);border-color:var(--ink)}
+  .msg .who{font-family:var(--font-mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:9px;display:flex;align-items:center;gap:7px}
+  .msg h4{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;margin:14px 0 7px;color:var(--ink)}
+  .msg h4:first-of-type{margin-top:4px}
+  .audit{font-size:13.5px;padding:3px 0;display:flex;gap:9px;align-items:baseline}
+  .audit .fx{font-family:var(--font-mono);font-weight:500}
+  .fx.ok{color:var(--green)} .fx.no{color:var(--ember)}
+  .chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+  .chip{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.05em;border:1px solid var(--ink-soft);color:var(--ink-soft);padding:4px 8px;display:inline-flex;gap:6px;align-items:center}
+  .composer{display:flex;gap:0;border:1px solid var(--ink);margin-top:4px}
+  .composer input{flex:1;border:0;background:var(--paper);padding:13px 14px;font-family:var(--font-body);font-size:14px;color:var(--ink)}
+  .composer input:focus{outline:2px solid var(--ember);outline-offset:-2px}
+  .composer button{border:0;border-left:1px solid var(--ink);background:var(--ink);color:var(--paper);font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;padding:0 20px;cursor:pointer}
+  .composer button:hover{background:var(--ember)}
+
+  /* kanban lanes */
+  .lanes{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:start}
+  .lane .lane-hd{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border:1px solid var(--ink);background:var(--ink);color:var(--paper)}
+  .lane .lane-hd .ln{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase}
+  .lane .lane-hd .ct{font-family:var(--font-mono);font-size:11px;color:var(--rail-soft)}
+  .card{border:1px solid var(--ink);border-top:0;background:var(--panel);padding:11px 12px}
+  .card .cn{font-weight:600;font-size:14px}
+  .card .cmeta{font-family:var(--font-mono);font-size:10.5px;color:var(--ink-soft);letter-spacing:.04em;margin-top:5px;display:flex;flex-wrap:wrap;gap:5px 10px}
+  .card .cbadges{margin-top:9px;display:flex;gap:6px;flex-wrap:wrap}
+  .src{font-family:var(--font-mono);font-size:10px;letter-spacing:.04em;color:var(--ink-soft);display:inline-flex;gap:5px;align-items:center}
+
+  /* drafts */
+  .draftwrap{display:grid;grid-template-columns:250px 1fr;gap:18px}
+  .draftitem{padding:12px 13px;border-bottom:1px solid var(--line);cursor:pointer}
+  .draftitem:last-child{border-bottom:0}
+  .draftitem.sel{background:var(--panel-2);border-left:3px solid var(--ink);padding-left:10px}
+  .draftitem .dn{font-weight:600;font-size:13.5px}
+  .draftitem .dm{font-family:var(--font-mono);font-size:10.5px;color:var(--ink-soft);margin-top:4px;letter-spacing:.04em}
+  .mailhead{border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:14px}
+  .mailrow{display:flex;gap:10px;font-size:13px;padding:3px 0}
+  .mailrow .fld{font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);min-width:64px;padding-top:2px}
+  .toggle{display:inline-flex;border:1px solid var(--ink)}
+  .toggle span{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.06em;padding:4px 10px;cursor:pointer}
+  .toggle span.on{background:var(--ink);color:var(--paper)}
+  .mailbody{font-size:14px;line-height:1.6;white-space:pre-line}
+
+  /* settings */
+  .kv{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line)}
+  .kv:last-child{border-bottom:0}
+  .kv .lft{display:flex;flex-direction:column;gap:3px}
+  .kv .kt{font-weight:600;font-size:14px}
+  .kv .ks{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);letter-spacing:.04em}
+  .sel{font-family:var(--font-mono);font-size:11px;border:1px solid var(--ink);background:var(--paper);padding:5px 9px}
+
+  .note{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);letter-spacing:.03em;margin-top:10px;line-height:1.6}
+  .sectitle{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-soft);margin:26px 0 12px}
+  .sectitle:first-child{margin-top:0}
+
+  a{color:inherit}
+  :focus-visible{outline:2px solid var(--ember);outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+  /* responsive */
+  @media(max-width:860px){
+    .app{grid-template-columns:1fr}
+    .rail{position:static;height:auto;flex-direction:column}
+    nav{display:flex;flex-wrap:wrap;padding:6px}
+    .navbtn{width:auto;border-left:0;border-bottom:3px solid transparent;padding:9px 12px}
+    .navbtn.active{border-left:0;border-bottom-color:var(--ember)}
+    .rail .foot{display:none}
+    .grid2,.runwrap,.draftwrap{grid-template-columns:1fr}
+    .grid4{grid-template-columns:1fr 1fr}
+    .lanes{grid-template-columns:1fr 1fr}
+    main{padding:20px 16px 50px}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- NAV RAIL -->
+  <aside class="rail">
+    <div class="brand">
+      <div class="mark"><span class="glyph"></span><span class="word">BOXX</span></div>
+      <div class="sub">MISE · DAILY OPS</div>
+    </div>
+    <nav id="nav">
+      <button class="navbtn active" data-view="home"><span class="ix">00</span>Today</button>
+      <button class="navbtn" data-view="runs"><span class="ix">R</span>Runs</button>
+      <button class="navbtn" data-view="pipeline"><span class="ix">P</span>Pipeline</button>
+      <button class="navbtn" data-view="board"><span class="ix">B</span>Board</button>
+      <button class="navbtn" data-view="drafts"><span class="ix">D</span>Drafts</button>
+      <button class="navbtn" data-view="settings"><span class="ix">S</span>Settings</button>
+    </nav>
+    <div class="foot">ARTS DISTRICT · LA<br><b>hello@boxxcoffee.com</b></div>
+  </aside>
+
+  <main>
+    <!-- ============ HOME ============ -->
+    <section class="view active" id="view-home">
+      <div class="topbar">
+        <h1>Good morning, Arda.</h1>
+        <div class="clock">WED · 26 AUG 2026 · <b>08:34 LA</b></div>
+      </div>
+
+      <div class="grid4" style="margin-bottom:18px">
+        <div class="stat"><div class="k">Open leads</div><div class="v">14</div></div>
+        <div class="stat alert"><div class="k">Overdue</div><div class="v">3</div></div>
+        <div class="stat"><div class="k">Tasks due today</div><div class="v">5</div></div>
+        <div class="stat"><div class="k">Drafts ready</div><div class="v">2</div></div>
+      </div>
+
+      <div class="grid2">
+        <div class="box">
+          <div class="box-hd"><span class="lbl">Priority</span><span class="ix">◭ 6 ITEMS</span></div>
+          <div>
+            <div class="check"><span class="bx"></span><span class="t">Follow up <b>Kettle &amp; Stone</b><span class="sub">WHOLESALE LEADS · SAMPLED · 6D IDLE · overdue</span></span></div>
+            <div class="check"><span class="bx"></span><span class="t">Confirm call w/ <b>Ember Room</b> &amp; reset timer<span class="sub">WHOLESALE LEADS · lead tracker R-041</span></span></div>
+            <div class="check"><span class="bx"></span><span class="t">Chase invoice <b>#1043 — Halyard Café</b><span class="sub">INVOICE TRACKING · QUICKBOOKS · 14D OVERDUE</span></span></div>
+            <div class="check"><span class="bx"></span><span class="t">File <b>quarterly sales tax</b><span class="sub">GOVERNANCE · DUE 08/31</span></span></div>
+            <div class="check"><span class="bx"></span><span class="t">Confirm <b>Saturday pop-up</b> venue<span class="sub">POP-UPS · awaiting venue reply</span></span></div>
+            <div class="check"><span class="bx"></span><span class="t">Send draft to <b>Verdugo Bakehouse</b><span class="sub">WHOLESALE LEADS · arda@ · ready</span></span></div>
+          </div>
+        </div>
+
+        <div class="box" style="align-self:start">
+          <div class="box-hd"><span class="lbl">Waiting On</span><span class="ix">3 BLOCKED</span></div>
+          <div>
+            <div class="row"><span class="dot ember"></span><span class="name">Wholesale agreement</span><span class="meta">— Ember Room · sent 08/24 · no reply</span><span class="spacer"></span><span class="pill ghost">3d</span></div>
+            <div class="row"><span class="dot soft"></span><span class="name">Payment link</span><span class="meta">— Third &amp; Traction · QB invoice #1049</span><span class="spacer"></span><span class="pill ghost">1d</span></div>
+            <div class="row"><span class="dot soft"></span><span class="name">Green coffee ETA</span><span class="meta">— importer · callback promised</span><span class="spacer"></span><span class="pill ghost">2d</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ RUNS ============ -->
+    <section class="view" id="view-runs">
+      <div class="topbar">
+        <h1>Runs</h1>
+        <div class="clock">CONVERSATION PER RUN · <b>REVIEW</b></div>
+      </div>
+      <div class="runwrap">
+        <div class="box runlist" style="align-self:start">
+          <div class="box-hd"><span class="lbl">History</span><span class="ix">▚</span></div>
+          <div>
+            <div class="item sel">
+              <div class="h"><span class="rn">Lead Tracker</span><span class="dot ember"></span></div>
+              <div class="tm">R-041 · TODAY 08:30 · AWAITING</div>
+            </div>
+            <div class="item">
+              <div class="h"><span class="rn">Daily Agenda</span><span class="dot green"></span></div>
+              <div class="tm">A-118 · TODAY 07:30 · DONE</div>
+            </div>
+            <div class="item">
+              <div class="h"><span class="rn">Lead Tracker</span><span class="dot green"></span></div>
+              <div class="tm">R-040 · 25 AUG 08:30 · DONE</div>
+            </div>
+            <div class="item">
+              <div class="h"><span class="rn">Daily Agenda</span><span class="dot green"></span></div>
+              <div class="tm">A-117 · 25 AUG 07:30 · DONE</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="box" style="align-self:start">
+          <div class="box-hd"><span class="lbl">Lead Tracker · R-041</span><span class="ix">08:30 LA · AWAITING REVIEW</span></div>
+          <div class="box-bd">
+            <!-- assistant first turn -->
+            <div class="msg">
+              <div class="who"><span class="dot ember"></span>Autonomous run · 08:30</div>
+
+              <h4>1 · Sent-email audit — since last run (25 Aug 08:30)</h4>
+              <div class="audit"><span class="fx ok">✅ FOUND</span><span><b>Kettle &amp; Stone</b> — sent 08/22 · "Samples on the way"</span></div>
+              <div class="audit"><span class="fx no">❌ NONE</span><span><b>Ember Room</b> — no sent email since entering Sampled on 08/19</span></div>
+              <div class="audit"><span class="fx no">❌ NONE</span><span><b>Third &amp; Traction</b> — no sent email since Contacted on 08/22</span></div>
+
+              <h4>2 · New leads — week of 08/25–08/31</h4>
+              <table>
+                <tr><th>#</th><th>Business</th><th>Source</th><th>Signal</th></tr>
+                <tr><td class="mono">1</td><td>Halcyon Coffee Bar</td><td class="mono">referral</td><td>Asked for wholesale pricing + samples for a 20-seat bar. Landed in hello@.</td></tr>
+              </table>
+
+              <h4>3 · Overdue — by cadence</h4>
+              <div class="audit"><span class="pill ember">6D</span><span><b>Ember Room</b> · SAMPLED · alert at 3/7/every-5 · last action 08/19</span></div>
+              <div class="audit"><span class="pill ember">8D</span><span><b>Maslak Deli</b> · NEGOTIATING · alert every 7 · last action 08/18</span></div>
+              <div class="audit"><span class="pill ember">4D</span><span><b>Third &amp; Traction</b> · CONTACTED · alert every 3 · last action 08/22</span></div>
+
+              <div class="chips">
+                <span class="chip">◈ read hello@ · 3 new</span>
+                <span class="chip">◈ read arda@ /sent · 12</span>
+                <span class="chip">◈ 14 open leads loaded</span>
+              </div>
+
+              <p style="margin-top:14px;font-size:14px">Step 4 — anything to add or update? Report calls/texts and I'll set the action date to when it happened.</p>
+            </div>
+
+            <!-- user turn -->
+            <div class="msg user">
+              <div class="who">Arda · 08:36</div>
+              <div style="font-size:14px">Called Ember Room today — they want 5 lb/wk of Blend No: 01. Move them to Negotiating and remind me to send the agreement Thursday.</div>
+            </div>
+
+            <!-- assistant response -->
+            <div class="msg">
+              <div class="who"><span class="dot green"></span>Applied</div>
+              <div style="font-size:14px">Logged the call and updated Ember Room. Idle timer reset from today (08/26).</div>
+              <div class="chips">
+                <span class="chip">⟳ Ember Room → NEGOTIATING</span>
+                <span class="chip">◷ Last action → 08/26 (call)</span>
+                <span class="chip">◷ Reminder · Thu 09:00 · arda@ cal</span>
+                <span class="chip">✉ Draft: agreement · saved to arda@</span>
+              </div>
+            </div>
+
+            <div class="composer">
+              <input type="text" placeholder="Reply to this run — e.g. 'close Maslak Deli as lost, price'" aria-label="Reply to run">
+              <button>Send</button>
+            </div>
+            <div class="note">Runs close on their own — everything above is already saved to the Pipeline and Board. Nothing here has emailed anyone — drafts wait in Drafts for your review.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PIPELINE ============ -->
+    <section class="view" id="view-pipeline">
+      <div class="topbar">
+        <h1>Wholesale Pipeline</h1>
+        <div class="clock">14 OPEN · <b>3 OVERDUE</b> · SOURCE: HUB DB</div>
+      </div>
+      <div class="lanes">
+        <div class="lane">
+          <div class="lane-hd"><span class="ln">New</span><span class="ct">02</span></div>
+          <div class="card"><div class="cn">Halcyon Coffee Bar</div><div class="cmeta"><span>referral</span><span>hello@</span></div><div class="cbadges"><span class="pill ember">alert daily</span></div></div>
+          <div class="card"><div class="cn">Sunset &amp; Vine Deli</div><div class="cmeta"><span>walk-in</span><span>0d idle</span></div><div class="cbadges"><span class="pill ghost">new 08/26</span></div></div>
+        </div>
+        <div class="lane">
+          <div class="lane-hd"><span class="ln">Contacted</span><span class="ct">04</span></div>
+          <div class="card"><div class="cn">Third &amp; Traction</div><div class="cmeta"><span>espresso</span><span>last 08/22</span></div><div class="cbadges"><span class="pill ember">4d · overdue</span></div></div>
+          <div class="card"><div class="cn">Verdugo Bakehouse</div><div class="cmeta"><span>filter</span><span>last 08/25</span></div><div class="cbadges"><span class="pill ghost">1d idle</span></div></div>
+          <div class="card"><div class="cn">Halyard Café</div><div class="cmeta"><span>both</span><span>last 08/24</span></div><div class="cbadges"><span class="pill ghost">2d idle</span></div></div>
+          <div class="card"><div class="cn">Ada Cafe</div><div class="cmeta"><span>espresso</span><span>last 08/25</span></div><div class="cbadges"><span class="pill ghost">1d idle</span></div></div>
+        </div>
+        <div class="lane">
+          <div class="lane-hd"><span class="ln">Sampled</span><span class="ct">03</span></div>
+          <div class="card"><div class="cn">Ember Room</div><div class="cmeta"><span>rotating single farm</span><span>last 08/19</span></div><div class="cbadges"><span class="pill ember">6d · overdue</span></div></div>
+          <div class="card"><div class="cn">Kettle &amp; Stone</div><div class="cmeta"><span>blend · entry</span><span>last 08/22</span></div><div class="cbadges"><span class="pill ghost">4d idle</span></div></div>
+          <div class="card"><div class="cn">Loft Nine Roasterie</div><div class="cmeta"><span>competition</span><span>last 08/23</span></div><div class="cbadges"><span class="pill ghost">3d idle</span></div></div>
+        </div>
+        <div class="lane">
+          <div class="lane-hd"><span class="ln">Negotiating</span><span class="ct">02</span></div>
+          <div class="card"><div class="cn">Maslak Deli</div><div class="cmeta"><span>blend · 8 lb/wk</span><span>last 08/18</span></div><div class="cbadges"><span class="pill ember">8d · overdue</span></div></div>
+          <div class="card"><div class="cn">Ateş Bakery</div><div class="cmeta"><span>espresso · 12 lb/wk</span><span>last 08/25</span></div><div class="cbadges"><span class="pill ghost">1d idle</span></div></div>
+        </div>
+      </div>
+      <div class="note">Idle days count from <b>Last Confirmed Action</b>, not stage date. Cadence: New daily · Contacted 3d · Sampled 3/7/every-5 · Negotiating 7d.</div>
+    </section>
+
+    <!-- ============ BOARD ============ -->
+    <section class="view" id="view-board">
+      <div class="topbar">
+        <h1>Board</h1>
+        <div class="clock">CLASSIFIED BY BUSINESS LINE · <b>REPLACES TODOIST</b></div>
+      </div>
+      <div class="tabbar" id="catTabs">
+        <span class="tab on" data-cat="wl">Wholesale Leads</span>
+        <span class="tab" data-cat="cons">Consultation</span>
+        <span class="tab" data-cat="pop">Pop-Ups</span>
+        <span class="tab" data-cat="inv">Invoice Tracking</span>
+        <span class="tab" data-cat="gov">Governance</span>
+      </div>
+
+      <!-- Wholesale Leads -->
+      <div class="catboard on" data-cat="wl">
+        <div class="lanes">
+          <div class="lane">
+            <div class="lane-hd"><span class="ln">To do</span><span class="ct">03</span></div>
+            <div class="card"><div class="cn">Send agreement to Ember Room</div><div class="cmeta"><span class="src">↳ Ember Room</span></div><div class="cbadges"><span class="pill ember">Due Thu</span><span class="pill ghost">Arda</span></div></div>
+            <div class="card"><div class="cn">Price Maslak Deli @ 8 lb/wk</div><div class="cmeta"><span class="src">↳ email · hello@</span></div><div class="cbadges"><span class="pill ghost">Arda</span></div></div>
+            <div class="card"><div class="cn">Qualify Halcyon Coffee Bar</div><div class="cmeta"><span class="src">↳ run R-041</span></div><div class="cbadges"><span class="pill ghost">Emre</span></div></div>
+          </div>
+          <div class="lane">
+            <div class="lane-hd"><span class="ln">Doing</span><span class="ct">01</span></div>
+            <div class="card"><div class="cn">Sample roast — Blend No: 01</div><div class="cmeta"><span class="src">↳ Ember Room · Kettle &amp; Stone</span></div><div class="cbadges"><span class="pill ghost">Emre</span></div></div>
+          </div>
+          <div class="lane">
+            <div class="lane-hd"><span class="ln">Waiting</span><span class="ct">02</span></div>
+            <div class="card"><div class="cn">Payment link — Third &amp; Traction</div><div class="cmeta"><span class="src">↳ deposit invoice</span></div><div class="cbadges"><span class="pill ember">blocked</span></div></div>
+            <div class="card"><div class="cn">WhatsApp confirm w/ Emre</div><div class="cmeta"><span class="src">↳ delegated · unverified</span></div><div class="cbadges"><span class="pill ember">no written confirm</span></div></div>
+          </div>
+          <div class="lane">
+            <div class="lane-hd"><span class="ln">Done</span><span class="ct">02</span></div>
+            <div class="card"><div class="cn">Ship samples — Kettle &amp; Stone</div><div class="cmeta"><span class="src">↳ 08/22</span></div><div class="cbadges"><span class="pill green">done</span></div></div>
+            <div class="card"><div class="cn">Reply Verdugo Bakehouse</div><div class="cmeta"><span class="src">↳ 08/25</span></div><div class="cbadges"><span class="pill green">done</span></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Consultation -->
+      <div class="catboard" data-cat="cons">
+        <div class="lanes">
+          <div class="lane">
+            <div class="lane-hd"><span class="ln">To do</span><span class="ct">02</span></div>
+            <div class="card"><div class="cn">Proposal — new café buildout</div><div class="cmeta"><span class="src">↳ consulting inquiry</span></div><div class="cbadges"><span class="pill ghost">Arda</span></div></div>
+            <div class="card"><div class="cn">Schedule menu consult</div><div class="cmeta"><span class="src">↳ Studio B</span></div><div class="cbadges"><span class="pill ghost">Emre</span></div></div>
+          </div>
+          <div class="lane">
+            <div class="lane-hd"><span class="ln">Doing</span><span class="ct">01</span></div>
+            <div class="card"><div class="cn">Espresso calibration training</div><div class="cmeta"><span class="src">↳ on-site</span></div><div class="cbadges"><span class="pill ghost">Emre</span></div></div>
+          </div>
+          <div class="lane">
+            <div class="lane-hd"><span class="ln">Waiting</span><span class="ct">00</span></div>
+          </div>
+          <div class="lane">
+            <div class="lane-hd"><span class="ln">Done</span><span class="ct">01</span></div>
+            <div class="card"><div class="cn">Invoice consult — Studio B</div><div class="cmeta"><span class="src">↳ 08/20</span></div><div class="cbadges"><span class="pill green">done</span></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pop-Ups -->
+      <div class="catboard" data-cat="pop">
+        <div class="lanes">
+          <div class="lane">
+            <div class="lane-hd"><span class="ln">To do</span><span class="ct">02</span></div>
+            <div class="card"><div class="cn">Confirm Saturday pop-up location</div><div class="cmeta"><span class="src">↳ venue email</span></div><div class="cbadges"><span class="pill ember">Due Fri</span><span class="pill ghost">Arda</span></div></div>
+            <div class="card"><div class="cn">Order cups + signage</div><div class="cmeta"><span class="src">↳ supplier</span></div><div class="cbadges"><span class="pill ghost">Emre</span></div></div>
+          </div>
+          <div class="lane">
+            <div class="lane-hd"><span class="ln">Doing</span><span class="ct">01</span></div>
+            <div class="card"><div class="cn">Staffing — Saturday pop-up</div><div class="cmeta"><span class="src">↳ roster</span></div><div class="cbadges"><span class="pill ghost">Emre</span></div></div>
+          </div>
+          <div class="lane">
+            <div class="lane-hd"><span class="ln">Waiting</span><span class="ct">01</span></div>
+            <div class="card"><div class="cn">Venue confirmation</div><div class="cmeta"><span class="src">↳ awaiting reply</span></div><div class="cbadges"><span class="pill ember">blocked</span></div></div>
+          </div>
+          <div class="lane">
+            <div class="lane-hd"><span class="ln">Done</span><span class="ct">00</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Invoice Tracking (QuickBooks) -->
+      <div class="catboard" data-cat="inv">
+        <div class="lanes">
+          <div class="lane">
+            <div class="lane-hd"><span class="ln">To do</span><span class="ct">02</span></div>
+            <div class="card"><div class="cn">Chase #1043 — Halyard Café</div><div class="cmeta"><span class="src">↳ QuickBooks</span><span>$420</span></div><div class="cbadges"><span class="pill ember">14d overdue</span></div></div>
+            <div class="card"><div class="cn">Reminder #1051 — Loft Nine</div><div class="cmeta"><span class="src">↳ QuickBooks</span><span>$680</span></div><div class="cbadges"><span class="pill ember">7d overdue</span></div></div>
+          </div>
+          <div class="lane">
+            <div class="lane-hd"><span class="ln">Doing</span><span class="ct">01</span></div>
+            <div class="card"><div class="cn">Reconcile August statement</div><div class="cmeta"><span class="src">↳ QuickBooks</span></div><div class="cbadges"><span class="pill ghost">Arda</span></div></div>
+          </div>
+          <div class="lane">
+            <div class="lane-hd"><span class="ln">Waiting</span><span class="ct">01</span></div>
+            <div class="card"><div class="cn">Payment #1049 — Third &amp; Traction</div><div class="cmeta"><span class="src">↳ QuickBooks</span><span>link sent</span></div><div class="cbadges"><span class="pill ghost">2d</span></div></div>
+          </div>
+          <div class="lane">
+            <div class="lane-hd"><span class="ln">Done</span><span class="ct">01</span></div>
+            <div class="card"><div class="cn">Paid #1038 — Ateş Bakery</div><div class="cmeta"><span class="src">↳ QuickBooks</span><span>$540</span></div><div class="cbadges"><span class="pill green">cleared</span></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Governance -->
+      <div class="catboard" data-cat="gov">
+        <div class="lanes">
+          <div class="lane">
+            <div class="lane-hd"><span class="ln">To do</span><span class="ct">03</span></div>
+            <div class="card"><div class="cn">File quarterly sales tax</div><div class="cmeta"><span class="src">↳ CDTFA</span></div><div class="cbadges"><span class="pill ember">Due 08/31</span></div></div>
+            <div class="card"><div class="cn">Renew business license</div><div class="cmeta"><span class="src">↳ City of LA</span></div><div class="cbadges"><span class="pill ghost">Arda</span></div></div>
+            <div class="card"><div class="cn">W-9 for new vendor</div><div class="cmeta"><span class="src">↳ form</span></div><div class="cbadges"><span class="pill ghost">Arda</span></div></div>
+          </div>
+          <div class="lane">
+            <div class="lane-hd"><span class="ln">Doing</span><span class="ct">01</span></div>
+            <div class="card"><div class="cn">Q3 bookkeeping cleanup</div><div class="cmeta"><span class="src">↳ QuickBooks</span></div><div class="cbadges"><span class="pill ghost">Arda</span></div></div>
+          </div>
+          <div class="lane">
+            <div class="lane-hd"><span class="ln">Waiting</span><span class="ct">01</span></div>
+            <div class="card"><div class="cn">CPA review</div><div class="cmeta"><span class="src">↳ external</span></div><div class="cbadges"><span class="pill ember">blocked</span></div></div>
+          </div>
+          <div class="lane">
+            <div class="lane-hd"><span class="ln">Done</span><span class="ct">00</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="note">Five standing categories — each a board. Tasks created by routines carry a source link (↳ lead / email / run / QuickBooks). Incomplete tasks feed tomorrow's agenda automatically.</div>
+    </section>
+
+    <!-- ============ DRAFTS ============ -->
+    <section class="view" id="view-drafts">
+      <div class="topbar">
+        <h1>Email Drafts</h1>
+        <div class="clock">COMPOSE IN HUB · <b>SAVE TO GMAIL</b> · NEVER AUTO-SEND</div>
+      </div>
+      <div class="draftwrap">
+        <div class="box" style="align-self:start">
+          <div class="box-hd"><span class="lbl">Drafts</span><span class="ix">2 READY</span></div>
+          <div>
+            <div class="draftitem sel"><div class="dn">Ember Room — wholesale agreement</div><div class="dm">arda@ · READY · from run R-041</div></div>
+            <div class="draftitem"><div class="dn">Verdugo Bakehouse — sample follow-up</div><div class="dm">arda@ · SAVED TO GMAIL</div></div>
+            <div class="draftitem"><div class="dn">Halcyon — pricing &amp; samples</div><div class="dm">hello@ · DRAFTING</div></div>
+          </div>
+        </div>
+
+        <div class="box" style="align-self:start">
+          <div class="box-hd"><span class="lbl">Preview</span><span class="ix">✉ R-041 · READY</span></div>
+          <div class="box-bd">
+            <div class="mailhead">
+              <div class="mailrow"><span class="fld">From</span>
+                <span class="toggle"><span class="on">arda@</span><span>hello@</span></span>
+              </div>
+              <div class="mailrow"><span class="fld">To</span><span>Deniz Aksoy — Ember Room &lt;deniz@emberroom.la&gt;</span></div>
+              <div class="mailrow"><span class="fld">Subject</span><span><b>Boxx wholesale — Blend No: 01 agreement</b></span></div>
+            </div>
+            <div class="mailbody">Hey Deniz,
+
+Great speaking today. As discussed, attached please see the wholesale agreement for Blend No:1 at 5 lb/week, delivered weekly to the Arts District.
+
+Pricing holds at the sampled rate, and happy to come over to dial-in the espresso once you're set up. Let me know if this arrangement is okay and we'll lock in your first delivery,
+
+Best
+Arda</div>
+            <div class="chips">
+              <span class="chip">↳ Ember Room</span>
+              <span class="chip">◷ linked task: Due Thu</span>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:16px">
+              <button class="linkish" style="background:var(--ink);color:var(--paper)">Save to Gmail</button>
+              <button class="linkish">Edit</button>
+              <button class="linkish">Discard</button>
+            </div>
+            <div class="note">Saving places a native draft in your Gmail. You review and send from Gmail — the hub never sends on its own.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SETTINGS ============ -->
+    <section class="view" id="view-settings">
+      <div class="topbar">
+        <h1>Settings</h1>
+        <div class="clock">RAILWAY · <b>AMERICA/LOS_ANGELES</b></div>
+      </div>
+
+      <div class="sectitle">Routines</div>
+      <div class="box">
+        <div class="box-hd"><span class="lbl">Scheduled Routines</span><span class="ix">2 ENABLED</span></div>
+        <div>
+          <div class="kv">
+            <div class="lft"><span class="kt">Wholesale Lead Tracker</span><span class="ks">daily 08:30 · reads arda@ + hello@ · calendar</span></div>
+            <div style="display:flex;gap:8px;align-items:center"><span class="sel">MODEL: OPUS</span><span class="pill green">on</span><button class="linkish">Prompt</button></div>
+          </div>
+          <div class="kv">
+            <div class="lft"><span class="kt">Daily Agenda</span><span class="ks">daily 07:30 · calendar + arda@ + board</span></div>
+            <div style="display:flex;gap:8px;align-items:center"><span class="sel">MODEL: OPUS</span><span class="pill green">on</span><button class="linkish">Prompt</button></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sectitle">Connectors</div>
+      <div class="box">
+        <div class="box-hd"><span class="lbl">Google Workspace · Service Account</span><span class="ix">DOMAIN-WIDE DELEGATION</span></div>
+        <div>
+          <div class="kv"><div class="lft"><span class="kt">Gmail — ardabarlas@boxxcoffee.com</span><span class="ks">read inbox + sent · create drafts</span></div><span class="pill green">connected</span></div>
+          <div class="kv"><div class="lft"><span class="kt">Gmail — hello@boxxcoffee.com</span><span class="ks">separate mailbox · impersonated · licensed seat verified</span></div><span class="pill green">connected</span></div>
+          <div class="kv"><div class="lft"><span class="kt">Google Calendar — ardabarlas@</span><span class="ks">read events · create reminders</span></div><span class="pill green">connected</span></div>
+        </div>
+      </div>
+      <div class="box">
+        <div class="box-hd"><span class="lbl">Intuit QuickBooks · OAuth</span><span class="ix">INVOICE TRACKING</span></div>
+        <div>
+          <div class="kv"><div class="lft"><span class="kt">QuickBooks Online</span><span class="ks">read customer invoices (A/R) · surface overdue receivables as tasks</span></div><span class="pill green">connected</span></div>
+        </div>
+      </div>
+
+      <div class="sectitle">Dropped</div>
+      <div class="box">
+        <div class="box-hd"><span class="lbl">Dropped</span><span class="ix">REPLACED IN-APP</span></div>
+        <div>
+          <div class="kv"><div class="lft"><span class="kt">Todoist</span><span class="ks">superseded by the internal Board</span></div><span class="pill">retired</span></div>
+          <div class="kv"><div class="lft"><span class="kt">Google Sheet — Boxx Wholesale Pipeline</span><span class="ks">pipeline now lives in Hub DB</span></div><span class="pill">retired</span></div>
+        </div>
+      </div>
+
+      <div class="sectitle">Secrets</div>
+      <div class="box">
+        <div class="box-hd"><span class="lbl">Environment · Railway</span><span class="ix">HEALTH</span></div>
+        <div>
+          <div class="kv"><div class="lft"><span class="kt">ANTHROPIC_API_KEY</span><span class="ks">routine execution</span></div><span class="pill green">ok</span></div>
+          <div class="kv"><div class="lft"><span class="kt">GOOGLE_SA_JSON</span><span class="ks">service account · delegated users set</span></div><span class="pill green">ok</span></div>
+          <div class="kv"><div class="lft"><span class="kt">DATABASE_URL</span><span class="ks">postgres · scheduler jobstore</span></div><span class="pill green">ok</span></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+  const nav = document.getElementById('nav');
+  function show(view){
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.getElementById('view-'+view).classList.add('active');
+    document.querySelectorAll('.navbtn').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
+    window.scrollTo({top:0,behavior:'instant'});
+  }
+  nav.addEventListener('click', e=>{
+    const btn = e.target.closest('.navbtn');
+    if(btn) show(btn.dataset.view);
+  });
+  document.querySelectorAll('[data-goto]').forEach(el=>{
+    el.addEventListener('click', ()=>show(el.dataset.goto));
+  });
+  // board category tabs
+  const catTabs = document.getElementById('catTabs');
+  if(catTabs){
+    catTabs.addEventListener('click', e=>{
+      const t = e.target.closest('.tab'); if(!t) return;
+      catTabs.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on', x===t));
+      document.querySelectorAll('#view-board .catboard').forEach(b=>b.classList.toggle('on', b.dataset.cat===t.dataset.cat));
+    });
+  }
+  // demo-only checklist toggle
+  document.querySelectorAll('.check .bx').forEach(bx=>{
+    bx.addEventListener('click', ()=>bx.classList.toggle('on'));
+  });
+  // demo-only from-mailbox toggle
+  document.querySelectorAll('.toggle span').forEach(s=>{
+    s.addEventListener('click', ()=>{
+      s.parentElement.querySelectorAll('span').forEach(x=>x.classList.remove('on'));
+      s.classList.add('on');
+    });
+  });
+</script>
+</body>
+</html>
