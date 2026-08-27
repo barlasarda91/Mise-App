@@ -135,4 +135,16 @@ def drafts(request: Request):
 
 @app.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request):
-    return render_page(request, "placeholder.html", "settings", title="Settings", milestone="5–10")
+    from app.tools.check_google import connectivity_report
+
+    settings = get_settings()
+    secrets = {
+        "APP_PASSWORD": bool(settings.app_password),
+        "SESSION_SECRET": settings.session_secret != "dev-secret-change-me",
+        "DATABASE_URL": bool(settings.database_url),
+        "GOOGLE_SA_JSON": bool(settings.google_sa_json),
+        "ANTHROPIC_API_KEY": bool(settings.anthropic_api_key),
+    }
+    return render_page(
+        request, "settings.html", "settings", report=connectivity_report(), secrets=secrets
+    )

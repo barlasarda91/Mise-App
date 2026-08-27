@@ -13,6 +13,19 @@ UX reference: [`docs/boxx-routines-hub-mockups.html`](docs/boxx-routines-hub-moc
 - Milestone 1 — scaffold: FastAPI app, single-user auth gate, Postgres wiring,
   Boxx dashboard shell, Railway deploy skeleton. ✅
 - Milestone 2 — data model + Alembic migrations (all 12 tables from spec §6). ✅
+- Milestone 3 — Google service-account tool layer: Gmail read/draft for both
+  mailboxes, Calendar read + reminder events, connectivity test
+  (`python -m app.tools.check_google`, also shown on /settings). ✅
+
+## Google connector provisioning
+
+Follow spec §5: create a GCP service account, enable domain-wide delegation in
+Workspace admin with scopes `gmail.readonly`, `gmail.compose`,
+`calendar.events`, authorize impersonation for `ardabarlas@` and `hello@`
+(hello@ must be a **licensed user seat**), then set `GOOGLE_SA_JSON` and run
+`python -m app.tools.check_google` — all three connectors should report ok.
+The tool layer exposes drafts only; **no send function exists** (enforced by a
+test).
 
 ## Migrations
 

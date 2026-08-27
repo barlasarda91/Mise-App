@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block heading %}Settings{% endblock %}
+{% block content %}
+
+{% macro status_pill(status) -%}
+  {% if status == "ok" %}<span class="pill green">connected</span>
+  {% elif status == "not_configured" %}<span class="pill ghost">not configured</span>
+  {% else %}<span class="pill ember">error</span>{% endif %}
+{%- endmacro %}
+
+<div class="box">
+  <div class="box-hd"><span class="lbl">Google Workspace · Service Account</span><span class="ix">DOMAIN-WIDE DELEGATION</span></div>
+  <div>
+    {% for key, label in [("gmail_arda", "Gmail"), ("gmail_hello", "Gmail"), ("calendar", "Google Calendar")] %}
+    {% set entry = report[key] %}
+    <div class="kv">
+      <div class="lft">
+        <span class="kt">{{ label }} — {{ entry.address }}</span>
+        <span class="ks">{{ entry.detail }}</span>
+      </div>
+      {{ status_pill(entry.status) }}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="box">
+  <div class="box-hd"><span class="lbl">Intuit QuickBooks · OAuth</span><span class="ix">INVOICE TRACKING</span></div>
+  <div>
+    <div class="kv">
+      <div class="lft"><span class="kt">QuickBooks Online</span><span class="ks">read A/R · overdue receivables → tasks · milestone 8</span></div>
+      <span class="pill ghost">not built yet</span>
+    </div>
+  </div>
+</div>
+
+<div class="box">
+  <div class="box-hd"><span class="lbl">Secrets · Environment</span><span class="ix">HEALTH</span></div>
+  <div>
+    {% for name, ok in secrets.items() %}
+    <div class="kv">
+      <div class="lft"><span class="kt">{{ name }}</span></div>
+      {% if ok %}<span class="pill green">set</span>{% else %}<span class="pill ember">missing</span>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="note">Connector checks run live against Google on page load. CLI equivalent: <b>python -m app.tools.check_google</b>. Routines configuration lands in milestone 5.</div>
+{% endblock %}

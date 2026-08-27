@@ -7,3 +7,5 @@ itsdangerous>=2.2
 SQLAlchemy>=2.0
 alembic>=1.13
 psycopg[binary]>=3.2
+google-api-python-client>=2.140
+google-auth>=2.30

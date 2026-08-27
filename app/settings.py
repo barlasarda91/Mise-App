@@ -12,6 +12,15 @@ class Settings(BaseSettings):
     session_secret: str = "dev-secret-change-me"
     database_url: str | None = None
     default_tz: str = "America/Los_Angeles"
+
+    # Google Workspace service account (domain-wide delegation): raw JSON or a file path.
+    google_sa_json: str | None = None
+    gmail_arda_address: str = "ardabarlas@boxxcoffee.com"  # canonical (spec §5)
+    gmail_hello_address: str = "hello@boxxcoffee.com"
+    # Reminders land on arda's calendar; override only if that ever changes.
+    calendar_address: str | None = None
+
+    anthropic_api_key: str | None = None
     # DEV_MODE=1 relaxes the Secure flag on the session cookie for local http.
     dev_mode: bool = False
 

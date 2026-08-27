@@ -90,6 +90,13 @@ main{padding:26px 30px 60px;max-width:1180px}
 
 .note{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);letter-spacing:.03em;margin-top:10px;line-height:1.6}
 
+/* key/value rows (settings) */
+.kv{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line);gap:12px}
+.kv:last-child{border-bottom:0}
+.kv .lft{display:flex;flex-direction:column;gap:3px;min-width:0}
+.kv .kt{font-weight:600;font-size:14px}
+.kv .ks{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);letter-spacing:.04em;overflow-wrap:anywhere}
+
 /* ---------- login ---------- */
 .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
 .login-box{width:340px;background:var(--panel);border:1px solid var(--ink)}
