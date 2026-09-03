@@ -202,11 +202,10 @@ def test_tool_specs_are_strict_and_sorted():
     specs = tool_specs()
     assert [t["name"] for t in specs] == sorted(t["name"] for t in specs)
     for spec in specs:
-        assert isinstance(spec["strict"], bool)
+        # strict is off everywhere: the strict-schema compiler rejected our
+        # toolset twice (union cap, "schema is too complex" — A-005/A-006)
+        assert "strict" not in spec
         assert spec["input_schema"]["additionalProperties"] is False
-    # strict stays the default; only the field-heavy tools opt out
-    non_strict = {s["name"] for s in specs if not s["strict"]}
-    assert non_strict == {"create_lead", "create_email_draft"}
 
 
 def test_no_schema_mixes_enum_with_type_union():
@@ -239,5 +238,5 @@ def test_union_parameter_budget_for_strict_tools():
             return sum(count_unions(item) for item in node)
         return 0
 
-    total = sum(count_unions(s["input_schema"]) for s in tool_specs() if s["strict"])
+    total = sum(count_unions(s["input_schema"]) for s in tool_specs() if s.get("strict"))
     assert total <= 14, f"union-typed params in strict tools: {total} (API cap 16)"

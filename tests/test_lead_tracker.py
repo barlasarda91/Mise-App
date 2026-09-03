@@ -215,6 +215,27 @@ def test_create_task_dedup_updates_not_duplicates(session_factory):
         assert s.query(ExternalMutation).count() == 1
 
 
+def test_tools_accept_omitted_optional_params(session_factory):
+    """Without strict mode the model may omit optional params — handlers must
+    default them instead of raising TypeError."""
+    with session_factory() as s:
+        s.add(_lead(LeadStage.CONTACTED, date(2026, 9, 1)))
+        s.flush()
+        lead_id = s.query(Lead).one().id
+
+    minimal = _call(session_factory, "update_lead", lead_id=lead_id)
+    assert minimal["outcome"] == "updated" and minimal["changes"] == []
+
+    task = _call(session_factory, "create_task", category="governance", title="W-9 for new vendor", dedup_key="task:w9")
+    assert task["outcome"] == "created"
+
+    moved = _call(session_factory, "update_task", task_id=task["task_id"])
+    assert moved["outcome"] == "updated"
+
+    lead = _call(session_factory, "create_lead", business_name="Sunset & Vine Deli", lead_source="walk-in")
+    assert lead["outcome"] == "created"
+
+
 def test_mark_gather_complete_uses_run_start(session_factory):
     seed_routines(session_factory)
     with session_factory() as s:

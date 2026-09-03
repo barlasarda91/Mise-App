@@ -25,10 +25,11 @@ class ToolDef:
     description: str
     input_schema: dict
     handler: Callable[..., Any]  # handler(session, **tool_input)
-    # The API caps union-typed parameters (type arrays / anyOf) at 16 across
-    # all strict tools per request; field-heavy tools opt out of strict and
-    # give their handler params defaults instead.
-    strict: bool = True
+    # Strict mode is off for all tools: the API's strict-schema compiler
+    # rejects toolsets like ours ("too many union parameters", "schema is
+    # too complex"). Handlers default their optional params and validate
+    # inputs themselves; dispatch returns errors the model can correct.
+    strict: bool = False
 
 
 _REGISTRY: dict[str, ToolDef] = {}
@@ -61,15 +62,13 @@ def tool_specs(names: list[str] | None = None) -> list[dict]:
     """API tool definitions, sorted by name so the request prefix stays
     byte-stable for prompt caching."""
     tools = _REGISTRY.values() if names is None else [_REGISTRY[n] for n in names]
-    return [
-        {
-            "name": t.name,
-            "description": t.description,
-            "strict": t.strict,
-            "input_schema": t.input_schema,
-        }
-        for t in sorted(tools, key=lambda t: t.name)
-    ]
+    out = []
+    for t in sorted(tools, key=lambda t: t.name):
+        spec = {"name": t.name, "description": t.description, "input_schema": t.input_schema}
+        if t.strict:
+            spec["strict"] = True
+        out.append(spec)
+    return out
 
 
 def dispatch(name: str, tool_input: dict, session: Session) -> tuple[str, bool]:

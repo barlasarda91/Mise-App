@@ -49,7 +49,7 @@ def _tz() -> ZoneInfo:
 # ---------- Gmail (read-only + metadata; drafts arrive in milestone 9) ----------
 
 
-def _search_gmail(session: Session, mailbox: str, query: str, after_date, max_results: int):
+def _search_gmail(session: Session, mailbox: str, query: str, after_date=None, max_results: int = 25):
     from app.tools import gmail
 
     after = None
@@ -76,7 +76,7 @@ register(
                 "after_date": NULLABLE_STR,
                 "max_results": {"type": "integer"},
             },
-            "required": ["mailbox", "query", "after_date", "max_results"],
+            "required": ["mailbox", "query"],
             "additionalProperties": False,
         },
         handler=_search_gmail,
@@ -257,12 +257,11 @@ register(
             "additionalProperties": False,
         },
         handler=_create_lead,
-        strict=False,  # optional fields may simply be omitted
     )
 )
 
 
-def _update_lead(session: Session, lead_id: int, stage, loss_reason, note):
+def _update_lead(session: Session, lead_id: int, stage=None, loss_reason=None, note=None):
     lead = session.get(Lead, lead_id)
     if lead is None:
         raise ValueError(f"lead {lead_id} not found")
@@ -316,7 +315,7 @@ register(
                 "loss_reason": NULLABLE_STR,
                 "note": NULLABLE_STR,
             },
-            "required": ["lead_id", "stage", "loss_reason", "note"],
+            "required": ["lead_id"],
             "additionalProperties": False,
         },
         handler=_update_lead,
@@ -361,7 +360,7 @@ def _create_task_impl(session, category, title, dedup_key, description, due_date
     return {"outcome": "created", "task_id": task.id, "title": title}
 
 
-def _create_task(session: Session, category, title, dedup_key, description, due_date, assignee, lead_id):
+def _create_task(session: Session, category, title, dedup_key, description=None, due_date=None, assignee=None, lead_id=None):
     source_ref = {"lead_id": lead_id} if lead_id else None
     return _create_task_impl(session, category, title, dedup_key, description, due_date, assignee, source_ref)
 
@@ -386,7 +385,7 @@ register(
                 "assignee": NULLABLE_STR,
                 "lead_id": {"type": ["integer", "null"]},
             },
-            "required": ["category", "title", "dedup_key", "description", "due_date", "assignee", "lead_id"],
+            "required": ["category", "title", "dedup_key"],
             "additionalProperties": False,
         },
         handler=_create_task,
@@ -418,7 +417,7 @@ register(
 )
 
 
-def _update_task(session: Session, task_id: int, status, waiting_on, due_date, assignee):
+def _update_task(session: Session, task_id: int, status=None, waiting_on=None, due_date=None, assignee=None):
     task = session.get(Task, task_id)
     if task is None:
         raise ValueError(f"task {task_id} not found")
@@ -457,7 +456,7 @@ register(
                 "due_date": {"type": ["string", "null"], "description": "YYYY-MM-DD, '' to clear, null to keep"},
                 "assignee": NULLABLE_STR,
             },
-            "required": ["task_id", "status", "waiting_on", "due_date", "assignee"],
+            "required": ["task_id"],
             "additionalProperties": False,
         },
         handler=_update_task,
@@ -612,7 +611,6 @@ register(
             "additionalProperties": False,
         },
         handler=_create_email_draft,
-        strict=False,  # optional fields may simply be omitted
     )
 )
 
