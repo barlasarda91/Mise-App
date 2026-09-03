@@ -418,12 +418,14 @@ def board_add_task(
 
 @app.get("/board/task/{task_id}", response_class=HTMLResponse)
 def task_detail(request: Request, task_id: int, msg: str | None = None):
-    from app.web.board_view import load_task
+    from app.web.board_view import load_task, load_task_email_context
 
     task = load_task(task_id)
     if task is None:
         return RedirectResponse("/board?msg=Task not found.", status_code=303)
-    return render_page(request, "task.html", "board", task=task, msg=msg)
+    return render_page(
+        request, "task.html", "board", task=task, email_ctx=load_task_email_context(task), msg=msg
+    )
 
 
 @app.post("/tasks/{task_id}/status")
@@ -436,6 +438,30 @@ def task_set_status(task_id: int, status: str = Form(...), waiting_on: str = For
         msg = f"Error: {exc}"
     target = next if next.startswith("/") and not next.startswith("//") else "/board"
     return RedirectResponse(f"{target}?msg={msg}", status_code=303)
+
+
+@app.post("/tasks/{task_id}/draft")
+def task_draft_email(
+    task_id: int,
+    instruction: str = Form(""),
+    mailbox: str = Form("arda"),
+    thread_id: str = Form(""),
+    to: str = Form(""),
+):
+    from app.web.board_view import load_task
+    from app.web.drafts_view import start_generation
+
+    task = load_task(task_id)
+    lead_id = str(task.get("lead_id") or "") if task else ""
+    try:
+        msg, draft_id = start_generation(
+            instruction, mailbox, lead_id, thread_id, task_id=str(task_id), to=to
+        )
+    except Exception as exc:
+        msg, draft_id = f"Error: {exc}", None
+    if draft_id:
+        return RedirectResponse(f"/drafts?draft={draft_id}&msg={msg}", status_code=303)
+    return RedirectResponse(f"/board/task/{task_id}?msg={msg}", status_code=303)
 
 
 @app.post("/tasks/{task_id}/edit")

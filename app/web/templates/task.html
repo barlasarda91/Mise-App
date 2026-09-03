@@ -39,6 +39,33 @@
     {% endif %}
 
     <div class="box">
+      <div class="box-hd"><span class="lbl">Email</span>
+        <span class="ix">{% if email_ctx and email_ctx.messages %}{{ email_ctx.messages | length }} · VIA {{ email_ctx.mailbox | upper }}@{% else %}NO HISTORY{% endif %}</span>
+      </div>
+      <div class="box-bd">
+        {% if email_ctx and email_ctx.error %}
+        <div class="note">Couldn't load email history: {{ email_ctx.error }}</div>
+        {% elif email_ctx and email_ctx.messages %}
+        {% for m in email_ctx.messages %}
+        {% if loop.last %}
+        <div class="msg">
+          <div class="who">{{ m.from }} · {{ m.date }}</div>
+          <div class="mailbody" style="font-size:13.5px">{{ m.body }}</div>
+        </div>
+        {% else %}
+        <details class="threadmsg">
+          <summary>{{ m.from }} · {{ m.date }}</summary>
+          <div class="mailbody" style="font-size:13.5px;padding:10px 12px">{{ m.body }}</div>
+        </details>
+        {% endif %}
+        {% endfor %}
+        {% else %}
+        <div class="note">No email history found for this task.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="box">
       <div class="box-hd"><span class="lbl">Activity</span><span class="ix">{{ task.activities | length }}</span></div>
       <div>
         {% for a in task.activities %}
@@ -51,6 +78,25 @@
   </div>
 
   <div>
+    <div class="box">
+      <div class="box-hd"><span class="lbl">Draft email</span><span class="ix">CLAUDE · {% if email_ctx and email_ctx.thread_id %}REPLIES ON-THREAD{% else %}FRESH{% endif %}</span></div>
+      <div class="box-bd">
+        <form method="post" action="/tasks/{{ task.id }}/draft" class="stack">
+          <input type="hidden" name="thread_id" value="{{ email_ctx.thread_id if email_ctx and email_ctx.thread_id else '' }}">
+          <input type="hidden" name="to" value="{{ email_ctx.reply_addr if email_ctx and email_ctx.reply_addr else '' }}">
+          <label>Instruction<input name="instruction" placeholder="reply with cutoff dates and roast turnaround" required></label>
+          <label>From mailbox
+            <select name="mailbox">
+              <option value="arda">arda@ (personal voice)</option>
+              <option value="hello" {% if email_ctx and email_ctx.mailbox == "hello" %}selected{% endif %}>hello@ (brand voice)</option>
+            </select>
+          </label>
+          <button class="linkish solid" type="submit">Generate draft</button>
+        </form>
+        <div class="note">Opens in Drafts linked to this task{% if task.lead_id %} and its lead{% endif %}{% if email_ctx and email_ctx.thread_id %}, replying on the thread{% endif %}.</div>
+      </div>
+    </div>
+
     <div class="box">
       <div class="box-hd"><span class="lbl">Move</span><span class="ix">NOW: {{ task.status | upper }}</span></div>
       <div class="box-bd">

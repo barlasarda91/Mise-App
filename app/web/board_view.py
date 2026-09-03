@@ -121,6 +121,7 @@ def load_task(task_id: int) -> dict | None:
             ).all()
             return {
                 **_card(task, today),
+                "gmail_msg_id": ref.get("gmail_msg_id"),
                 "description": task.description,
                 "category": task.category.value,
                 "category_label": dict((c.value, l) for c, l in CATEGORIES)[task.category.value],
@@ -134,6 +135,65 @@ def load_task(task_id: int) -> dict | None:
             }
     except Exception:
         return None
+
+
+def _counterpart_addr(messages: list[dict]) -> str:
+    """Newest non-Boxx sender in a conversation — the address a reply goes to."""
+    from email.utils import parseaddr
+
+    for m in reversed(messages):
+        addr = parseaddr(m.get("from", ""))[1]
+        if addr and "boxxcoffee.com" not in addr.lower():
+            return addr
+    return ""
+
+
+def load_task_email_context(task: dict | None) -> dict | None:
+    """Email conversation behind a task: via its linked lead's contact, or —
+    for email-sourced tasks with no lead — by locating the source message's
+    thread in either mailbox."""
+    if not task:
+        return None
+    if task.get("lead_id"):
+        try:
+            with db_session() as s:
+                from app.models import Lead
+
+                lead = s.get(Lead, task["lead_id"])
+                email = lead.contact_email if lead else None
+        except Exception:
+            email = None
+        if not email:
+            return None
+        from app.web.pipeline_view import load_email_context
+
+        ctx = load_email_context({"contact_email": email})
+        if ctx is not None:
+            ctx["reply_addr"] = email
+        return ctx
+
+    msg_id = task.get("gmail_msg_id")
+    if not msg_id:
+        return None
+    from app.models.enums import FromMailbox
+    from app.tools import gmail
+    from app.web.drafts_view import load_thread
+
+    last_error = None
+    for mailbox in ("arda", "hello"):
+        try:
+            message = gmail.get_message(FromMailbox(mailbox), msg_id)
+        except Exception as exc:
+            last_error = f"{type(exc).__name__}: {exc}"
+            continue
+        ctx = load_thread({"thread_id": message.get("thread_id"), "mailbox": mailbox, "to": ""})
+        if ctx is not None:
+            ctx["reply_addr"] = _counterpart_addr(ctx.get("messages") or [])
+            return ctx
+    if last_error:
+        return {"error": last_error, "messages": [], "label": "thread", "thread_id": None,
+                "mailbox": "arda", "reply_addr": ""}
+    return None
 
 
 # ---------- manual services ----------

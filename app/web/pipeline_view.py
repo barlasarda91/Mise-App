@@ -194,8 +194,12 @@ def log_activity_manual(lead_id: int, type_: str, occurred_on: str, detail: str)
             lead.last_confirmed_action is None or when > lead.last_confirmed_action
         ):
             lead.last_confirmed_action = when  # Arda-reported: confirmed by definition
+        from app.routines.task_sync import sync_lead_tasks
+
+        done = sync_lead_tasks(s, lead, _today())
         name = lead.business_name
-    return f"Logged {type_} on {when} for {name}."
+    suffix = f" Auto-completed: {', '.join(done)}." if done else ""
+    return f"Logged {type_} on {when} for {name}.{suffix}"
 
 
 def change_stage_manual(lead_id: int, stage: str, loss_reason: str) -> str:
@@ -221,7 +225,11 @@ def change_stage_manual(lead_id: int, stage: str, loss_reason: str) -> str:
         lead.stage_since = _today()
         if new_stage == LeadStage.CLOSED_LOST:
             lead.loss_reason = loss_reason.strip()
-    return f"Stage → {new_stage.value}."
+        from app.routines.task_sync import sync_lead_tasks
+
+        done = sync_lead_tasks(s, lead, _today())
+    suffix = f" Auto-completed: {', '.join(done)}." if done else ""
+    return f"Stage → {new_stage.value}.{suffix}"
 
 
 def resolve_pending(lead_id: int, action: str) -> str:
@@ -245,7 +253,11 @@ def resolve_pending(lead_id: int, action: str) -> str:
             )
             if lead.last_confirmed_action is None or when > lead.last_confirmed_action:
                 lead.last_confirmed_action = when
-            message = f"Confirmed — timer reset to {when}."
+            from app.routines.task_sync import sync_lead_tasks
+
+            done = sync_lead_tasks(s, lead, _today())
+            suffix = f" Auto-completed: {', '.join(done)}." if done else ""
+            message = f"Confirmed — timer reset to {when}.{suffix}"
         else:
             message = "Dismissed."
         lead.pending_confirmation = None

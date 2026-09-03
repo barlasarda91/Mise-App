@@ -266,7 +266,10 @@ def load_thread(selected: dict | None) -> dict | None:
 # ---------- services ----------
 
 
-def start_generation(instruction: str, mailbox: str, lead_id: str, thread_id: str) -> tuple[str, int | None]:
+def start_generation(
+    instruction: str, mailbox: str, lead_id: str, thread_id: str,
+    task_id: str = "", to: str = "",
+) -> tuple[str, int | None]:
     if not instruction.strip():
         return "Tell it what to draft first.", None
     with db_session() as s:
@@ -274,6 +277,7 @@ def start_generation(instruction: str, mailbox: str, lead_id: str, thread_id: st
             subject="",
             from_mailbox=FromMailbox(mailbox),
             related_lead_id=int(lead_id) if lead_id else None,
+            related_task_id=int(task_id) if task_id else None,
             gmail_thread_id=thread_id.strip() or None,
             status=DraftStatus.DRAFTING,
         )
@@ -281,6 +285,8 @@ def start_generation(instruction: str, mailbox: str, lead_id: str, thread_id: st
             lead = s.get(Lead, draft.related_lead_id)
             if lead and lead.contact_email:
                 draft.to_addrs = [lead.contact_email]
+        if not draft.to_addrs and to.strip():
+            draft.to_addrs = [to.strip()]
         s.add(draft)
         s.flush()
         draft_id = draft.id
@@ -439,6 +445,11 @@ def send_now(draft_id: int) -> str:
                 lead_note = f" {lead.business_name} → contacted, timer reset."
             else:
                 lead_note = f" {lead.business_name}: timer reset to today."
+            from app.routines.task_sync import sync_lead_tasks
+
+            done = sync_lead_tasks(s, lead, today)
+            if done:
+                lead_note += f" Auto-completed: {', '.join(done)}."
     return f"Sent from {_mailbox_address(mailbox)}.{lead_note}"
 
 

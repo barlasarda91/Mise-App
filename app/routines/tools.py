@@ -150,6 +150,12 @@ def _record_email_activity(
     )
     if advances:
         lead.last_confirmed_action = when
+        from app.routines.task_sync import sync_lead_tasks
+
+        done = sync_lead_tasks(session, lead, today)
+        if done:
+            return {"outcome": "recorded", "lead": lead.business_name, "advanced_timer": True,
+                    "auto_completed_tasks": done}
     return {"outcome": "recorded", "lead": lead.business_name, "advanced_timer": advances}
 
 
@@ -285,6 +291,10 @@ def _update_lead(session: Session, lead_id: int, stage=None, loss_reason=None, n
         if loss_reason:
             lead.loss_reason = loss_reason
         changes.append(f"stage → {new_stage.value}")
+        from app.routines.task_sync import sync_lead_tasks
+
+        for title in sync_lead_tasks(session, lead, today):
+            changes.append(f"auto-completed task: {title}")
     if note:
         session.add(
             LeadActivity(
