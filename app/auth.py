@@ -9,6 +9,13 @@ from starlette.requests import Request
 from app.settings import Settings
 
 _SESSION_VALUE = "mise-authenticated"
+_DEFAULT_SECRET = "dev-secret-change-me"
+
+
+def secret_usable(settings: Settings) -> bool:
+    """The known default secret must never validate or mint sessions outside
+    dev mode — otherwise anyone can forge the cookie offline."""
+    return settings.dev_mode or settings.session_secret != _DEFAULT_SECRET
 
 
 def _serializer(settings: Settings) -> URLSafeTimedSerializer:
@@ -23,12 +30,14 @@ def verify_password(settings: Settings, candidate: str) -> bool:
 
 
 def issue_session_token(settings: Settings) -> str:
+    if not secret_usable(settings):
+        raise RuntimeError("SESSION_SECRET is not configured")
     # A random nonce keeps tokens unique; validity comes from the signature + age.
     return _serializer(settings).dumps({"v": _SESSION_VALUE, "n": secrets.token_hex(8)})
 
 
 def session_is_valid(settings: Settings, token: str | None) -> bool:
-    if not token:
+    if not token or not secret_usable(settings):
         return False
     try:
         data = _serializer(settings).loads(token, max_age=settings.session_max_age_seconds)

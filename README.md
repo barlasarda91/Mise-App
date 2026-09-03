@@ -48,6 +48,23 @@ UX reference: [`docs/boxx-routines-hub-mockups.html`](docs/boxx-routines-hub-moc
   drafts via `create_email_draft` (deduped). Operator-only Send button with
   confirmation (syncs latest content, sends, locks the draft); the model
   tool layer can never send — enforced by a test. ✅
+- Post-spec additions: draft attachments + reusable file library, Inbox tab
+  (merged unread, sender muting, on-thread replies, nav badge), lead↔board
+  auto-sync on send/advance, task/lead email workstations, clickable Home. ✅
+- Milestone 10 — polish pass: full-branch security review (session-secret
+  fail-closed incl. forged-cookie gate test, MIME header-injection
+  stripping, markdown href allowlist, security headers, redirect
+  validation), code review applied, spec conformance verified. ✅
+
+## Known deviations from the spec (deliberate)
+
+- Routine prompts/schedules/models are edited via the versioned files in
+  `app/routines/prompts/` and the seed defaults, not in-app (Settings has
+  the enabled toggle + Run now). The files are the source of truth.
+- Operator-initiated Send exists (spec §8.2 amendment 2026-09-03); the
+  model/routines still cannot send — test-enforced.
+- The `users` table is unused; auth is the APP_PASSWORD gate (spec §12.6).
+- Mise cannot mark mail read (gmail.readonly + compose scopes only).
 
 ## QuickBooks provisioning
 

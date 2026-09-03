@@ -8,6 +8,7 @@ which Arda clicks after reviewing; never wire it into a model tool.
 """
 
 import base64
+import os
 import re
 from datetime import datetime
 from email.message import EmailMessage
@@ -67,11 +68,15 @@ def build_mime(
         refs = f"{references} {in_reply_to}".strip() if references else in_reply_to
         msg["References"] = clean(refs)
     msg.set_content(body)
-    import os
-
     for att in attachments or []:
         maintype, _, subtype = (att.get("content_type") or "application/octet-stream").partition("/")
-        filename = clean(os.path.basename(att["filename"]))[:200] or "attachment"
+        # Strip both separator styles (os.path.basename ignores '\' on Linux)
+        # and truncate the stem, never the extension.
+        filename = clean(att["filename"]).replace("\\", "/")
+        filename = os.path.basename(filename) or "attachment"
+        if len(filename) > 160:
+            stem, dot, ext = filename.rpartition(".")
+            filename = (stem[:150] + "." + ext[:9]) if dot and stem else filename[:160]
         msg.add_attachment(
             att["data"],
             maintype=clean(maintype) or "application",

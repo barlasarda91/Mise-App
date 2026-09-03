@@ -43,29 +43,29 @@ def test_mime_headers_strip_crlf_injection():
     assert "/" not in atts[0].get_filename() and "\n" not in atts[0].get_filename()
 
 
-def test_markdown_blocks_javascript_hrefs():
+def test_markdown_blocks_javascript_and_protocol_relative_hrefs():
     html_out = render_markdown("[click](javascript:alert(1)) and [ok](https://boxxcoffee.com)")
     assert "javascript:" not in html_out
     assert 'href="https://boxxcoffee.com"' in html_out
     assert "<script>" not in render_markdown("<script>alert(1)</script>")
+    # protocol-relative //host is not "relative"
+    out = render_markdown("[invoice](//evil.example/phish) [rel](/runs)")
+    assert 'href="//evil.example/phish"' not in out
+    assert 'href="/runs"' in out
 
 
-def test_login_backoff_escalates(client, monkeypatch):
-    import app.main as main
-
-    sleeps = []
-
-    async def fake_sleep(seconds):
-        sleeps.append(seconds)
-
-    monkeypatch.setattr(main.asyncio, "sleep", fake_sleep)
-    main._failed_logins["count"] = 0
-    for _ in range(3):
-        client.post("/login", data={"password": "wrong"})
-    assert sleeps == [0.5, 1.0, 1.5]
-    # success resets the counter
-    client.post("/login", data={"password": "test-password"})
-    assert main._failed_logins["count"] == 0
+def test_mime_filename_backslash_and_extension_preserved():
+    raw = build_mime(
+        "hello@boxxcoffee.com", ["x@y.com"], "s", "b",
+        attachments=[
+            {"filename": "..\\..\\evil.exe", "content_type": "application/pdf", "data": b"x"},
+            {"filename": "p" * 300 + ".pdf", "content_type": "application/pdf", "data": b"x"},
+        ],
+    )
+    atts = list(decode_mime(raw).iter_attachments())
+    assert atts[0].get_filename() == "evil.exe"  # traversal components stripped
+    assert atts[1].get_filename().endswith(".pdf")  # extension survives truncation
+    assert len(atts[1].get_filename()) <= 160
 
 
 def test_login_refuses_default_secret_outside_dev(client, monkeypatch):
@@ -77,6 +77,24 @@ def test_login_refuses_default_secret_outside_dev(client, monkeypatch):
     r = client.post("/login", data={"password": "test-password"})
     assert r.status_code == 503
     assert "SESSION_SECRET" in r.text
+
+
+def test_forged_default_secret_cookie_rejected_by_gate(client, monkeypatch):
+    """The real vulnerability: a cookie signed offline with the KNOWN default
+    secret must not pass the auth middleware when the server runs with it."""
+    from itsdangerous import URLSafeTimedSerializer
+
+    from app.settings import get_settings
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "session_secret", "dev-secret-change-me", raising=False)
+    monkeypatch.setattr(settings, "dev_mode", False, raising=False)
+    forged = URLSafeTimedSerializer("dev-secret-change-me", salt="mise-session").dumps(
+        {"v": "mise-authenticated", "n": "attacker"}
+    )
+    client.cookies.set("mise_session", forged)
+    r = client.get("/", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/login"
 
 
 def test_redirect_targets_validated(client):

@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.auth import issue_session_token, request_is_authenticated, verify_password
+from app.auth import issue_session_token, request_is_authenticated, secret_usable, verify_password
 from app.db import check_db
 from app.settings import get_settings
 
@@ -125,13 +125,12 @@ def login_form(request: Request):
     return templates.TemplateResponse(request, "login.html", {"error": None})
 
 
-_failed_logins = {"count": 0}
-
-
 @app.post("/login", response_class=HTMLResponse)
 async def login_submit(request: Request, password: str = Form("")):
     settings = get_settings()
-    if settings.session_secret == "dev-secret-change-me" and not settings.dev_mode:
+    if not secret_usable(settings):
+        # session_is_valid also refuses the default secret, so the gate stays
+        # closed to forged cookies too — this just gives a clear message.
         return templates.TemplateResponse(
             request,
             "login.html",
@@ -139,8 +138,9 @@ async def login_submit(request: Request, password: str = Form("")):
             status_code=503,
         )
     if not verify_password(settings, password):
-        _failed_logins["count"] += 1
-        await asyncio.sleep(min(0.5 * _failed_logins["count"], 5.0))  # escalating damper
+        # Flat damper: a per-attempt counter would let an attacker degrade the
+        # operator (shared state) while barely slowing parallel guessing.
+        await asyncio.sleep(0.5)
         message = (
             "APP_PASSWORD is not configured on the server."
             if not settings.app_password
@@ -149,7 +149,6 @@ async def login_submit(request: Request, password: str = Form("")):
         return templates.TemplateResponse(
             request, "login.html", {"error": message}, status_code=401
         )
-    _failed_logins["count"] = 0
     response = RedirectResponse("/", status_code=303)
     response.set_cookie(
         settings.session_cookie_name,

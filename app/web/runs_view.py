@@ -2,6 +2,7 @@
 
 import html
 import json
+import re
 from datetime import datetime
 
 import markdown as _markdown
@@ -20,9 +21,9 @@ TOOL_RESULT_PREVIEW_CHARS = 3000
 CODE_PREFIXES = {"lead_tracker": "R", "daily_agenda": "A"}
 
 
-import re as _re
-
-_UNSAFE_HREF = _re.compile(r'href="(?!https?://|mailto:|/)[^"]*"', _re.I)
+# Allow http(s)/mailto/single-slash-relative only; /(?!/) rejects
+# protocol-relative //host links.
+_UNSAFE_HREF = re.compile(r'href="(?!https?://|mailto:|/(?!/))[^"]*"', re.I)
 
 
 def render_markdown(text: str) -> str:
