@@ -4,11 +4,45 @@ tool layer has no send capability."""
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import DateTime, ForeignKey, LargeBinary, String, Text, UniqueConstraint, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, PortableJSON, TimestampMixin, db_enum
 from app.models.enums import DraftStatus, FromMailbox
+
+
+class StoredFile(Base):
+    """Uploaded file (attachment payloads; pricelists live here with
+    in_library=True for reuse). Bytes are stored in Postgres."""
+
+    __tablename__ = "files"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    filename: Mapped[str] = mapped_column(String(255))
+    content_type: Mapped[str | None] = mapped_column(String(100))
+    size: Mapped[int] = mapped_column()
+    data: Mapped[bytes] = mapped_column(LargeBinary)
+    in_library: Mapped[bool] = mapped_column(default=False)
+    label: Mapped[str | None] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class DraftAttachment(Base):
+    __tablename__ = "draft_attachments"
+    __table_args__ = (UniqueConstraint("draft_id", "file_id", name="uq_draft_attachment"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    draft_id: Mapped[int] = mapped_column(
+        ForeignKey("email_drafts.id", ondelete="CASCADE"), index=True
+    )
+    file_id: Mapped[int] = mapped_column(ForeignKey("files.id"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    file: Mapped[StoredFile] = relationship()
 
 
 class EmailDraft(TimestampMixin, Base):

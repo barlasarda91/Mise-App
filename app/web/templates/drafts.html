@@ -55,6 +55,9 @@
       <p style="font-size:14px">Claude is writing this one — the page refreshes itself.</p>
       {% elif selected.sent %}
       <div class="mailbody" style="font-size:14px">{{ selected.body }}</div>
+      {% if selected.attachments %}
+      <div class="note" style="margin-top:10px">{% for a in selected.attachments %}📎 {{ a.filename }} ({{ a.size }}){% if not loop.last %} · {% endif %}{% endfor %}</div>
+      {% endif %}
       <div class="note">Sent ✓ from {{ "ardabarlas" if selected.mailbox == "arda" else "hello" }}@boxxcoffee.com — this draft is read-only now. Start a new draft for a follow-up.</div>
       {% else %}
       <form method="post" action="/drafts/{{ selected.id }}" class="stack">
@@ -70,6 +73,36 @@
         <label>Body<textarea name="body" rows="14">{{ selected.body }}</textarea></label>
         <button class="linkish" type="submit">Save changes</button>
       </form>
+      <div class="box" style="margin-top:14px">
+        <div class="box-hd"><span class="lbl">Attachments</span><span class="ix">{{ selected.attachments | length }}</span></div>
+        <div>
+          {% for a in selected.attachments %}
+          <div class="row">
+            <span class="name" style="font-size:13.5px">📎 {{ a.filename }}</span>
+            <span class="meta">{{ a.size }}</span>
+            <span class="spacer"></span>
+            <form method="post" action="/drafts/{{ selected.id }}/attachments/{{ a.id }}/remove"><button class="linkish" type="submit">Remove</button></form>
+          </div>
+          {% endfor %}
+          <div class="box-bd" style="display:flex;flex-direction:column;gap:10px">
+            {% if library %}
+            <form method="post" action="/drafts/{{ selected.id }}/attach-library" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <select name="file_id" class="sel" style="font-family:var(--font-mono);font-size:11px;border:1px solid var(--ink);background:var(--paper);padding:6px 9px">
+                {% for f in library %}<option value="{{ f.id }}">{{ f.name }} ({{ f.size }})</option>{% endfor %}
+              </select>
+              <button class="linkish" type="submit">Attach from library</button>
+            </form>
+            {% endif %}
+            <form method="post" action="/drafts/{{ selected.id }}/attach" enctype="multipart/form-data" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <input type="file" name="file" required style="font-family:var(--font-mono);font-size:11px">
+              <label style="font-family:var(--font-mono);font-size:10.5px;display:flex;gap:5px;align-items:center"><input type="checkbox" name="to_library"> keep in library as</label>
+              <input name="label" placeholder="wholesale pricelist" style="border:1px solid var(--line);background:var(--paper);font-family:var(--font-mono);font-size:11px;padding:5px 8px">
+              <button class="linkish" type="submit">Upload &amp; attach</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
       <div style="display:flex;gap:10px;margin-top:14px">
         <form method="post" action="/drafts/{{ selected.id }}/send" onsubmit="return confirm('Send this email now from {{ 'ardabarlas' if selected.mailbox == 'arda' else 'hello' }}@boxxcoffee.com? This cannot be undone.')"><button class="linkish solid" type="submit">Send</button></form>
         <form method="post" action="/drafts/{{ selected.id }}/save-to-gmail"><button class="linkish" type="submit">Save to Gmail</button></form>

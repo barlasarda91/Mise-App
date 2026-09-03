@@ -11,9 +11,26 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 
 from app.db import db_session
-from app.models import DraftStatus, EmailDraft, Lead, LeadStage, OPEN_LEAD_STAGES
+from app.models import (
+    DraftAttachment,
+    DraftStatus,
+    EmailDraft,
+    Lead,
+    LeadStage,
+    OPEN_LEAD_STAGES,
+    StoredFile,
+)
 from app.models.enums import FromMailbox
 from app.settings import get_settings
+
+MAX_FILE_BYTES = 10 * 1024 * 1024  # per file
+MAX_TOTAL_ATTACH_BYTES = 20 * 1024 * 1024  # per email
+
+
+def _fmt_size(n: int) -> str:
+    if n >= 1024 * 1024:
+        return f"{n / (1024 * 1024):.1f} MB"
+    return f"{max(n // 1024, 1)} KB"
 
 STATUS_LABELS = {
     DraftStatus.DRAFTING: "drafting…",
@@ -68,6 +85,15 @@ def load_draft(draft_id: int) -> dict | None:
             if draft.related_lead_id:
                 lead = s.get(Lead, draft.related_lead_id)
                 lead_name = lead.business_name if lead else None
+            attachments = [
+                {"id": att_id, "filename": filename, "size": _fmt_size(size)}
+                for att_id, filename, size in s.execute(
+                    select(DraftAttachment.id, StoredFile.filename, StoredFile.size)
+                    .join(StoredFile, DraftAttachment.file_id == StoredFile.id)
+                    .where(DraftAttachment.draft_id == draft_id)
+                    .order_by(DraftAttachment.id)
+                ).all()
+            ]
             return {
                 **_row(draft),
                 "to": _addrs(draft.to_addrs),
@@ -76,6 +102,7 @@ def load_draft(draft_id: int) -> dict | None:
                 "lead_name": lead_name,
                 "gmail_draft_id": draft.gmail_draft_id,
                 "thread_id": draft.gmail_thread_id,
+                "attachments": attachments,
             }
     except Exception:
         return None
@@ -90,6 +117,103 @@ def open_leads_for_picker() -> list[dict]:
             return [{"id": l.id, "name": l.business_name} for l in leads]
     except Exception:
         return []
+
+
+def library_files() -> list[dict]:
+    try:
+        with db_session() as s:
+            files = s.execute(
+                select(StoredFile.id, StoredFile.filename, StoredFile.label, StoredFile.size)
+                .where(StoredFile.in_library.is_(True))
+                .order_by(StoredFile.filename)
+            ).all()
+            return [
+                {"id": f.id, "name": f.label or f.filename, "size": _fmt_size(f.size)}
+                for f in files
+            ]
+    except Exception:
+        return []
+
+
+def attach_upload(draft_id: int, filename: str, content: bytes, content_type: str, to_library: bool, label: str) -> str:
+    if not filename or not content:
+        return "Choose a file first."
+    if len(content) > MAX_FILE_BYTES:
+        return f"File too large ({_fmt_size(len(content))}) — 10 MB max."
+    with db_session() as s:
+        draft = s.get(EmailDraft, draft_id)
+        if draft is None:
+            return "Draft not found."
+        if draft.sent_at:
+            return "Already sent."
+        stored = StoredFile(
+            filename=filename,
+            content_type=content_type or "application/octet-stream",
+            size=len(content),
+            data=content,
+            in_library=to_library,
+            label=label.strip() or None if to_library else None,
+        )
+        s.add(stored)
+        s.flush()
+        s.add(DraftAttachment(draft_id=draft_id, file_id=stored.id))
+        if draft.status == DraftStatus.SAVED_TO_GMAIL:
+            draft.status = DraftStatus.COMPOSED  # changed since last save
+    saved = " (kept in library)" if to_library else ""
+    return f"Attached {filename}{saved}."
+
+
+def attach_from_library(draft_id: int, file_id: int) -> str:
+    with db_session() as s:
+        draft = s.get(EmailDraft, draft_id)
+        stored = s.get(StoredFile, file_id)
+        if draft is None or stored is None:
+            return "Not found."
+        if draft.sent_at:
+            return "Already sent."
+        exists = s.scalar(
+            select(DraftAttachment).where(
+                DraftAttachment.draft_id == draft_id, DraftAttachment.file_id == file_id
+            )
+        )
+        if exists:
+            return "Already attached."
+        s.add(DraftAttachment(draft_id=draft_id, file_id=file_id))
+        if draft.status == DraftStatus.SAVED_TO_GMAIL:
+            draft.status = DraftStatus.COMPOSED
+        name = stored.label or stored.filename
+    return f"Attached {name}."
+
+
+def remove_attachment(draft_id: int, attachment_id: int) -> str:
+    with db_session() as s:
+        att = s.get(DraftAttachment, attachment_id)
+        if att is None or att.draft_id != draft_id:
+            return "Not found."
+        draft = s.get(EmailDraft, draft_id)
+        if draft and draft.sent_at:
+            return "Already sent."
+        stored = s.get(StoredFile, att.file_id)
+        s.delete(att)
+        # ad-hoc uploads (not library) are orphaned once detached — clean up
+        if stored and not stored.in_library:
+            others = s.scalar(select(DraftAttachment).where(DraftAttachment.file_id == stored.id))
+            if others is None:
+                s.delete(stored)
+    return "Removed."
+
+
+def _load_attachment_payloads(session, draft_id: int) -> list[dict]:
+    rows = session.execute(
+        select(StoredFile)
+        .join(DraftAttachment, DraftAttachment.file_id == StoredFile.id)
+        .where(DraftAttachment.draft_id == draft_id)
+        .order_by(DraftAttachment.id)
+    ).scalars().all()
+    return [
+        {"filename": f.filename, "content_type": f.content_type, "data": f.data}
+        for f in rows
+    ]
 
 
 THREAD_BODY_CHARS = 4000
@@ -207,12 +331,17 @@ def _sync_to_gmail(draft_id: int) -> tuple[bool, str]:
         if not draft.subject:
             return False, "Add a subject first."
         mailbox = draft.from_mailbox
+        attachments = _load_attachment_payloads(s, draft_id)
+        total = sum(len(a["data"]) for a in attachments)
+        if total > MAX_TOTAL_ATTACH_BYTES:
+            return False, f"Attachments total {_fmt_size(total)} — 20 MB max per email."
         payload = dict(
             to=list(draft.to_addrs),
             subject=draft.subject,
             body=draft.body or "",
             cc=list(draft.cc_addrs) if draft.cc_addrs else None,
             thread_id=draft.gmail_thread_id,
+            attachments=attachments or None,
         )
         existing_gmail_id = draft.gmail_draft_id
 

@@ -1,5 +1,5 @@
 from app.models.base import Base
-from app.models.draft import EmailDraft
+from app.models.draft import DraftAttachment, EmailDraft, StoredFile
 from app.models.enums import (
     ActivitySource,
     CoffeeProgram,
@@ -30,8 +30,10 @@ __all__ = [
     "AppState",
     "Base",
     "CoffeeProgram",
+    "DraftAttachment",
     "DraftStatus",
     "EmailDraft",
+    "StoredFile",
     "ExternalMutation",
     "FromMailbox",
     "Lead",

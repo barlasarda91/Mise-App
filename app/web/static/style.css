@@ -166,7 +166,7 @@ a.cn:hover{color:var(--ember)}
 .toolresult pre{font-family:var(--font-mono);font-size:11.5px;padding:9px;border-top:1px solid var(--line);overflow-x:auto;white-space:pre-wrap;overflow-wrap:anywhere;max-height:340px;overflow-y:auto}
 .toolresult.err{border-color:var(--ember)}
 .toolresult.err summary{color:var(--ember)}
-.runwrap.withthread{grid-template-columns:230px minmax(0,1.45fr) minmax(0,.95fr)}
+.runwrap.withthread{grid-template-columns:220px minmax(0,1.9fr) minmax(0,1fr)}
 .threadmsg{border:1px solid var(--line);background:var(--paper);margin-bottom:10px}
 .threadmsg summary{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);padding:8px 12px;cursor:pointer;overflow-wrap:anywhere}
 @media(max-width:1100px){.runwrap.withthread{grid-template-columns:250px 1fr}}

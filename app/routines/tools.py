@@ -561,6 +561,8 @@ def _create_email_draft(
     lead_id=None,
     task_id=None,
     gmail_thread_id=None,
+
+    attach_library_labels=None,
 ):
     from app.models import DraftStatus, EmailDraft
     from app.models.enums import FromMailbox as FM
@@ -592,7 +594,27 @@ def _create_email_draft(
             run_id=ctx.get("run_id"),
         )
     )
-    return {"outcome": "created", "draft_id": draft.id}
+    attached, missing = [], []
+    for label in attach_library_labels or []:
+        from app.models import DraftAttachment, StoredFile
+
+        stored = session.scalar(
+            select(StoredFile).where(
+                StoredFile.in_library.is_(True),
+                (StoredFile.label == label) | (StoredFile.filename == label),
+            )
+        )
+        if stored is None:
+            missing.append(label)
+        else:
+            session.add(DraftAttachment(draft_id=draft.id, file_id=stored.id))
+            attached.append(stored.label or stored.filename)
+    result = {"outcome": "created", "draft_id": draft.id}
+    if attached:
+        result["attached"] = attached
+    if missing:
+        result["missing_library_files"] = missing
+    return result
 
 
 register(
@@ -606,7 +628,9 @@ register(
             "terms); hello = brand front-desk voice (self-introduce 'This is Arda from "
             "Boxx Coffee Roasters', brand 'we', service-first). Set gmail_thread_id when "
             "replying to an existing conversation. purpose = a short slug like "
-            "'followup' or 'inquiry_reply' (used for dedup)."
+            "'followup' or 'inquiry_reply' (used for dedup). attach_library_labels "
+            "attaches stored files by label — e.g. the wholesale pricelist on "
+            "inquiry replies, when one exists in the library."
         ),
         input_schema={
             "type": "object",
@@ -620,6 +644,11 @@ register(
                 "lead_id": {"type": "integer"},
                 "task_id": {"type": "integer"},
                 "gmail_thread_id": {"type": "string"},
+                "attach_library_labels": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Labels of stored library files to attach (e.g. 'wholesale pricelist').",
+                },
             },
             "required": ["mailbox", "to", "subject", "body", "purpose"],
             "additionalProperties": False,

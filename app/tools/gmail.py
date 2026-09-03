@@ -47,8 +47,10 @@ def build_mime(
     cc: list[str] | None = None,
     in_reply_to: str | None = None,
     references: str | None = None,
+    attachments: list[dict] | None = None,
 ) -> str:
-    """RFC 2822 message, base64url-encoded for the Gmail API `raw` field."""
+    """RFC 2822 message, base64url-encoded for the Gmail API `raw` field.
+    attachments: [{filename, content_type, data(bytes)}]."""
     msg = EmailMessage()
     msg["From"] = from_addr
     msg["To"] = ", ".join(to)
@@ -59,6 +61,14 @@ def build_mime(
         msg["In-Reply-To"] = in_reply_to
         msg["References"] = f"{references} {in_reply_to}".strip() if references else in_reply_to
     msg.set_content(body)
+    for att in attachments or []:
+        maintype, _, subtype = (att.get("content_type") or "application/octet-stream").partition("/")
+        msg.add_attachment(
+            att["data"],
+            maintype=maintype or "application",
+            subtype=subtype or "octet-stream",
+            filename=att["filename"],
+        )
     return base64.urlsafe_b64encode(msg.as_bytes()).decode()
 
 
@@ -68,6 +78,21 @@ def decode_mime(raw: str) -> EmailMessage:
 
 def _b64part(data: str) -> str:
     return base64.urlsafe_b64decode(data.encode()).decode(errors="replace")
+
+
+def _maybe_qp_decode(text: str, part: dict) -> str:
+    """Some senders' parts arrive still quoted-printable encoded (soft '='
+    line breaks, =XX escapes) — decode when the part says so or it shows."""
+    headers = {h["name"].lower(): h["value"] for h in part.get("headers") or []}
+    encoded = headers.get("content-transfer-encoding", "").lower() == "quoted-printable"
+    if encoded or "=\n" in text or "=\r\n" in text:
+        import quopri
+
+        try:
+            return quopri.decodestring(text.encode()).decode(errors="replace")
+        except Exception:
+            return text
+    return text
 
 
 def extract_body(payload: dict) -> str:
@@ -80,10 +105,11 @@ def extract_body(payload: dict) -> str:
         mime = part.get("mimeType", "")
         data = (part.get("body") or {}).get("data")
         if data:
+            text = _maybe_qp_decode(_b64part(data), part)
             if mime == "text/plain":
-                plain.append(_b64part(data))
+                plain.append(text)
             elif mime == "text/html":
-                html.append(_b64part(data))
+                html.append(text)
         for child in part.get("parts") or []:
             walk(child)
 
@@ -201,6 +227,7 @@ def create_draft(
     body: str,
     cc: list[str] | None = None,
     thread_id: str | None = None,
+    attachments: list[dict] | None = None,
 ) -> dict:
     """Create a native Gmail draft in the given mailbox. With `thread_id`, the
     draft is attached to that conversation with proper reply headers."""
@@ -210,7 +237,7 @@ def create_draft(
     if thread_id:
         in_reply_to, references = _thread_reply_headers(svc, thread_id)
     message: dict = {
-        "raw": build_mime(address, to, subject, body, cc, in_reply_to, references)
+        "raw": build_mime(address, to, subject, body, cc, in_reply_to, references, attachments)
     }
     if thread_id:
         message["threadId"] = thread_id
@@ -230,6 +257,7 @@ def update_draft(
     body: str,
     cc: list[str] | None = None,
     thread_id: str | None = None,
+    attachments: list[dict] | None = None,
 ) -> dict:
     address = mailbox_address(mailbox)
     svc = gmail_service(address)
@@ -237,7 +265,7 @@ def update_draft(
     if thread_id:
         in_reply_to, references = _thread_reply_headers(svc, thread_id)
     message: dict = {
-        "raw": build_mime(address, to, subject, body, cc, in_reply_to, references)
+        "raw": build_mime(address, to, subject, body, cc, in_reply_to, references, attachments)
     }
     if thread_id:
         message["threadId"] = thread_id

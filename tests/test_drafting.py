@@ -133,11 +133,11 @@ def test_save_to_gmail_and_update_flow(session_factory, monkeypatch):
 
     import app.tools.gmail as gm
 
-    def fake_create(mailbox, to, subject, body, cc=None, thread_id=None):
+    def fake_create(mailbox, to, subject, body, cc=None, thread_id=None, attachments=None):
         calls["create"] = dict(mailbox=mailbox, to=to, subject=subject, cc=cc, thread_id=thread_id)
         return {"draft_id": "gd-1", "message_id": "m-1", "thread_id": "t-9"}
 
-    def fake_update(mailbox, draft_id, to, subject, body, cc=None, thread_id=None):
+    def fake_update(mailbox, draft_id, to, subject, body, cc=None, thread_id=None, attachments=None):
         calls["update"] = dict(draft_id=draft_id)
         return {"draft_id": "gd-1", "message_id": "m-2", "thread_id": "t-9"}
 
@@ -250,7 +250,7 @@ def test_send_now_syncs_then_sends_and_locks(session_factory, monkeypatch):
 
     monkeypatch.setattr(
         gm, "create_draft",
-        lambda mailbox, to, subject, body, cc=None, thread_id=None: (
+        lambda mailbox, to, subject, body, cc=None, thread_id=None, attachments=None: (
             calls.append("create") or {"draft_id": "gd-7", "message_id": "m", "thread_id": "t-1"}
         ),
     )
@@ -291,6 +291,117 @@ def test_send_now_blocks_invalid_drafts(session_factory, monkeypatch):
         s.flush()
         draft_id = draft.id
     assert "To address" in dv.send_now(draft_id)
+
+
+def test_attachments_flow_and_gmail_payload(session_factory, monkeypatch):
+    import app.tools.gmail as gm
+    import app.web.drafts_view as dv
+    from app.models import DraftAttachment, StoredFile
+
+    monkeypatch.setattr(dv, "db_session", session_factory)
+    with session_factory() as s:
+        draft = EmailDraft(
+            subject="Boxx wholesale", body="Attached please see our pricelist,",
+            from_mailbox=FromMailbox.HELLO, to_addrs=["kathy@umbral.com"],
+            status=DraftStatus.COMPOSED,
+        )
+        s.add(draft)
+        s.flush()
+        draft_id = draft.id
+
+    # upload + keep in library
+    msg = dv.attach_upload(draft_id, "pricelist.pdf", b"%PDF-fake", "application/pdf", True, "wholesale pricelist")
+    assert "Attached pricelist.pdf" in msg and "library" in msg
+    assert dv.library_files()[0]["name"] == "wholesale pricelist"
+
+    # ad-hoc upload, then remove -> orphan cleaned up
+    dv.attach_upload(draft_id, "notes.txt", b"hi", "text/plain", False, "")
+    detail = dv.load_draft(draft_id)
+    assert [a["filename"] for a in detail["attachments"]] == ["pricelist.pdf", "notes.txt"]
+    att_id = detail["attachments"][1]["id"]
+    assert dv.remove_attachment(draft_id, att_id) == "Removed."
+    with session_factory() as s:
+        assert s.query(StoredFile).count() == 1  # library file kept, ad-hoc purged
+        assert s.query(DraftAttachment).count() == 1
+
+    # saving passes attachment payloads through to Gmail
+    captured = {}
+
+    def fake_create(mailbox, to, subject, body, cc=None, thread_id=None, attachments=None):
+        captured["attachments"] = attachments
+        return {"draft_id": "gd-1", "message_id": "m", "thread_id": None}
+
+    monkeypatch.setattr(gm, "create_draft", fake_create)
+    assert "Saved as a Gmail draft" in dv.save_to_gmail(draft_id)
+    assert captured["attachments"][0]["filename"] == "pricelist.pdf"
+    assert captured["attachments"][0]["data"] == b"%PDF-fake"
+
+
+def test_attach_upload_size_limit(session_factory, monkeypatch):
+    import app.web.drafts_view as dv
+
+    monkeypatch.setattr(dv, "db_session", session_factory)
+    with session_factory() as s:
+        draft = EmailDraft(subject="x", from_mailbox=FromMailbox.ARDA, status=DraftStatus.COMPOSED)
+        s.add(draft)
+        s.flush()
+        draft_id = draft.id
+    msg = dv.attach_upload(draft_id, "big.pdf", b"x" * (11 * 1024 * 1024), "application/pdf", False, "")
+    assert "too large" in msg
+
+
+def test_build_mime_with_attachment_roundtrip():
+    from app.tools.gmail import build_mime, decode_mime
+
+    raw = build_mime(
+        "hello@boxxcoffee.com", ["k@u.com"], "Pricelist", "body",
+        attachments=[{"filename": "pricelist.pdf", "content_type": "application/pdf", "data": b"%PDF-fake"}],
+    )
+    msg = decode_mime(raw)
+    atts = list(msg.iter_attachments())
+    assert len(atts) == 1
+    assert atts[0].get_filename() == "pricelist.pdf"
+    assert atts[0].get_content() == b"%PDF-fake"
+
+
+def test_extract_body_decodes_quoted_printable():
+    import base64
+
+    from app.tools.gmail import extract_body
+
+    qp_text = "reach out direct=\nly if you have any questions. caf=C3=A9"
+    payload = {
+        "mimeType": "text/plain",
+        "headers": [{"name": "Content-Transfer-Encoding", "value": "quoted-printable"}],
+        "body": {"data": base64.urlsafe_b64encode(qp_text.encode()).decode()},
+    }
+    text = extract_body(payload)
+    assert "directly" in text
+    assert "café" in text
+
+
+def test_create_email_draft_tool_attaches_library_labels(session_factory):
+    from app.models import DraftAttachment, StoredFile
+
+    with session_factory() as s:
+        s.add(StoredFile(filename="pl.pdf", content_type="application/pdf", size=9,
+                         data=b"%PDF-fake", in_library=True, label="wholesale pricelist"))
+    set_run_context(run_id=1, routine_id=1, started_at=datetime(2026, 9, 3, tzinfo=timezone.utc))
+    try:
+        with session_factory() as s:
+            content, is_error = dispatch(
+                "create_email_draft",
+                {"mailbox": "hello", "to": ["k@u.com"], "subject": "s", "body": "b",
+                 "purpose": "inquiry_reply", "attach_library_labels": ["wholesale pricelist", "nope"]},
+                s,
+            )
+        result = json.loads(content)
+        assert result["attached"] == ["wholesale pricelist"]
+        assert result["missing_library_files"] == ["nope"]
+        with session_factory() as s:
+            assert s.query(DraftAttachment).count() == 1
+    finally:
+        clear_run_context()
 
 
 def test_create_email_draft_tool_dedups_per_run(session_factory):

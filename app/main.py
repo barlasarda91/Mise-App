@@ -443,10 +443,12 @@ def drafts(request: Request, draft: int | None = None, msg: str | None = None):
     selected = None
     if index:
         selected = load_draft(draft if draft is not None else index[0]["id"])
+    from app.web.drafts_view import library_files
+
     return render_page(
         request, "drafts.html", "drafts",
         drafts=index, selected=selected, thread=load_thread(selected),
-        leads=open_leads_for_picker(), msg=msg,
+        leads=open_leads_for_picker(), library=library_files(), msg=msg,
     )
 
 
@@ -502,6 +504,49 @@ def drafts_save_to_gmail(draft_id: int):
 
     try:
         msg = save_to_gmail(draft_id)
+    except Exception as exc:
+        msg = f"Error: {exc}"
+    return RedirectResponse(f"/drafts?draft={draft_id}&msg={msg}", status_code=303)
+
+
+@app.post("/drafts/{draft_id}/attach")
+async def drafts_attach(draft_id: int, request: Request):
+    from app.web.drafts_view import attach_upload
+
+    try:
+        form = await request.form()
+        upload = form.get("file")
+        content = await upload.read() if upload is not None and upload.filename else b""
+        msg = attach_upload(
+            draft_id,
+            upload.filename if upload is not None else "",
+            content,
+            getattr(upload, "content_type", "") or "",
+            form.get("to_library") == "on",
+            str(form.get("label") or ""),
+        )
+    except Exception as exc:
+        msg = f"Error: {exc}"
+    return RedirectResponse(f"/drafts?draft={draft_id}&msg={msg}", status_code=303)
+
+
+@app.post("/drafts/{draft_id}/attach-library")
+def drafts_attach_library(draft_id: int, file_id: int = Form(...)):
+    from app.web.drafts_view import attach_from_library
+
+    try:
+        msg = attach_from_library(draft_id, file_id)
+    except Exception as exc:
+        msg = f"Error: {exc}"
+    return RedirectResponse(f"/drafts?draft={draft_id}&msg={msg}", status_code=303)
+
+
+@app.post("/drafts/{draft_id}/attachments/{attachment_id}/remove")
+def drafts_remove_attachment(draft_id: int, attachment_id: int):
+    from app.web.drafts_view import remove_attachment
+
+    try:
+        msg = remove_attachment(draft_id, attachment_id)
     except Exception as exc:
         msg = f"Error: {exc}"
     return RedirectResponse(f"/drafts?draft={draft_id}&msg={msg}", status_code=303)
