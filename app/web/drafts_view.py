@@ -8,7 +8,7 @@ sends from Gmail. The hub never sends.
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.db import db_session
 from app.models import (
@@ -412,6 +412,18 @@ def send_now(draft_id: int) -> str:
         # by the real Gmail message id so the morning audit is idempotent),
         # reset the idle timer, and auto-advance New -> Contacted.
         lead = s.get(Lead, draft.related_lead_id) if draft.related_lead_id else None
+        if lead is None and draft.to_addrs:
+            # Unlinked draft: match the To address against open leads so the
+            # pipeline still advances (and adopt the link for the record).
+            first_to = draft.to_addrs[0].strip().lower()
+            lead = s.scalar(
+                select(Lead).where(
+                    Lead.stage.in_(OPEN_LEAD_STAGES),
+                    func.lower(Lead.contact_email) == first_to,
+                )
+            )
+            if lead is not None:
+                draft.related_lead_id = lead.id
         if lead is not None:
             today = now.date()
             already = s.scalar(
@@ -450,6 +462,22 @@ def send_now(draft_id: int) -> str:
             done = sync_lead_tasks(s, lead, today)
             if done:
                 lead_note += f" Auto-completed: {', '.join(done)}."
+
+        # Task-linked draft: sending the reply completes the task.
+        if draft.related_task_id:
+            from app.models import Task, TaskActivity, TaskStatus
+
+            task = s.get(Task, draft.related_task_id)
+            if task is not None and task.status != TaskStatus.DONE:
+                task.status = TaskStatus.DONE
+                task.completed_at = func.now()
+                s.add(
+                    TaskActivity(
+                        task_id=task.id, type="status_change",
+                        detail="auto: reply sent from hub", actor="Mise",
+                    )
+                )
+                lead_note += f" Task done: {task.title}."
     return f"Sent from {_mailbox_address(mailbox)}.{lead_note}"
 
 

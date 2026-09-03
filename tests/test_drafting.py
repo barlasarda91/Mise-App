@@ -323,6 +323,72 @@ def test_send_advances_linked_lead(session_factory, monkeypatch):
         assert sent.gmail_msg_id == "m-sent-1"  # audit-idempotent
 
 
+def test_send_matches_unlinked_draft_to_lead_by_address(session_factory, monkeypatch):
+    from datetime import date
+
+    import app.tools.gmail as gm
+    import app.web.drafts_view as dv
+    from app.models import Lead, LeadStage
+
+    monkeypatch.setattr(dv, "db_session", session_factory)
+    monkeypatch.setattr(
+        gm, "create_draft",
+        lambda mailbox, to, subject, body, cc=None, thread_id=None, attachments=None: {
+            "draft_id": "gd-3", "message_id": "m-sent-3", "thread_id": None},
+    )
+    monkeypatch.setattr(
+        gm, "send_draft", lambda mailbox, draft_id: {"message_id": "m-sent-3", "thread_id": None}
+    )
+    with session_factory() as s:
+        s.add(Lead(business_name="Buen Dia", stage=LeadStage.NEW, contact_email="Jonathan@BuenDiaDesign.com"))
+        draft = EmailDraft(subject="s", body="b", from_mailbox=FromMailbox.HELLO,
+                           to_addrs=["jonathan@buendiadesign.com"], status=DraftStatus.COMPOSED)
+        s.add(draft)
+        s.flush()
+        draft_id = draft.id
+
+    msg = dv.send_now(draft_id)  # draft has NO related_lead_id
+    assert "Buen Dia → contacted" in msg
+    with session_factory() as s:
+        lead = s.query(Lead).one()
+        assert lead.stage == LeadStage.CONTACTED
+        assert lead.last_confirmed_action == date.today()
+        assert s.get(EmailDraft, draft_id).related_lead_id == lead.id  # link adopted
+
+
+def test_send_completes_linked_task(session_factory, monkeypatch):
+    import app.tools.gmail as gm
+    import app.web.drafts_view as dv
+    from app.models import Task, TaskStatus
+
+    monkeypatch.setattr(dv, "db_session", session_factory)
+    monkeypatch.setattr(
+        gm, "create_draft",
+        lambda mailbox, to, subject, body, cc=None, thread_id=None, attachments=None: {
+            "draft_id": "gd-4", "message_id": "m-sent-4", "thread_id": "t-la"},
+    )
+    monkeypatch.setattr(
+        gm, "send_draft", lambda mailbox, draft_id: {"message_id": "m-sent-4", "thread_id": "t-la"}
+    )
+    with session_factory() as s:
+        task = Task(category="wholesale_leads", title="LA Coffee Club (Adam) — send order cutoff date")
+        s.add(task)
+        s.flush()
+        draft = EmailDraft(subject="Re: order process", body="Hey Adam,", from_mailbox=FromMailbox.HELLO,
+                           to_addrs=["adam@lacoffeeclub.com"], related_task_id=task.id,
+                           status=DraftStatus.COMPOSED)
+        s.add(draft)
+        s.flush()
+        draft_id, task_id = draft.id, task.id
+
+    msg = dv.send_now(draft_id)
+    assert "Task done: LA Coffee Club" in msg
+    with session_factory() as s:
+        task = s.get(Task, task_id)
+        assert task.status == TaskStatus.DONE
+        assert task.completed_at is not None
+
+
 def test_send_resets_timer_without_stage_change_for_later_stages(session_factory, monkeypatch):
     from datetime import date
 
