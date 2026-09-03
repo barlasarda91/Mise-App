@@ -83,7 +83,7 @@
 
   {% if thread %}
   <div class="box" style="align-self:start;min-width:0">
-    <div class="box-hd"><span class="lbl">Thread</span><span class="ix">{{ thread.messages | length }} MESSAGES · OLDEST FIRST</span></div>
+    <div class="box-hd"><span class="lbl">{{ "Thread" if thread.label == "thread" else "Recent history" }}</span><span class="ix">{{ thread.messages | length }} MESSAGES · OLDEST FIRST</span></div>
     <div class="box-bd">
       {% if thread.error %}
       <div class="note">Couldn't load the thread: {{ thread.error }}</div>

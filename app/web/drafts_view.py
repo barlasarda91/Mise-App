@@ -96,18 +96,29 @@ THREAD_BODY_CHARS = 4000
 
 
 def load_thread(selected: dict | None) -> dict | None:
-    """The Gmail conversation a reply draft answers — rendered beside the
-    editor. Returns None for non-replies; errors degrade to a note."""
-    if not selected or not selected.get("thread_id"):
+    """Conversation context rendered beside the editor: the reply's own thread
+    when the draft has one, otherwise the most recent Gmail conversation with
+    the first To address ("recent history"). Errors degrade to a note."""
+    if not selected:
         return None
     from app.tools import gmail
 
+    mailbox = FromMailbox(selected["mailbox"])
+    thread_id = selected.get("thread_id")
+    label = "thread"
     try:
-        messages = gmail.get_thread_messages(
-            FromMailbox(selected["mailbox"]), selected["thread_id"], last_n=8
-        )
+        if not thread_id:
+            first_to = (selected.get("to") or "").split(",")[0].strip()
+            if not first_to:
+                return None
+            hits = gmail.search_messages(mailbox, first_to, max_results=1)
+            if not hits or not hits[0].get("thread_id"):
+                return None  # genuinely no prior history — no panel
+            thread_id = hits[0]["thread_id"]
+            label = "history"
+        messages = gmail.get_thread_messages(mailbox, thread_id, last_n=8)
     except Exception as exc:
-        return {"error": f"{type(exc).__name__}: {exc}", "messages": []}
+        return {"error": f"{type(exc).__name__}: {exc}", "messages": [], "label": label}
     shaped = []
     for m in messages:
         body = (m.get("body") or m.get("snippet") or "").strip()
@@ -120,7 +131,7 @@ def load_thread(selected: dict | None) -> dict | None:
                 "body": body[:THREAD_BODY_CHARS] + ("\n… (truncated)" if truncated else ""),
             }
         )
-    return {"error": None, "messages": shaped}
+    return {"error": None, "messages": shaped, "label": label}
 
 
 # ---------- services ----------

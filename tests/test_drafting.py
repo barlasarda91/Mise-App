@@ -196,8 +196,35 @@ def test_load_thread_shapes_and_truncates(monkeypatch):
     assert len(thread["messages"]) == 2
     assert thread["messages"][1]["body"].endswith("(truncated)")
 
-    assert load_thread({"thread_id": None, "mailbox": "arda"}) is None
     assert load_thread(None) is None
+    assert thread["label"] == "thread"
+
+
+def test_load_thread_falls_back_to_recent_history(monkeypatch):
+    import app.tools.gmail as gm
+    from app.web.drafts_view import load_thread
+
+    monkeypatch.setattr(
+        gm, "search_messages",
+        lambda mailbox, query, after=None, max_results=25: [{"id": "m1", "thread_id": "t-hist"}]
+        if query == "kati.isabel.m@gmail.com" else [],
+    )
+    monkeypatch.setattr(
+        gm, "get_thread_messages",
+        lambda mailbox, thread_id, last_n=8: [
+            {"from": "Kathy", "date": "Mon", "subject": "Wholesale inquiry", "body": "Hi Boxx"}
+        ] if thread_id == "t-hist" else [],
+    )
+
+    # no thread id, but history exists with the To address
+    thread = load_thread({"thread_id": None, "mailbox": "hello", "to": "kati.isabel.m@gmail.com, other@x.com"})
+    assert thread["label"] == "history"
+    assert thread["messages"][0]["subject"] == "Wholesale inquiry"
+
+    # no thread id and no history -> no panel
+    assert load_thread({"thread_id": None, "mailbox": "hello", "to": "nobody@nowhere.com"}) is None
+    # no addresses at all -> no panel
+    assert load_thread({"thread_id": None, "mailbox": "arda", "to": ""}) is None
 
 
 def test_load_thread_error_degrades(monkeypatch):
