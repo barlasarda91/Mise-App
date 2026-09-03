@@ -25,6 +25,10 @@ class ToolDef:
     description: str
     input_schema: dict
     handler: Callable[..., Any]  # handler(session, **tool_input)
+    # The API caps union-typed parameters (type arrays / anyOf) at 16 across
+    # all strict tools per request; field-heavy tools opt out of strict and
+    # give their handler params defaults instead.
+    strict: bool = True
 
 
 _REGISTRY: dict[str, ToolDef] = {}
@@ -61,7 +65,7 @@ def tool_specs(names: list[str] | None = None) -> list[dict]:
         {
             "name": t.name,
             "description": t.description,
-            "strict": True,
+            "strict": t.strict,
             "input_schema": t.input_schema,
         }
         for t in sorted(tools, key=lambda t: t.name)

@@ -181,12 +181,12 @@ register(
 def _create_lead(
     session: Session,
     business_name: str,
-    contact_name,
-    contact_email,
-    contact_phone,
-    lead_source,
-    notes,
-    gmail_msg_id,
+    lead_source: str,
+    contact_name=None,
+    contact_email=None,
+    contact_phone=None,
+    notes=None,
+    gmail_msg_id=None,
 ):
     open_leads = session.scalars(select(Lead).where(Lead.stage.in_(OPEN_LEAD_STAGES))).all()
     for existing in open_leads:
@@ -246,25 +246,18 @@ register(
             "type": "object",
             "properties": {
                 "business_name": {"type": "string"},
-                "contact_name": NULLABLE_STR,
-                "contact_email": NULLABLE_STR,
-                "contact_phone": NULLABLE_STR,
                 "lead_source": {"type": "string", "description": "e.g. inbound_email, referral, walk-in"},
-                "notes": NULLABLE_STR,
-                "gmail_msg_id": NULLABLE_STR,
+                "contact_name": {"type": "string"},
+                "contact_email": {"type": "string"},
+                "contact_phone": {"type": "string"},
+                "notes": {"type": "string"},
+                "gmail_msg_id": {"type": "string"},
             },
-            "required": [
-                "business_name",
-                "contact_name",
-                "contact_email",
-                "contact_phone",
-                "lead_source",
-                "notes",
-                "gmail_msg_id",
-            ],
+            "required": ["business_name", "lead_source"],
             "additionalProperties": False,
         },
         handler=_create_lead,
+        strict=False,  # optional fields may simply be omitted
     )
 )
 
@@ -545,7 +538,16 @@ register(
 
 
 def _create_email_draft(
-    session: Session, mailbox: str, to, cc, subject, body, purpose, lead_id, task_id, gmail_thread_id
+    session: Session,
+    mailbox: str,
+    to,
+    subject: str,
+    body: str,
+    purpose: str,
+    cc=None,
+    lead_id=None,
+    task_id=None,
+    gmail_thread_id=None,
 ):
     from app.models import DraftStatus, EmailDraft
     from app.models.enums import FromMailbox as FM
@@ -598,18 +600,19 @@ register(
             "properties": {
                 "mailbox": {"type": "string", "enum": ["arda", "hello"]},
                 "to": {"type": "array", "items": {"type": "string"}},
-                "cc": {"type": ["array", "null"], "items": {"type": "string"}},
                 "subject": {"type": "string"},
                 "body": {"type": "string"},
                 "purpose": {"type": "string"},
-                "lead_id": {"type": ["integer", "null"]},
-                "task_id": {"type": ["integer", "null"]},
-                "gmail_thread_id": NULLABLE_STR,
+                "cc": {"type": "array", "items": {"type": "string"}},
+                "lead_id": {"type": "integer"},
+                "task_id": {"type": "integer"},
+                "gmail_thread_id": {"type": "string"},
             },
-            "required": ["mailbox", "to", "cc", "subject", "body", "purpose", "lead_id", "task_id", "gmail_thread_id"],
+            "required": ["mailbox", "to", "subject", "body", "purpose"],
             "additionalProperties": False,
         },
         handler=_create_email_draft,
+        strict=False,  # optional fields may simply be omitted
     )
 )
 

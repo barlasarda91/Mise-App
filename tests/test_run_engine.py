@@ -202,8 +202,11 @@ def test_tool_specs_are_strict_and_sorted():
     specs = tool_specs()
     assert [t["name"] for t in specs] == sorted(t["name"] for t in specs)
     for spec in specs:
-        assert spec["strict"] is True
+        assert isinstance(spec["strict"], bool)
         assert spec["input_schema"]["additionalProperties"] is False
+    # strict stays the default; only the field-heavy tools opt out
+    non_strict = {s["name"] for s in specs if not s["strict"]}
+    assert non_strict == {"create_lead", "create_email_draft"}
 
 
 def test_no_schema_mixes_enum_with_type_union():
@@ -222,3 +225,19 @@ def test_no_schema_mixes_enum_with_type_union():
 
     for spec in tool_specs():
         walk(spec["input_schema"])
+
+
+def test_union_parameter_budget_for_strict_tools():
+    """The API caps union-typed parameters (type arrays or anyOf) at 16 across
+    strict tools per request (regression: A-005). Keep headroom below the cap."""
+
+    def count_unions(node) -> int:
+        if isinstance(node, dict):
+            own = 1 if (isinstance(node.get("type"), list) or "anyOf" in node) else 0
+            return own + sum(count_unions(v) for v in node.values())
+        if isinstance(node, list):
+            return sum(count_unions(item) for item in node)
+        return 0
+
+    total = sum(count_unions(s["input_schema"]) for s in tool_specs() if s["strict"])
+    assert total <= 14, f"union-typed params in strict tools: {total} (API cap 16)"
