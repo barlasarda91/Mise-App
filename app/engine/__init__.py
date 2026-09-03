@@ -1,1 +1,1 @@
-# Run lifecycle, Anthropic client, runtime-context injection (milestone 4).
+# Run engine: lifecycle (runner), Anthropic client, runtime context, tool registry.

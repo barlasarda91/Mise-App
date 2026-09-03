@@ -1,6 +1,8 @@
 """Mise — FastAPI app: auth gate, dashboard shell, health."""
 
 import asyncio
+import logging
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -16,8 +18,24 @@ from app.db import check_db
 from app.settings import get_settings
 
 BASE_DIR = Path(__file__).parent
+log = logging.getLogger(__name__)
 
-app = FastAPI(title="Mise", docs_url=None, redoc_url=None, openapi_url=None)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Crash recovery: fail any run orphaned in `running` by a redeploy (spec §4).
+    try:
+        from app.engine.runner import sweep_orphan_runs
+
+        swept = sweep_orphan_runs()
+        if swept:
+            log.warning("startup sweep: marked %d orphaned run(s) failed", swept)
+    except Exception as exc:
+        log.warning("startup sweep skipped: %s", exc)
+    yield
+
+
+app = FastAPI(title="Mise", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "web" / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "web" / "templates")
 

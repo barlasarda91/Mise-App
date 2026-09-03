@@ -16,6 +16,11 @@ UX reference: [`docs/boxx-routines-hub-mockups.html`](docs/boxx-routines-hub-moc
 - Milestone 3 — Google service-account tool layer: Gmail read/draft for both
   mailboxes, Calendar read + reminder events, connectivity test
   (`python -m app.tools.check_google`, also shown on /settings). ✅
+- Milestone 4 — run engine: Anthropic client (model aliases → Claude Opus 5 /
+  Sonnet 5), runtime-context injection, single-phase agentic tool-use loop
+  with per-step `run_messages` persistence, tool registry, refusal handling,
+  startup orphan-run sweep. Needs `ANTHROPIC_API_KEY` set to execute real
+  runs. ✅
 
 ## Google connector provisioning
 
