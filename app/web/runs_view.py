@@ -20,10 +20,18 @@ TOOL_RESULT_PREVIEW_CHARS = 3000
 CODE_PREFIXES = {"lead_tracker": "R", "daily_agenda": "A"}
 
 
+import re as _re
+
+_UNSAFE_HREF = _re.compile(r'href="(?!https?://|mailto:|/)[^"]*"', _re.I)
+
+
 def render_markdown(text: str) -> str:
     """Assistant text -> safe HTML: escape first (no raw HTML passes through),
-    then render markdown so the routines' bold/headers/tables display."""
-    return _markdown.markdown(html.escape(text), extensions=["tables", "nl2br"])
+    then render markdown so the routines' bold/headers/tables display. Link
+    targets are restricted to http(s)/mailto/relative — markdown link syntax
+    would otherwise let a javascript: href through the escaping."""
+    rendered = _markdown.markdown(html.escape(text), extensions=["tables", "nl2br"])
+    return _UNSAFE_HREF.sub('href="#"', rendered)
 
 
 def run_code(routine_key: str, run_id: int) -> str:

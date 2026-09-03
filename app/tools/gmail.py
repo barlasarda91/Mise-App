@@ -50,24 +50,33 @@ def build_mime(
     attachments: list[dict] | None = None,
 ) -> str:
     """RFC 2822 message, base64url-encoded for the Gmail API `raw` field.
-    attachments: [{filename, content_type, data(bytes)}]."""
+    attachments: [{filename, content_type, data(bytes)}]. Header values are
+    stripped of CR/LF to rule out header injection from user/model input."""
+
+    def clean(value: str) -> str:
+        return value.replace("\r", " ").replace("\n", " ").strip()
+
     msg = EmailMessage()
-    msg["From"] = from_addr
-    msg["To"] = ", ".join(to)
+    msg["From"] = clean(from_addr)
+    msg["To"] = ", ".join(clean(a) for a in to)
     if cc:
-        msg["Cc"] = ", ".join(cc)
-    msg["Subject"] = subject
+        msg["Cc"] = ", ".join(clean(a) for a in cc)
+    msg["Subject"] = clean(subject)
     if in_reply_to:
-        msg["In-Reply-To"] = in_reply_to
-        msg["References"] = f"{references} {in_reply_to}".strip() if references else in_reply_to
+        msg["In-Reply-To"] = clean(in_reply_to)
+        refs = f"{references} {in_reply_to}".strip() if references else in_reply_to
+        msg["References"] = clean(refs)
     msg.set_content(body)
+    import os
+
     for att in attachments or []:
         maintype, _, subtype = (att.get("content_type") or "application/octet-stream").partition("/")
+        filename = clean(os.path.basename(att["filename"]))[:200] or "attachment"
         msg.add_attachment(
             att["data"],
-            maintype=maintype or "application",
-            subtype=subtype or "octet-stream",
-            filename=att["filename"],
+            maintype=clean(maintype) or "application",
+            subtype=clean(subtype) or "octet-stream",
+            filename=filename,
         )
     return base64.urlsafe_b64encode(msg.as_bytes()).decode()
 

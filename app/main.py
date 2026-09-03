@@ -85,7 +85,17 @@ class AuthGateMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", "same-origin")
+        return response
+
+
 app.add_middleware(AuthGateMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 
 
 def _clock() -> str:
@@ -115,11 +125,22 @@ def login_form(request: Request):
     return templates.TemplateResponse(request, "login.html", {"error": None})
 
 
+_failed_logins = {"count": 0}
+
+
 @app.post("/login", response_class=HTMLResponse)
 async def login_submit(request: Request, password: str = Form("")):
     settings = get_settings()
+    if settings.session_secret == "dev-secret-change-me" and not settings.dev_mode:
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            {"error": "SESSION_SECRET is not configured on the server."},
+            status_code=503,
+        )
     if not verify_password(settings, password):
-        await asyncio.sleep(0.5)  # blunt brute-force damper
+        _failed_logins["count"] += 1
+        await asyncio.sleep(min(0.5 * _failed_logins["count"], 5.0))  # escalating damper
         message = (
             "APP_PASSWORD is not configured on the server."
             if not settings.app_password
@@ -128,6 +149,7 @@ async def login_submit(request: Request, password: str = Form("")):
         return templates.TemplateResponse(
             request, "login.html", {"error": message}, status_code=401
         )
+    _failed_logins["count"] = 0
     response = RedirectResponse("/", status_code=303)
     response.set_cookie(
         settings.session_cookie_name,
