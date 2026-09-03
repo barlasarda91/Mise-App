@@ -12,10 +12,13 @@ from sqlalchemy import select
 
 from app.db import db_session
 from app.models import (
+    ActivitySource,
     DraftAttachment,
     DraftStatus,
     EmailDraft,
     Lead,
+    LeadActivity,
+    LeadActivityType,
     LeadStage,
     OPEN_LEAD_STAGES,
     StoredFile,
@@ -390,13 +393,53 @@ def send_now(draft_id: int) -> str:
     except Exception as exc:
         return f"Gmail error on send: {type(exc).__name__}: {exc}"
 
+    lead_note = ""
     with db_session() as s:
         draft = s.get(EmailDraft, draft_id)
-        draft.sent_at = datetime.now(ZoneInfo(get_settings().default_tz))
+        now = datetime.now(ZoneInfo(get_settings().default_tz))
+        draft.sent_at = now
         draft.gmail_draft_id = None  # sending consumes the Gmail draft
         if result.get("thread_id"):
             draft.gmail_thread_id = result["thread_id"]
-    return f"Sent from {_mailbox_address(mailbox)}."
+
+        # Operator-sent email against a linked lead: log the activity (keyed
+        # by the real Gmail message id so the morning audit is idempotent),
+        # reset the idle timer, and auto-advance New -> Contacted.
+        lead = s.get(Lead, draft.related_lead_id) if draft.related_lead_id else None
+        if lead is not None:
+            today = now.date()
+            already = s.scalar(
+                select(LeadActivity).where(LeadActivity.gmail_msg_id == result.get("message_id"))
+            )
+            if not already:
+                s.add(
+                    LeadActivity(
+                        lead_id=lead.id,
+                        type=LeadActivityType.EMAIL_SENT,
+                        occurred_on=today,
+                        detail=draft.subject,
+                        source=ActivitySource.GMAIL,
+                        gmail_msg_id=result.get("message_id"),
+                    )
+                )
+            if lead.last_confirmed_action is None or today > lead.last_confirmed_action:
+                lead.last_confirmed_action = today
+            if lead.stage == LeadStage.NEW:
+                s.add(
+                    LeadActivity(
+                        lead_id=lead.id,
+                        type=LeadActivityType.STAGE_CHANGE,
+                        occurred_on=today,
+                        detail="new → contacted (email sent from hub)",
+                        source=ActivitySource.MANUAL,
+                    )
+                )
+                lead.stage = LeadStage.CONTACTED
+                lead.stage_since = today
+                lead_note = f" {lead.business_name} → contacted, timer reset."
+            else:
+                lead_note = f" {lead.business_name}: timer reset to today."
+    return f"Sent from {_mailbox_address(mailbox)}.{lead_note}"
 
 
 def discard(draft_id: int) -> str:

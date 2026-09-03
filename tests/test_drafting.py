@@ -281,6 +281,83 @@ def test_send_now_syncs_then_sends_and_locks(session_factory, monkeypatch):
     assert "Already sent" in dv.update_fields(draft_id, "arda", "x@y.com", "", "s", "b")
 
 
+def test_send_advances_linked_lead(session_factory, monkeypatch):
+    from datetime import date
+
+    import app.tools.gmail as gm
+    import app.web.drafts_view as dv
+    from app.models import Lead, LeadActivity, LeadStage
+
+    monkeypatch.setattr(dv, "db_session", session_factory)
+    monkeypatch.setattr(
+        gm, "create_draft",
+        lambda mailbox, to, subject, body, cc=None, thread_id=None, attachments=None: {
+            "draft_id": "gd-1", "message_id": "m-sent-1", "thread_id": "t-1"},
+    )
+    monkeypatch.setattr(
+        gm, "send_draft", lambda mailbox, draft_id: {"message_id": "m-sent-1", "thread_id": "t-1"}
+    )
+
+    with session_factory() as s:
+        lead = Lead(business_name="Buen Dia", stage=LeadStage.NEW, contact_email="j@buendia.com")
+        s.add(lead)
+        s.flush()
+        draft = EmailDraft(
+            subject="Boxx wholesale — samples", body="Hey Jonathan,", from_mailbox=FromMailbox.HELLO,
+            to_addrs=["j@buendia.com"], related_lead_id=lead.id, status=DraftStatus.COMPOSED,
+        )
+        s.add(draft)
+        s.flush()
+        draft_id, lead_id = draft.id, lead.id
+
+    msg = dv.send_now(draft_id)
+    assert "Buen Dia → contacted" in msg
+    with session_factory() as s:
+        lead = s.get(Lead, lead_id)
+        assert lead.stage == LeadStage.CONTACTED
+        assert lead.last_confirmed_action == date.today()
+        activities = s.query(LeadActivity).filter_by(lead_id=lead_id).all()
+        types = sorted(a.type.value for a in activities)
+        assert types == ["email_sent", "stage_change"]
+        sent = next(a for a in activities if a.type.value == "email_sent")
+        assert sent.gmail_msg_id == "m-sent-1"  # audit-idempotent
+
+
+def test_send_resets_timer_without_stage_change_for_later_stages(session_factory, monkeypatch):
+    from datetime import date
+
+    import app.tools.gmail as gm
+    import app.web.drafts_view as dv
+    from app.models import Lead, LeadStage
+
+    monkeypatch.setattr(dv, "db_session", session_factory)
+    monkeypatch.setattr(
+        gm, "create_draft",
+        lambda mailbox, to, subject, body, cc=None, thread_id=None, attachments=None: {
+            "draft_id": "gd-2", "message_id": "m-sent-2", "thread_id": None},
+    )
+    monkeypatch.setattr(
+        gm, "send_draft", lambda mailbox, draft_id: {"message_id": "m-sent-2", "thread_id": None}
+    )
+    with session_factory() as s:
+        lead = Lead(business_name="Ember Room", stage=LeadStage.NEGOTIATING,
+                    last_confirmed_action=date(2026, 8, 20))
+        s.add(lead)
+        s.flush()
+        draft = EmailDraft(subject="s", body="b", from_mailbox=FromMailbox.ARDA,
+                           to_addrs=["d@e.la"], related_lead_id=lead.id, status=DraftStatus.COMPOSED)
+        s.add(draft)
+        s.flush()
+        draft_id, lead_id = draft.id, lead.id
+
+    msg = dv.send_now(draft_id)
+    assert "timer reset" in msg
+    with session_factory() as s:
+        lead = s.get(Lead, lead_id)
+        assert lead.stage == LeadStage.NEGOTIATING  # unchanged
+        assert lead.last_confirmed_action == date.today()
+
+
 def test_send_now_blocks_invalid_drafts(session_factory, monkeypatch):
     import app.web.drafts_view as dv
 
