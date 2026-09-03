@@ -35,6 +35,19 @@ UX reference: [`docs/boxx-routines-hub-mockups.html`](docs/boxx-routines-hub-moc
   Pipeline kanban with lead detail, manual entry (activity/stage/reminder)
   and one-click pending confirmations. Enable the routine in Settings to
   start daily runs. ✅
+- Milestone 8 — Board + Daily Agenda: five-category kanban (tasks by status,
+  move/add, source links), agenda routine prompt (schedule / important
+  emails / action items with QuickBooks A/R / waiting-on), QuickBooks layer
+  with rotation-safe token storage in Postgres and an in-app OAuth Connect
+  flow on Settings, Home priority checklist + Waiting-On. ✅
+
+## QuickBooks provisioning
+
+Create an Intuit developer app (production keys), register the redirect URI
+`https://<your-app-domain>/settings/qbo/callback`, set `QBO_CLIENT_ID` and
+`QBO_CLIENT_SECRET` on Railway, then click **Connect** on the Settings page
+and authorize — the rotating refresh token is stored in Postgres
+automatically. A/R only; A/P stays in Wolverine.
 
 ## Google connector provisioning
 

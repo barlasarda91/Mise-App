@@ -422,6 +422,125 @@ register(
 )
 
 
+def _update_task(session: Session, task_id: int, status, waiting_on, due_date, assignee):
+    task = session.get(Task, task_id)
+    if task is None:
+        raise ValueError(f"task {task_id} not found")
+    changes = []
+    if status and status != task.status.value:
+        task.status = TaskStatus(status)
+        if task.status == TaskStatus.DONE:
+            task.completed_at = func.now()
+        changes.append(f"status → {status}")
+    if waiting_on is not None:
+        task.waiting_on = waiting_on or None
+        changes.append("waiting_on set")
+    if due_date is not None:
+        task.due_date = date.fromisoformat(due_date) if due_date else None
+        changes.append(f"due → {due_date or 'none'}")
+    if assignee is not None:
+        task.assignee = assignee or None
+        changes.append(f"assignee → {assignee}")
+    return {"outcome": "updated", "task_id": task_id, "changes": changes}
+
+
+register(
+    ToolDef(
+        name="update_task",
+        description=(
+            "Update a board task: move status (todo/doing/waiting/done — waiting for "
+            "blocked-on-third-party, with waiting_on saying who/what), set due date or "
+            "assignee. Pass null for fields you're not changing."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "integer"},
+                "status": {
+                    "type": ["string", "null"],
+                    "enum": [s.value for s in TaskStatus] + [None],
+                },
+                "waiting_on": NULLABLE_STR,
+                "due_date": {"type": ["string", "null"], "description": "YYYY-MM-DD, '' to clear, null to keep"},
+                "assignee": NULLABLE_STR,
+            },
+            "required": ["task_id", "status", "waiting_on", "due_date", "assignee"],
+            "additionalProperties": False,
+        },
+        handler=_update_task,
+    )
+)
+
+
+# ---------- calendar + QuickBooks (read) ----------
+
+
+def _list_calendar_events(session: Session, date_from: str, date_to: str):
+    from app.tools import calendar
+
+    tz = _tz()
+    start = datetime.combine(date.fromisoformat(date_from), time.min, tzinfo=tz)
+    end = datetime.combine(date.fromisoformat(date_to), time.max, tzinfo=tz)
+    events = calendar.list_events(start, end)
+    out = []
+    for event in events:
+        start_info = event.get("start") or {}
+        out.append(
+            {
+                "summary": event.get("summary", "(no title)"),
+                "start": start_info.get("dateTime") or start_info.get("date"),
+                "end": (event.get("end") or {}).get("dateTime") or (event.get("end") or {}).get("date"),
+                "all_day": "date" in start_info,
+                "timezone_label": start_info.get("timeZone"),
+                "location": event.get("location"),
+                "attendees": [a.get("email") for a in event.get("attendees") or []],
+            }
+        )
+    return out
+
+
+register(
+    ToolDef(
+        name="list_calendar_events",
+        description=(
+            "List arda's calendar events between two dates inclusive (YYYY-MM-DD). "
+            "Includes each event's timezone label so displayed-vs-actual offsets can be checked."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "date_from": {"type": "string"},
+                "date_to": {"type": "string"},
+            },
+            "required": ["date_from", "date_to"],
+            "additionalProperties": False,
+        },
+        handler=_list_calendar_events,
+    )
+)
+
+
+def _list_overdue_invoices(session: Session):
+    from app.tools import quickbooks
+
+    today = datetime.now(_tz()).date()
+    return quickbooks.list_overdue_invoices(today)
+
+
+register(
+    ToolDef(
+        name="list_overdue_invoices",
+        description=(
+            "QuickBooks A/R: list overdue customer invoices (receivables Boxx has issued "
+            "that are past due with a balance) — invoice id, doc number, customer, amount, "
+            "balance, due date, days overdue. A/R only; A/P is out of scope."
+        ),
+        input_schema={"type": "object", "properties": {}, "required": [], "additionalProperties": False},
+        handler=_list_overdue_invoices,
+    )
+)
+
+
 # ---------- sync cursor ----------
 
 

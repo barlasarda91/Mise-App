@@ -9,15 +9,42 @@
   <div class="stat"><div class="k">Drafts ready</div><div class="v">{{ stats.drafts }}</div></div>
 </div>
 
-<div class="box">
-  <div class="box-hd"><span class="lbl">Today</span><span class="ix">HUB</span></div>
-  <div class="box-bd">
-    <p style="font-size:14px">Overdue leads and pending confirmations live in <a href="/pipeline">Pipeline</a>;
-    run transcripts in <a href="/runs">Runs</a>. The priority checklist and Waiting-On land with the Board + Agenda (milestone 8).</p>
-    <div class="note">
-      DB: {% if db_status == "ok" %}<span class="pill green">connected</span>{% elif db_status == "absent" %}<span class="pill ghost">not configured</span>{% else %}<span class="pill ember">{{ db_status }}</span>{% endif %}
-      &nbsp;·&nbsp; TZ: AMERICA/LOS_ANGELES
+<div class="grid2">
+  <div class="box" style="align-self:start">
+    <div class="box-hd"><span class="lbl">Priority</span><span class="ix">◭ {{ priority | length }} ITEMS</span></div>
+    <div>
+      {% for p in priority %}
+      <a class="row" href="{{ p.href }}" style="text-decoration:none">
+        <span class="name" style="font-size:14px">{{ p.title }}</span>
+        <span class="meta">{{ p.sub | upper }}</span>
+        <span class="spacer"></span>
+        {% if p.urgent %}<span class="pill ember">overdue</span>{% endif %}
+      </a>
+      {% else %}
+      <div class="box-bd"><span class="note">Nothing urgent — due/high-priority tasks and pending confirmations appear here.</span></div>
+      {% endfor %}
     </div>
   </div>
+
+  <div class="box" style="align-self:start">
+    <div class="box-hd"><span class="lbl">Waiting On</span><span class="ix">{{ waiting | length }} BLOCKED</span></div>
+    <div>
+      {% for w in waiting %}
+      <div class="row">
+        <span class="name" style="font-size:14px">{{ w.title }}</span>
+        <span class="meta">— {{ w.sub }}</span>
+        <span class="spacer"></span>
+        {% if w.age is not none %}<span class="pill ghost">{{ w.age }}d</span>{% endif %}
+      </div>
+      {% else %}
+      <div class="box-bd"><span class="note">Nothing blocked. Tasks in "waiting" land here with who they wait on.</span></div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="note" style="margin-top:14px">
+  DB: {% if db_status == "ok" %}<span class="pill green">connected</span>{% elif db_status == "absent" %}<span class="pill ghost">not configured</span>{% else %}<span class="pill ember">{{ db_status }}</span>{% endif %}
+  &nbsp;·&nbsp; TZ: AMERICA/LOS_ANGELES &nbsp;·&nbsp; <a href="/pipeline">Pipeline</a> · <a href="/board">Board</a> · <a href="/runs">Runs</a>
 </div>
 {% endblock %}

@@ -1,12 +1,25 @@
-"""Dedup ledger for external mutations + the single-user row."""
+"""Dedup ledger for external mutations, app KV state, and the single-user row."""
 
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import Base, db_enum
+from app.models.base import Base, PortableJSON, db_enum
 from app.models.enums import MutationKind
+
+
+class AppState(Base):
+    """Small KV store for durable app state (e.g. the rotating QuickBooks
+    refresh token — Railway env vars can't be updated by the app)."""
+
+    __tablename__ = "app_state"
+
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[dict] = mapped_column(PortableJSON)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class ExternalMutation(Base):

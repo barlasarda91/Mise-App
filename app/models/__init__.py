@@ -20,13 +20,14 @@ from app.models.enums import (
     TaskSource,
     TaskStatus,
 )
-from app.models.infra import ExternalMutation, User
+from app.models.infra import AppState, ExternalMutation, User
 from app.models.lead import Lead, LeadActivity
 from app.models.routine import Routine, Run, RunMessage, SyncState
 from app.models.task import Project, Task, TaskActivity
 
 __all__ = [
     "ActivitySource",
+    "AppState",
     "Base",
     "CoffeeProgram",
     "DraftStatus",

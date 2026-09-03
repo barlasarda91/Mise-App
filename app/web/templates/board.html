@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Board{% endblock %}
+{% block heading %}Board{% endblock %}
+{% block content %}
+
+{% if msg %}<div class="note" style="margin:0 0 14px">▸ {{ msg }}</div>{% endif %}
+
+<div class="tabbar" id="catTabs">
+  {% for b in boards %}
+  <span class="tab{% if loop.first %} on{% endif %}" data-cat="{{ b.key }}">{{ b.label }}{% if b.open %} · {{ b.open }}{% endif %}</span>
+  {% endfor %}
+</div>
+
+{% for b in boards %}
+<div class="catboard{% if loop.first %} on{% endif %}" data-cat="{{ b.key }}">
+  <div class="lanes">
+    {% for lane in b.lanes %}
+    <div class="lane">
+      <div class="lane-hd"><span class="ln">{{ lane.label }}</span><span class="ct">{{ "%02d" | format(lane.cards | length) }}</span></div>
+      {% for c in lane.cards %}
+      <div class="card">
+        <div class="cn">{{ c.title }}</div>
+        <div class="cmeta">
+          <span>↳ {{ c.source }}</span>
+          {% if c.waiting_on %}<span>waits: {{ c.waiting_on }}</span>{% endif %}
+        </div>
+        <div class="cbadges">
+          {% if c.overdue %}<span class="pill ember">due {{ c.due }}</span>
+          {% elif c.due %}<span class="pill ghost">due {{ c.due }}</span>{% endif %}
+          {% if c.priority == "high" %}<span class="pill ember">high</span>{% endif %}
+          {% if c.assignee %}<span class="pill ghost">{{ c.assignee }}</span>{% endif %}
+          {% if c.lead_id %}<a class="pill ghost" href="/pipeline/lead/{{ c.lead_id }}">lead ↗</a>{% endif %}
+        </div>
+        <form method="post" action="/tasks/{{ c.id }}/status" class="cardmove">
+          <select name="status">
+            {% for s in ["todo","doing","waiting","done"] %}
+            <option value="{{ s }}" {% if s == c.status %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+          <input name="waiting_on" placeholder="waiting on…" value="{{ c.waiting_on or '' }}">
+          <button class="linkish" type="submit">Move</button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endfor %}
+
+<div class="box" style="margin-top:18px;max-width:640px">
+  <div class="box-hd"><span class="lbl">Add task</span><span class="ix">MANUAL</span></div>
+  <div class="box-bd">
+    <form method="post" action="/board/tasks" class="stack">
+      <label>Category
+        <select name="category">
+          {% for b in boards %}<option value="{{ b.key }}">{{ b.label }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Title<input name="title" required></label>
+      <label>Due date<input type="date" name="due_date"></label>
+      <label>Assignee<input name="assignee" placeholder="Arda / Emre"></label>
+      <label>Priority
+        <select name="priority"><option value="normal">normal</option><option value="high">high</option><option value="low">low</option></select>
+      </label>
+      <button class="linkish solid" type="submit">Add task</button>
+    </form>
+  </div>
+</div>
+
+<div class="note">Five standing categories, columns by status. Tasks created by routines carry a source link; incomplete tasks feed tomorrow's agenda automatically.</div>
+
+<script>
+  const catTabs = document.getElementById('catTabs');
+  catTabs.addEventListener('click', e => {
+    const t = e.target.closest('.tab'); if (!t) return;
+    catTabs.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === t));
+    document.querySelectorAll('.catboard').forEach(b => b.classList.toggle('on', b.dataset.cat === t.dataset.cat));
+  });
+</script>
+{% endblock %}

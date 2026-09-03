@@ -50,11 +50,17 @@
 </div>
 
 <div class="box">
-  <div class="box-hd"><span class="lbl">Intuit QuickBooks · OAuth</span><span class="ix">INVOICE TRACKING</span></div>
+  <div class="box-hd"><span class="lbl">Intuit QuickBooks · OAuth</span><span class="ix">INVOICE TRACKING · A/R ONLY</span></div>
   <div>
     <div class="kv">
-      <div class="lft"><span class="kt">QuickBooks Online</span><span class="ks">read A/R · overdue receivables → tasks · milestone 8</span></div>
-      <span class="pill ghost">not built yet</span>
+      <div class="lft"><span class="kt">QuickBooks Online</span><span class="ks">{{ qbo.detail }}</span></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        {% if qbo.status == "ok" %}<span class="pill green">connected</span>
+        {% elif qbo.status == "not_configured" %}<span class="pill ghost">not configured</span>
+        {% elif qbo.status == "not_connected" %}<span class="pill ghost">not connected</span>
+        {% else %}<span class="pill ember">error</span>{% endif %}
+        {% if qbo_configured %}<a class="linkish" href="/settings/qbo/connect">{{ "Reconnect" if qbo.status in ("ok", "error") else "Connect" }}</a>{% endif %}
+      </div>
     </div>
   </div>
 </div>

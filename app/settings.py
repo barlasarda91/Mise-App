@@ -21,6 +21,15 @@ class Settings(BaseSettings):
     calendar_address: str | None = None
 
     anthropic_api_key: str | None = None
+
+    # QuickBooks Online (Intuit OAuth2 — separate from the Google SA).
+    # QBO_REFRESH_TOKEN is a bootstrap seed only: Intuit rotates refresh
+    # tokens on use, and the live token persists in app_state (spec §5).
+    qbo_client_id: str | None = None
+    qbo_client_secret: str | None = None
+    qbo_refresh_token: str | None = None
+    qbo_realm_id: str | None = None
+    qbo_environment: str = "production"  # or "sandbox"
     # DEV_MODE=1 relaxes the Secure flag on the session cookie for local http.
     dev_mode: bool = False
 

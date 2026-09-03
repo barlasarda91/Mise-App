@@ -102,6 +102,19 @@ main{padding:26px 30px 60px;max-width:1180px}
 .card .cbadges{margin-top:9px;display:flex;gap:6px;flex-wrap:wrap}
 @media(max-width:860px){.lanes{grid-template-columns:1fr 1fr}}
 
+/* board tabs */
+.tabbar{display:flex;flex-wrap:wrap;border:1px solid var(--ink);margin-bottom:16px}
+.tab{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;padding:9px 13px;cursor:pointer;border-right:1px solid var(--ink);background:var(--panel);color:var(--ink-soft)}
+.tab:last-child{border-right:0}
+.tab.on{background:var(--ink);color:var(--paper)}
+.tab:hover:not(.on){background:var(--panel-2);color:var(--ink)}
+.catboard{display:none}
+.catboard.on{display:block}
+.cardmove{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
+.cardmove select,.cardmove input{border:1px solid var(--line);background:var(--paper);font-family:var(--font-mono);font-size:10.5px;padding:4px 6px;color:var(--ink)}
+.cardmove input{flex:1;min-width:70px}
+a.pill{text-decoration:none}
+
 /* forms */
 .stack{display:flex;flex-direction:column;gap:11px}
 .stack label{font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-soft);display:flex;flex-direction:column;gap:5px}

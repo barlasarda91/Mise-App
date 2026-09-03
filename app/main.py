@@ -150,29 +150,69 @@ def health():
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
     stats = {"open": "—", "overdue": "—", "due_today": "—", "drafts": "—"}
+    priority: list[dict] = []
+    waiting: list[dict] = []
     try:
         from sqlalchemy import select
 
         from app.db import db_session
         from app.models import DraftStatus, EmailDraft, Lead, OPEN_LEAD_STAGES, Task, TaskStatus
-        from app.routines.cadence import is_overdue
+        from app.routines.cadence import idle_days, is_overdue
 
         today = datetime.now(ZoneInfo(get_settings().default_tz)).date()
         with db_session() as s:
             leads = s.scalars(select(Lead).where(Lead.stage.in_(OPEN_LEAD_STAGES))).all()
             stats["open"] = len(leads)
             stats["overdue"] = sum(1 for lead in leads if is_overdue(lead, today))
-            stats["due_today"] = len(
-                s.scalars(
-                    select(Task).where(Task.status != TaskStatus.DONE, Task.due_date <= today)
-                ).all()
-            )
+            open_tasks = s.scalars(
+                select(Task)
+                .where(Task.status != TaskStatus.DONE)
+                .order_by(Task.due_date.is_(None), Task.due_date)
+            ).all()
+            stats["due_today"] = sum(1 for t in open_tasks if t.due_date and t.due_date <= today)
             stats["drafts"] = len(
                 s.scalars(select(EmailDraft).where(EmailDraft.status == DraftStatus.COMPOSED)).all()
             )
+
+            for lead in leads:
+                if lead.pending_confirmation:
+                    priority.append(
+                        {
+                            "title": f"Confirm found email — {lead.business_name}",
+                            "sub": f"wholesale leads · pending confirmation",
+                            "href": f"/pipeline/lead/{lead.id}",
+                            "urgent": True,
+                        }
+                    )
+            for task in open_tasks:
+                if task.status == TaskStatus.WAITING:
+                    continue
+                due_flag = task.due_date and task.due_date <= today
+                if due_flag or task.priority.value == "high":
+                    priority.append(
+                        {
+                            "title": task.title,
+                            "sub": f"{task.category.value.replace('_', ' ')}"
+                            + (f" · due {task.due_date}" if task.due_date else ""),
+                            "href": "/board",
+                            "urgent": bool(task.due_date and task.due_date < today),
+                        }
+                    )
+            priority = priority[:10]
+            waiting = [
+                {
+                    "title": t.title,
+                    "sub": t.waiting_on or t.category.value.replace("_", " "),
+                    "age": (today - t.updated_at.date()).days if t.updated_at else None,
+                }
+                for t in open_tasks
+                if t.status == TaskStatus.WAITING
+            ][:8]
     except Exception:
         pass
-    return render_page(request, "home.html", "home", db_status=check_db(), stats=stats)
+    return render_page(
+        request, "home.html", "home", db_status=check_db(), stats=stats, priority=priority, waiting=waiting
+    )
 
 
 @app.get("/runs", response_class=HTMLResponse)
@@ -268,8 +308,38 @@ def lead_create_reminder(lead_id: int, remind_on: str = Form(...), note: str = F
 
 
 @app.get("/board", response_class=HTMLResponse)
-def board(request: Request):
-    return render_page(request, "placeholder.html", "board", title="Board", milestone="8")
+def board(request: Request, msg: str | None = None):
+    from app.web.board_view import load_boards
+
+    return render_page(request, "board.html", "board", boards=load_boards(), msg=msg)
+
+
+@app.post("/board/tasks")
+def board_add_task(
+    category: str = Form(...),
+    title: str = Form(""),
+    due_date: str = Form(""),
+    assignee: str = Form(""),
+    priority: str = Form("normal"),
+):
+    from app.web.board_view import create_task_manual
+
+    try:
+        msg = create_task_manual(category, title, due_date, assignee, priority)
+    except Exception as exc:
+        msg = f"Error: {exc}"
+    return RedirectResponse(f"/board?msg={msg}", status_code=303)
+
+
+@app.post("/tasks/{task_id}/status")
+def task_set_status(task_id: int, status: str = Form(...), waiting_on: str = Form("")):
+    from app.web.board_view import set_task_status
+
+    try:
+        msg = set_task_status(task_id, status, waiting_on)
+    except Exception as exc:
+        msg = f"Error: {exc}"
+    return RedirectResponse(f"/board?msg={msg}", status_code=303)
 
 
 @app.get("/drafts", response_class=HTMLResponse)
@@ -302,6 +372,9 @@ def settings_page(request: Request, msg: str | None = None):
         "GOOGLE_SA_JSON": bool(settings.google_sa_json),
         "ANTHROPIC_API_KEY": bool(settings.anthropic_api_key),
     }
+    from app.tools.quickbooks import configured as qbo_configured
+    from app.tools.quickbooks import qbo_status
+
     return render_page(
         request,
         "settings.html",
@@ -309,8 +382,46 @@ def settings_page(request: Request, msg: str | None = None):
         report=connectivity_report(),
         secrets=secrets,
         routines=_load_routines(),
+        qbo=qbo_status(),
+        qbo_configured=qbo_configured(),
         msg=msg,
     )
+
+
+def _qbo_redirect_uri(request: Request) -> str:
+    return str(request.base_url).rstrip("/") + "/settings/qbo/callback"
+
+
+@app.get("/settings/qbo/connect")
+def qbo_connect(request: Request):
+    from itsdangerous import URLSafeTimedSerializer
+
+    from app.tools.quickbooks import authorize_url, configured
+
+    if not configured():
+        return RedirectResponse("/settings?msg=Set QBO_CLIENT_ID and QBO_CLIENT_SECRET first.", status_code=303)
+    state = URLSafeTimedSerializer(get_settings().session_secret, salt="qbo-state").dumps("qbo")
+    return RedirectResponse(authorize_url(_qbo_redirect_uri(request), state), status_code=303)
+
+
+@app.get("/settings/qbo/callback")
+def qbo_callback(request: Request, code: str = "", state: str = "", realmId: str = ""):
+    from itsdangerous import BadSignature, URLSafeTimedSerializer
+
+    from app.tools.quickbooks import exchange_code
+
+    try:
+        URLSafeTimedSerializer(get_settings().session_secret, salt="qbo-state").loads(state, max_age=600)
+    except BadSignature:
+        return RedirectResponse("/settings?msg=QuickBooks connect failed: bad state.", status_code=303)
+    if not code or not realmId:
+        return RedirectResponse("/settings?msg=QuickBooks connect was cancelled.", status_code=303)
+    try:
+        exchange_code(code, _qbo_redirect_uri(request), realmId)
+        msg = "QuickBooks connected."
+    except Exception as exc:
+        msg = f"QuickBooks connect failed: {type(exc).__name__}: {exc}"
+    return RedirectResponse(f"/settings?msg={msg}", status_code=303)
 
 
 @app.post("/routines/{routine_id}/run")
