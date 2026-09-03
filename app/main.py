@@ -408,8 +408,85 @@ def task_set_status(task_id: int, status: str = Form(...), waiting_on: str = For
 
 
 @app.get("/drafts", response_class=HTMLResponse)
-def drafts(request: Request):
-    return render_page(request, "placeholder.html", "drafts", title="Email Drafts", milestone="9")
+def drafts(request: Request, draft: int | None = None, msg: str | None = None):
+    from app.web.drafts_view import load_draft, load_drafts_index, open_leads_for_picker
+
+    index = load_drafts_index()
+    selected = None
+    if index:
+        selected = load_draft(draft if draft is not None else index[0]["id"])
+    return render_page(
+        request, "drafts.html", "drafts",
+        drafts=index, selected=selected, leads=open_leads_for_picker(), msg=msg,
+    )
+
+
+@app.post("/drafts/generate")
+def drafts_generate(
+    instruction: str = Form(""),
+    mailbox: str = Form("arda"),
+    lead_id: str = Form(""),
+    thread_id: str = Form(""),
+):
+    from app.web.drafts_view import start_generation
+
+    try:
+        msg, draft_id = start_generation(instruction, mailbox, lead_id, thread_id)
+    except Exception as exc:
+        msg, draft_id = f"Error: {exc}", None
+    target = f"/drafts?draft={draft_id}&msg={msg}" if draft_id else f"/drafts?msg={msg}"
+    return RedirectResponse(target, status_code=303)
+
+
+@app.post("/drafts/blank")
+def drafts_blank(mailbox: str = Form("arda")):
+    from app.web.drafts_view import create_blank
+
+    try:
+        draft_id = create_blank(mailbox)
+        return RedirectResponse(f"/drafts?draft={draft_id}", status_code=303)
+    except Exception as exc:
+        return RedirectResponse(f"/drafts?msg=Error: {exc}", status_code=303)
+
+
+@app.post("/drafts/{draft_id}")
+def drafts_update(
+    draft_id: int,
+    from_mailbox: str = Form(...),
+    to: str = Form(""),
+    cc: str = Form(""),
+    subject: str = Form(""),
+    body: str = Form(""),
+):
+    from app.web.drafts_view import update_fields
+
+    try:
+        msg = update_fields(draft_id, from_mailbox, to, cc, subject, body)
+    except Exception as exc:
+        msg = f"Error: {exc}"
+    return RedirectResponse(f"/drafts?draft={draft_id}&msg={msg}", status_code=303)
+
+
+@app.post("/drafts/{draft_id}/save-to-gmail")
+def drafts_save_to_gmail(draft_id: int):
+    from app.web.drafts_view import save_to_gmail
+
+    try:
+        msg = save_to_gmail(draft_id)
+    except Exception as exc:
+        msg = f"Error: {exc}"
+    return RedirectResponse(f"/drafts?draft={draft_id}&msg={msg}", status_code=303)
+
+
+@app.post("/drafts/{draft_id}/discard")
+def drafts_discard(draft_id: int):
+    from app.web.drafts_view import discard
+
+    try:
+        msg = discard(draft_id)
+    except Exception as exc:
+        msg = f"Error: {exc}"
+    return RedirectResponse(f"/drafts?msg={msg}", status_code=303)
 
 
 def _load_routines() -> list:

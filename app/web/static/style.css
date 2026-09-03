@@ -118,8 +118,9 @@ a.pill{text-decoration:none}
 /* forms */
 .stack{display:flex;flex-direction:column;gap:11px}
 .stack label{font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-soft);display:flex;flex-direction:column;gap:5px}
-.stack input,.stack select{border:1px solid var(--ink);background:var(--paper);padding:9px 11px;font-family:var(--font-body);font-size:14px;color:var(--ink)}
-.stack input:focus,.stack select:focus{outline:2px solid var(--ember);outline-offset:-2px}
+.stack input,.stack select,.stack textarea{border:1px solid var(--ink);background:var(--paper);padding:9px 11px;font-family:var(--font-body);font-size:14px;color:var(--ink)}
+.stack input:focus,.stack select:focus,.stack textarea:focus{outline:2px solid var(--ember);outline-offset:-2px}
+.stack textarea{resize:vertical;line-height:1.55}
 .linkish.solid{background:var(--ink);color:var(--paper)}
 .linkish.solid:hover{background:var(--ember)}
 

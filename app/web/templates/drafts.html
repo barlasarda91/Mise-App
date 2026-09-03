@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Email Drafts{% endblock %}
+{% block heading %}Email Drafts{% endblock %}
+{% block content %}
+
+{% if msg %}<div class="note" style="margin:0 0 14px">▸ {{ msg }}</div>{% endif %}
+
+<div class="runwrap">
+  <div>
+    <div class="box" style="align-self:start">
+      <div class="box-hd"><span class="lbl">Drafts</span><span class="ix">{{ drafts | length }}</span></div>
+      <div>
+        {% for d in drafts %}
+        <a class="item{% if selected and d.id == selected.id %} sel{% endif %}" href="/drafts?draft={{ d.id }}" style="display:block;padding:12px 13px;border-bottom:1px solid var(--line);text-decoration:none{% if selected and d.id == selected.id %};background:var(--panel-2);border-left:3px solid var(--ink);padding-left:10px{% endif %}">
+          <div style="font-weight:600;font-size:13.5px">{{ d.subject }}</div>
+          <div style="font-family:var(--font-mono);font-size:10.5px;color:var(--ink-soft);margin-top:4px;letter-spacing:.04em">{{ d.mailbox }}@ · {{ d.status_label | upper }}{% if d.is_reply %} · REPLY{% endif %}</div>
+        </a>
+        {% else %}
+        <div class="box-bd"><span class="note">No drafts yet.</span></div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="box">
+      <div class="box-hd"><span class="lbl">New draft</span><span class="ix">CLAUDE · VOICE A/B</span></div>
+      <div class="box-bd">
+        <form method="post" action="/drafts/generate" class="stack">
+          <label>Instruction<input name="instruction" placeholder="follow up on samples, propose 5 lb/wk terms" required></label>
+          <label>From mailbox
+            <select name="mailbox"><option value="arda">arda@ (personal voice)</option><option value="hello">hello@ (brand voice)</option></select>
+          </label>
+          <label>Linked lead (optional)
+            <select name="lead_id"><option value="">—</option>
+              {% for l in leads %}<option value="{{ l.id }}">{{ l.name }}</option>{% endfor %}
+            </select>
+          </label>
+          <label>Reply to Gmail thread id (optional)<input name="thread_id" placeholder="paste thread id to reply on-thread"></label>
+          <button class="linkish solid" type="submit">Generate draft</button>
+        </form>
+        <form method="post" action="/drafts/blank" style="margin-top:10px">
+          <input type="hidden" name="mailbox" value="arda">
+          <button class="linkish" type="submit">Blank draft</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  {% if selected %}
+  <div class="box" style="align-self:start;min-width:0">
+    <div class="box-hd"><span class="lbl">Editor</span>
+      <span class="ix">{{ selected.status_label | upper }}{% if selected.lead_name %} · ↳ {{ selected.lead_name | upper }}{% endif %}</span>
+    </div>
+    <div class="box-bd">
+      {% if selected.status == "drafting" %}
+      <p style="font-size:14px">Claude is writing this one — the page refreshes itself.</p>
+      {% else %}
+      <form method="post" action="/drafts/{{ selected.id }}" class="stack">
+        <label>From
+          <select name="from_mailbox">
+            <option value="arda" {% if selected.mailbox == "arda" %}selected{% endif %}>ardabarlas@boxxcoffee.com</option>
+            <option value="hello" {% if selected.mailbox == "hello" %}selected{% endif %}>hello@boxxcoffee.com</option>
+          </select>
+        </label>
+        <label>To<input name="to" value="{{ selected.to }}" placeholder="comma-separated"></label>
+        <label>Cc<input name="cc" value="{{ selected.cc }}" placeholder="comma-separated"></label>
+        <label>Subject<input name="subject" value="{{ selected.subject if selected.subject != '(no subject)' else '' }}"></label>
+        <label>Body<textarea name="body" rows="14">{{ selected.body }}</textarea></label>
+        <button class="linkish" type="submit">Save changes</button>
+      </form>
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <form method="post" action="/drafts/{{ selected.id }}/save-to-gmail"><button class="linkish solid" type="submit">Save to Gmail</button></form>
+        <form method="post" action="/drafts/{{ selected.id }}/discard"><button class="linkish" type="submit">Discard</button></form>
+      </div>
+      <div class="note">Saving places a native draft in the {{ "arda" if selected.mailbox == "arda" else "hello" }}@ mailbox{% if selected.is_reply %} on its thread{% endif %}. You review and send from Gmail — the hub never sends on its own.</div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{% if selected and selected.status == "drafting" %}
+<script>setTimeout(function(){ location.reload(); }, 4000);</script>
+{% endif %}
+{% endblock %}

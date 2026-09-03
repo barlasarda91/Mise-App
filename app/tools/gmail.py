@@ -157,6 +157,18 @@ def get_message(mailbox: FromMailbox, msg_id: str) -> dict:
     return summary
 
 
+def get_thread_messages(mailbox: FromMailbox, thread_id: str, last_n: int = 3) -> list[dict]:
+    """Last N messages of a thread with extracted bodies — context for reply drafts."""
+    svc = gmail_service(mailbox_address(mailbox))
+    thread = svc.users().threads().get(userId="me", id=thread_id, format="full").execute()
+    out = []
+    for message in (thread.get("messages") or [])[-last_n:]:
+        summary = _summarize(message)
+        summary["body"] = extract_body(message.get("payload") or {})
+        out.append(summary)
+    return out
+
+
 def _thread_reply_headers(svc, thread_id: str) -> tuple[str | None, str | None]:
     """(in_reply_to, references) from the last message on a thread."""
     thread = (

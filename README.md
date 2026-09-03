@@ -40,6 +40,12 @@ UX reference: [`docs/boxx-routines-hub-mockups.html`](docs/boxx-routines-hub-moc
   emails / action items with QuickBooks A/R / waiting-on), QuickBooks layer
   with rotation-safe token storage in Postgres and an in-app OAuth Connect
   flow on Settings, Home priority checklist + Waiting-On. ✅
+- Milestone 9 — email drafting: voice-profiled generation (Voice A arda@ /
+  Voice B hello@ from `docs/mise-voice-and-tone.md`, distilled into
+  `app/routines/prompts/voice_*.md`), Drafts UI with editable From/To/Cc/
+  subject/body, background generation from lead + thread context, save as
+  native Gmail draft (on-thread for replies), discard; routines can prepare
+  drafts via `create_email_draft` (deduped). The hub never sends email. ✅
 
 ## QuickBooks provisioning
 

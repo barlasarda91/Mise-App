@@ -541,6 +541,79 @@ register(
 )
 
 
+# ---------- email drafts (never sent — reviewed in the Drafts UI) ----------
+
+
+def _create_email_draft(
+    session: Session, mailbox: str, to, cc, subject, body, purpose, lead_id, task_id, gmail_thread_id
+):
+    from app.models import DraftStatus, EmailDraft
+    from app.models.enums import FromMailbox as FM
+
+    ctx = get_run_context()
+    dedup_key = f"draft:{purpose}:{lead_id or task_id or 'none'}:{ctx.get('run_id')}"
+    ledger = session.scalar(select(ExternalMutation).where(ExternalMutation.dedup_key == dedup_key))
+    if ledger and ledger.external_id:
+        return {"outcome": "already_exists", "draft_id": int(ledger.external_id)}
+    draft = EmailDraft(
+        subject=subject,
+        body=body,
+        to_addrs=to or None,
+        cc_addrs=cc or None,
+        from_mailbox=FM(mailbox),
+        gmail_thread_id=gmail_thread_id,
+        related_lead_id=lead_id,
+        related_task_id=task_id,
+        status=DraftStatus.COMPOSED,
+        run_id=ctx.get("run_id"),
+    )
+    session.add(draft)
+    session.flush()
+    session.add(
+        ExternalMutation(
+            kind=MutationKind.GMAIL_DRAFT,
+            dedup_key=dedup_key,
+            external_id=str(draft.id),
+            run_id=ctx.get("run_id"),
+        )
+    )
+    return {"outcome": "created", "draft_id": draft.id}
+
+
+register(
+    ToolDef(
+        name="create_email_draft",
+        description=(
+            "Prepare an email draft for Arda's review in the Drafts queue — it is NEVER "
+            "sent automatically. Write the full subject and plain-text body yourself, "
+            "matching the mailbox voice: arda = personal operator voice (greet 'Hey "
+            "<first name>,', sign off exactly 'Best\\nArda', short and warm, concrete "
+            "terms); hello = brand front-desk voice (self-introduce 'This is Arda from "
+            "Boxx Coffee Roasters', brand 'we', service-first). Set gmail_thread_id when "
+            "replying to an existing conversation. purpose = a short slug like "
+            "'followup' or 'inquiry_reply' (used for dedup)."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "mailbox": {"type": "string", "enum": ["arda", "hello"]},
+                "to": {"type": "array", "items": {"type": "string"}},
+                "cc": {"type": ["array", "null"], "items": {"type": "string"}},
+                "subject": {"type": "string"},
+                "body": {"type": "string"},
+                "purpose": {"type": "string"},
+                "lead_id": {"type": ["integer", "null"]},
+                "task_id": {"type": ["integer", "null"]},
+                "gmail_thread_id": NULLABLE_STR,
+            },
+            "required": ["mailbox", "to", "cc", "subject", "body", "purpose", "lead_id", "task_id", "gmail_thread_id"],
+            "additionalProperties": False,
+        },
+        handler=_create_email_draft,
+    )
+)
+
+
 # ---------- sync cursor ----------
 
 
