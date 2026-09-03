@@ -360,8 +360,19 @@ def _create_task_impl(session, category, title, dedup_key, description, due_date
     return {"outcome": "created", "task_id": task.id, "title": title}
 
 
-def _create_task(session: Session, category, title, dedup_key, description=None, due_date=None, assignee=None, lead_id=None):
-    source_ref = {"lead_id": lead_id} if lead_id else None
+def _create_task(
+    session: Session, category, title, dedup_key, description=None, due_date=None,
+    assignee=None, lead_id=None, qbo_invoice_id=None, gmail_msg_id=None,
+):
+    source_ref = {
+        k: v
+        for k, v in {
+            "lead_id": lead_id,
+            "qbo_invoice_id": qbo_invoice_id,
+            "gmail_msg_id": gmail_msg_id,
+        }.items()
+        if v
+    } or None
     return _create_task_impl(session, category, title, dedup_key, description, due_date, assignee, source_ref)
 
 
@@ -372,7 +383,8 @@ register(
             "Create a board task in one of the five categories, deduped by dedup_key — "
             "re-running with the same key updates instead of duplicating. Use stable keys: "
             "'followup:<lead_id>' for overdue-lead follow-ups, 'task:<gmail_msg_id>' for "
-            "email-derived items, 'invoice:<qbo_invoice_id>' for A/R."
+            "email-derived items, 'invoice:<qbo_invoice_id>' for A/R. Also pass "
+            "qbo_invoice_id / gmail_msg_id / lead_id so the task links to its source."
         ),
         input_schema={
             "type": "object",
@@ -384,6 +396,8 @@ register(
                 "due_date": {"type": ["string", "null"], "description": "YYYY-MM-DD or null"},
                 "assignee": NULLABLE_STR,
                 "lead_id": {"type": ["integer", "null"]},
+                "qbo_invoice_id": NULLABLE_STR,
+                "gmail_msg_id": NULLABLE_STR,
             },
             "required": ["category", "title", "dedup_key"],
             "additionalProperties": False,

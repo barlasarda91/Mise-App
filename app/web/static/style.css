@@ -114,6 +114,7 @@ main{padding:26px 30px 60px;max-width:1180px}
 .cardmove select,.cardmove input{border:1px solid var(--line);background:var(--paper);font-family:var(--font-mono);font-size:10.5px;padding:4px 6px;color:var(--ink)}
 .cardmove input{flex:1;min-width:70px}
 a.pill{text-decoration:none}
+a.cn:hover{color:var(--ember)}
 
 /* forms */
 .stack{display:flex;flex-direction:column;gap:11px}

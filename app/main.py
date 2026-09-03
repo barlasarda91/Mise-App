@@ -396,15 +396,43 @@ def board_add_task(
     return RedirectResponse(f"/board?msg={msg}", status_code=303)
 
 
+@app.get("/board/task/{task_id}", response_class=HTMLResponse)
+def task_detail(request: Request, task_id: int, msg: str | None = None):
+    from app.web.board_view import load_task
+
+    task = load_task(task_id)
+    if task is None:
+        return RedirectResponse("/board?msg=Task not found.", status_code=303)
+    return render_page(request, "task.html", "board", task=task, msg=msg)
+
+
 @app.post("/tasks/{task_id}/status")
-def task_set_status(task_id: int, status: str = Form(...), waiting_on: str = Form("")):
+def task_set_status(task_id: int, status: str = Form(...), waiting_on: str = Form(""), next: str = Form("/board")):
     from app.web.board_view import set_task_status
 
     try:
         msg = set_task_status(task_id, status, waiting_on)
     except Exception as exc:
         msg = f"Error: {exc}"
-    return RedirectResponse(f"/board?msg={msg}", status_code=303)
+    target = next if next.startswith("/") and not next.startswith("//") else "/board"
+    return RedirectResponse(f"{target}?msg={msg}", status_code=303)
+
+
+@app.post("/tasks/{task_id}/edit")
+def task_edit(
+    task_id: int,
+    due_date: str = Form(""),
+    assignee: str = Form(""),
+    priority: str = Form("normal"),
+    description: str = Form(""),
+):
+    from app.web.board_view import edit_task_manual
+
+    try:
+        msg = edit_task_manual(task_id, due_date, assignee, priority, description)
+    except Exception as exc:
+        msg = f"Error: {exc}"
+    return RedirectResponse(f"/board/task/{task_id}?msg={msg}", status_code=303)
 
 
 @app.get("/drafts", response_class=HTMLResponse)

@@ -87,6 +87,55 @@ def load_boards() -> list[dict]:
     return boards
 
 
+def load_task(task_id: int) -> dict | None:
+    today = _today()
+    try:
+        with db_session() as s:
+            task = s.get(Task, task_id)
+            if task is None:
+                return None
+            ref = task.source_ref or {}
+            links = []
+            if ref.get("lead_id"):
+                links.append({"label": "Open lead in Pipeline", "href": f"/pipeline/lead/{ref['lead_id']}", "external": False})
+            if ref.get("gmail_msg_id"):
+                links.append({
+                    "label": "Open email in Gmail",
+                    "href": f"https://mail.google.com/mail/u/0/#all/{ref['gmail_msg_id']}",
+                    "external": True,
+                })
+            if ref.get("qbo_invoice_id"):
+                links.append({
+                    "label": "Open invoice in QuickBooks",
+                    "href": f"https://app.qbo.intuit.com/app/invoice?txnId={ref['qbo_invoice_id']}",
+                    "external": True,
+                })
+            from app.models import EmailDraft
+
+            drafts = s.scalars(select(EmailDraft).where(EmailDraft.related_task_id == task_id)).all()
+            for d in drafts:
+                links.append({"label": f"Open draft: {d.subject or '(no subject)'}", "href": f"/drafts?draft={d.id}", "external": False})
+
+            activities = s.scalars(
+                select(TaskActivity).where(TaskActivity.task_id == task_id).order_by(TaskActivity.id.desc())
+            ).all()
+            return {
+                **_card(task, today),
+                "description": task.description,
+                "category": task.category.value,
+                "category_label": dict((c.value, l) for c, l in CATEGORIES)[task.category.value],
+                "created_at": task.created_at,
+                "completed_at": task.completed_at,
+                "links": links,
+                "activities": [
+                    {"type": a.type, "detail": a.detail, "actor": a.actor, "at": a.created_at}
+                    for a in activities
+                ],
+            }
+    except Exception:
+        return None
+
+
 # ---------- manual services ----------
 
 
@@ -106,6 +155,19 @@ def create_task_manual(category: str, title: str, due_date: str, assignee: str, 
         s.flush()
         s.add(TaskActivity(task_id=task.id, type="created", detail=title.strip(), actor="Arda"))
     return f"Task added: {title.strip()}."
+
+
+def edit_task_manual(task_id: int, due_date: str, assignee: str, priority: str, description: str) -> str:
+    with db_session() as s:
+        task = s.get(Task, task_id)
+        if task is None:
+            return "Task not found."
+        task.due_date = date.fromisoformat(due_date) if due_date else None
+        task.assignee = assignee.strip() or None
+        task.priority = TaskPriority(priority)
+        task.description = description.strip() or None
+        s.add(TaskActivity(task_id=task_id, type="edited", detail="details updated", actor="Arda"))
+    return "Task updated."
 
 
 def set_task_status(task_id: int, status: str, waiting_on: str = "") -> str:

@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}{{ task.title }}{% endblock %}
+{% block heading %}{{ task.title }}{% endblock %}
+{% block content %}
+
+{% if msg %}<div class="note" style="margin:0 0 14px">▸ {{ msg }}</div>{% endif %}
+<div class="note" style="margin:0 0 14px"><a href="/board">← back to board</a></div>
+
+<div class="grid2">
+  <div>
+    <div class="box">
+      <div class="box-hd"><span class="lbl">{{ task.category_label }}</span>
+        <span class="ix">{{ task.status | upper }}{% if task.overdue %} · <span style="color:var(--ember)">OVERDUE</span>{% endif %}</span>
+      </div>
+      <div class="box-bd" style="font-size:14px">
+        {% if task.description %}<p style="margin-bottom:12px;white-space:pre-line">{{ task.description }}</p>{% endif %}
+        <div class="kv"><span class="ks">Source</span><span>↳ {{ task.source }}</span></div>
+        <div class="kv"><span class="ks">Due</span><span>{{ task.due or "—" }}</span></div>
+        <div class="kv"><span class="ks">Assignee</span><span>{{ task.assignee or "—" }}</span></div>
+        <div class="kv"><span class="ks">Priority</span><span>{{ task.priority }}</span></div>
+        {% if task.waiting_on %}<div class="kv"><span class="ks">Waiting on</span><span>{{ task.waiting_on }}</span></div>{% endif %}
+        <div class="kv"><span class="ks">Created</span><span>{{ task.created_at.strftime("%Y-%m-%d %H:%M") if task.created_at else "—" }}</span></div>
+      </div>
+    </div>
+
+    {% if task.links %}
+    <div class="box">
+      <div class="box-hd"><span class="lbl">Related</span><span class="ix">{{ task.links | length }}</span></div>
+      <div>
+        {% for link in task.links %}
+        <a class="row" href="{{ link.href }}" {% if link.external %}target="_blank" rel="noopener"{% endif %} style="text-decoration:none">
+          <span class="name" style="font-size:14px">{{ link.label }}</span>
+          <span class="spacer"></span>
+          <span class="pill ghost">{{ "↗ opens app" if link.external else "→" }}</span>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="box">
+      <div class="box-hd"><span class="lbl">Activity</span><span class="ix">{{ task.activities | length }}</span></div>
+      <div>
+        {% for a in task.activities %}
+        <div class="row"><span class="code">{{ a.at.strftime("%m-%d %H:%M") if a.at else "" }}</span><span class="name" style="font-size:13.5px">{{ a.type }}</span><span class="meta">{{ a.detail or "" }}{% if a.actor %} · {{ a.actor }}{% endif %}</span></div>
+        {% else %}
+        <div class="box-bd"><span class="note">No activity logged.</span></div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="box">
+      <div class="box-hd"><span class="lbl">Move</span><span class="ix">NOW: {{ task.status | upper }}</span></div>
+      <div class="box-bd">
+        <form method="post" action="/tasks/{{ task.id }}/status" class="stack">
+          <input type="hidden" name="next" value="/board/task/{{ task.id }}">
+          <label>Status
+            <select name="status">
+              {% for s in ["todo","doing","waiting","done"] %}
+              <option value="{{ s }}" {% if s == task.status %}selected{% endif %}>{{ s }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>Waiting on (when parking)<input name="waiting_on" value="{{ task.waiting_on or '' }}"></label>
+          <button class="linkish solid" type="submit">Move</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="box">
+      <div class="box-hd"><span class="lbl">Edit</span><span class="ix">DETAILS</span></div>
+      <div class="box-bd">
+        <form method="post" action="/tasks/{{ task.id }}/edit" class="stack">
+          <label>Due date<input type="date" name="due_date" value="{{ task.due or '' }}"></label>
+          <label>Assignee<input name="assignee" value="{{ task.assignee or '' }}"></label>
+          <label>Priority
+            <select name="priority">
+              {% for p in ["low","normal","high"] %}
+              <option value="{{ p }}" {% if p == task.priority %}selected{% endif %}>{{ p }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>Description<textarea name="description" rows="5">{{ task.description or "" }}</textarea></label>
+          <button class="linkish solid" type="submit">Save</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

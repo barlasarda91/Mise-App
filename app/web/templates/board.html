@@ -19,7 +19,7 @@
       <div class="lane-hd"><span class="ln">{{ lane.label }}</span><span class="ct">{{ "%02d" | format(lane.cards | length) }}</span></div>
       {% for c in lane.cards %}
       <div class="card">
-        <div class="cn">{{ c.title }}</div>
+        <a class="cn" href="/board/task/{{ c.id }}" style="text-decoration:none;display:block">{{ c.title }}</a>
         <div class="cmeta">
           <span>↳ {{ c.source }}</span>
           {% if c.waiting_on %}<span>waits: {{ c.waiting_on }}</span>{% endif %}

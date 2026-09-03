@@ -148,6 +148,68 @@ def test_board_services(session_factory, monkeypatch):
     boards = None  # load_boards uses global db_session; covered via services + template smoke
 
 
+def test_create_task_tool_stores_source_ids(session_factory):
+    import json
+
+    set_run_context(run_id=None, routine_id=1, started_at=None)
+    try:
+        with session_factory() as s:
+            content, is_error = dispatch(
+                "create_task",
+                {"category": "invoice_tracking", "title": "Chase #1043", "dedup_key": "invoice:1043",
+                 "qbo_invoice_id": "1043", "due_date": "2026-08-20"},
+                s,
+            )
+        assert not is_error
+        with session_factory() as s:
+            task = s.get(Task, json.loads(content)["task_id"])
+            assert task.source_ref == {"qbo_invoice_id": "1043"}
+    finally:
+        clear_run_context()
+
+
+def test_load_task_builds_source_links(session_factory, monkeypatch):
+    import app.web.board_view as bv
+
+    monkeypatch.setattr(bv, "db_session", session_factory)
+    from app.models import EmailDraft
+    from app.models.enums import FromMailbox
+
+    with session_factory() as s:
+        task = Task(
+            category="invoice_tracking", title="Chase #1043",
+            source_ref={"qbo_invoice_id": "1043", "lead_id": 5, "gmail_msg_id": "m-77"},
+        )
+        s.add(task)
+        s.flush()
+        s.add(EmailDraft(subject="Re: invoice", from_mailbox=FromMailbox.ARDA, related_task_id=task.id))
+        task_id = task.id
+
+    detail = bv.load_task(task_id)
+    hrefs = [l["href"] for l in detail["links"]]
+    assert f"/pipeline/lead/5" in hrefs
+    assert any("mail.google.com" in h and "m-77" in h for h in hrefs)
+    assert any("qbo.intuit.com" in h and "1043" in h for h in hrefs)
+    assert any(h.startswith("/drafts?draft=") for h in hrefs)
+
+
+def test_edit_task_manual(session_factory, monkeypatch):
+    import app.web.board_view as bv
+
+    monkeypatch.setattr(bv, "db_session", session_factory)
+    with session_factory() as s:
+        task = Task(category="governance", title="Renew business license")
+        s.add(task)
+        s.flush()
+        task_id = task.id
+    assert "updated" in bv.edit_task_manual(task_id, "2026-10-01", "Arda", "high", "City of LA portal")
+    with session_factory() as s:
+        task = s.get(Task, task_id)
+        assert str(task.due_date) == "2026-10-01"
+        assert task.priority.value == "high"
+        assert task.description == "City of LA portal"
+
+
 def test_qbo_status_not_configured(monkeypatch):
     monkeypatch.setattr(qbo.get_settings(), "qbo_client_id", None, raising=False)
     status = qbo.qbo_status()
