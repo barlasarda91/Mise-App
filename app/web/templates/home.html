@@ -3,10 +3,10 @@
 {% block heading %}Good morning, Arda.{% endblock %}
 {% block content %}
 <div class="grid4" style="margin-bottom:18px">
-  <div class="stat"><div class="k">Open leads</div><div class="v">{{ stats.open }}</div></div>
-  <div class="stat{% if stats.overdue and stats.overdue != "—" %} alert{% endif %}"><div class="k">Overdue</div><div class="v">{{ stats.overdue }}</div></div>
-  <div class="stat"><div class="k">Tasks due today</div><div class="v">{{ stats.due_today }}</div></div>
-  <div class="stat"><div class="k">Drafts ready</div><div class="v">{{ stats.drafts }}</div></div>
+  <a class="stat" href="/pipeline"><div class="k">Open leads</div><div class="v">{{ stats.open }}</div></a>
+  <a class="stat{% if stats.overdue and stats.overdue != "—" %} alert{% endif %}" href="/pipeline"><div class="k">Overdue</div><div class="v">{{ stats.overdue }}</div></a>
+  <a class="stat" href="/board"><div class="k">Tasks due today</div><div class="v">{{ stats.due_today }}</div></a>
+  <a class="stat" href="/drafts"><div class="k">Drafts ready</div><div class="v">{{ stats.drafts }}</div></a>
 </div>
 
 <div class="grid2">
@@ -30,12 +30,12 @@
     <div class="box-hd"><span class="lbl">Waiting On</span><span class="ix">{{ waiting | length }} BLOCKED</span></div>
     <div>
       {% for w in waiting %}
-      <div class="row">
+      <a class="row" href="{{ w.href }}" style="text-decoration:none">
         <span class="name" style="font-size:14px">{{ w.title }}</span>
         <span class="meta">— {{ w.sub }}</span>
         <span class="spacer"></span>
         {% if w.age is not none %}<span class="pill ghost">{{ w.age }}d</span>{% endif %}
-      </div>
+      </a>
       {% else %}
       <div class="box-bd"><span class="note">Nothing blocked. Tasks in "waiting" land here with who they wait on.</span></div>
       {% endfor %}

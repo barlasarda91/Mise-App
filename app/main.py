@@ -259,7 +259,7 @@ def home(request: Request):
                             "title": task.title,
                             "sub": f"{task.category.value.replace('_', ' ')}"
                             + (f" · due {task.due_date}" if task.due_date else ""),
-                            "href": "/board",
+                            "href": f"/board/task/{task.id}",
                             "urgent": bool(task.due_date and task.due_date < today),
                         }
                     )
@@ -269,6 +269,7 @@ def home(request: Request):
                     "title": t.title,
                     "sub": t.waiting_on or t.category.value.replace("_", " "),
                     "age": (today - t.updated_at.date()).days if t.updated_at else None,
+                    "href": f"/board/task/{t.id}",
                 }
                 for t in open_tasks
                 if t.status == TaskStatus.WAITING
