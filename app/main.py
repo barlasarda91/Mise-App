@@ -60,7 +60,7 @@ app = FastAPI(title="Mise", docs_url=None, redoc_url=None, openapi_url=None, lif
 app.mount("/static", StaticFiles(directory=BASE_DIR / "web" / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "web" / "templates")
 
-PUBLIC_PATHS = {"/login", "/health"}
+PUBLIC_PATHS = {"/login", "/health", "/legal/terms", "/legal/privacy"}
 
 NAV = [
     {"view": "home", "ix": "00", "label": "Today", "path": "/"},
@@ -138,6 +138,71 @@ def logout():
     response = RedirectResponse("/login", status_code=303)
     response.delete_cookie(get_settings().session_cookie_name)
     return response
+
+
+LEGAL_EFFECTIVE = "September 3, 2026"
+
+TERMS_BODY = """
+<p>Mise is a private, internal operations application built and operated by Boxx Coffee
+Roasters ("Boxx") for its own business. It is not offered to the public, has no external
+customers, and access is limited to Boxx's authorized operator.</p>
+<h2>Use</h2>
+<ul>
+<li>The application may be used only by Boxx and only for Boxx's business operations.</li>
+<li>Connections to third-party services (Google Workspace, Intuit QuickBooks Online,
+Anthropic) are authorized by Boxx, act on Boxx's own accounts, and are governed by those
+services' own terms.</li>
+<li>The application is provided as-is for internal use, without warranties of any kind.</li>
+</ul>
+<h2>Contact</h2>
+<p>Boxx Coffee Roasters, Arts District, Los Angeles — hello@boxxcoffee.com</p>
+"""
+
+PRIVACY_BODY = """
+<p>Mise is a single-tenant internal tool: the only data subject and the only user is Boxx
+Coffee Roasters ("Boxx") itself. This policy describes how the application handles data.</p>
+<h2>What the application processes</h2>
+<ul>
+<li><b>Email metadata and content</b> from Boxx's own Google Workspace mailboxes, read to
+track wholesale leads and prepare a daily briefing.</li>
+<li><b>Calendar events</b> from Boxx's own Google Calendar, read to prepare briefings and
+to create reminder events at Boxx's request.</li>
+<li><b>QuickBooks Online accounting data</b> (issued customer invoices / accounts
+receivable), read to surface overdue receivables. The application never writes to or
+deletes QuickBooks data.</li>
+</ul>
+<h2>How data is stored and shared</h2>
+<ul>
+<li>Data is stored in a private database operated for Boxx (hosted on Railway) and shown
+only to Boxx's authenticated operator behind a login.</li>
+<li>Portions of the data are processed by Anthropic's Claude API to generate summaries
+and briefings, acting as a processor on Boxx's behalf.</li>
+<li>Data is never sold and never shared with, shown to, or used by any party other than
+Boxx and the processors named above.</li>
+</ul>
+<h2>Retention and control</h2>
+<p>Boxx controls all stored data and may delete it at any time. Third-party connections
+can be revoked at any time from the respective service (Google Admin Console, QuickBooks
+connected-apps settings).</p>
+<h2>Contact</h2>
+<p>Boxx Coffee Roasters, Arts District, Los Angeles — hello@boxxcoffee.com</p>
+"""
+
+
+@app.get("/legal/terms", response_class=HTMLResponse)
+def legal_terms(request: Request):
+    return templates.TemplateResponse(
+        request, "legal.html",
+        {"title": "End-User License Agreement", "effective": LEGAL_EFFECTIVE, "body": TERMS_BODY},
+    )
+
+
+@app.get("/legal/privacy", response_class=HTMLResponse)
+def legal_privacy(request: Request):
+    return templates.TemplateResponse(
+        request, "legal.html",
+        {"title": "Privacy Policy", "effective": LEGAL_EFFECTIVE, "body": PRIVACY_BODY},
+    )
 
 
 @app.get("/health")
