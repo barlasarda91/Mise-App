@@ -204,3 +204,21 @@ def test_tool_specs_are_strict_and_sorted():
     for spec in specs:
         assert spec["strict"] is True
         assert spec["input_schema"]["additionalProperties"] is False
+
+
+def test_no_schema_mixes_enum_with_type_union():
+    """The API's strict validator 400s on `enum` combined with a type union
+    (['string','null']) — nullable enums must use anyOf (regression: A-004)."""
+
+    def walk(node):
+        if isinstance(node, dict):
+            if "enum" in node and isinstance(node.get("type"), list):
+                raise AssertionError(f"enum with type union: {node}")
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    for spec in tool_specs():
+        walk(spec["input_schema"])

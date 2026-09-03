@@ -36,6 +36,12 @@ from app.settings import get_settings
 NULLABLE_STR = {"type": ["string", "null"]}
 
 
+def nullable_enum(values: list[str]) -> dict:
+    # A nullable enum must be anyOf-composed: "enum" alongside a type union
+    # (["string","null"]) is rejected by the API's strict schema validator.
+    return {"anyOf": [{"type": "string", "enum": values}, {"type": "null"}]}
+
+
 def _tz() -> ZoneInfo:
     return ZoneInfo(get_settings().default_tz)
 
@@ -313,10 +319,7 @@ register(
             "type": "object",
             "properties": {
                 "lead_id": {"type": "integer"},
-                "stage": {
-                    "type": ["string", "null"],
-                    "enum": [s.value for s in LeadStage] + [None],
-                },
+                "stage": nullable_enum([s.value for s in LeadStage]),
                 "loss_reason": NULLABLE_STR,
                 "note": NULLABLE_STR,
             },
@@ -456,10 +459,7 @@ register(
             "type": "object",
             "properties": {
                 "task_id": {"type": "integer"},
-                "status": {
-                    "type": ["string", "null"],
-                    "enum": [s.value for s in TaskStatus] + [None],
-                },
+                "status": nullable_enum([s.value for s in TaskStatus]),
                 "waiting_on": NULLABLE_STR,
                 "due_date": {"type": ["string", "null"], "description": "YYYY-MM-DD, '' to clear, null to keep"},
                 "assignee": NULLABLE_STR,
