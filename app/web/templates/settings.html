@@ -53,7 +53,9 @@
   <div class="box-hd"><span class="lbl">Intuit QuickBooks · OAuth</span><span class="ix">INVOICE TRACKING · A/R ONLY</span></div>
   <div>
     <div class="kv">
-      <div class="lft"><span class="kt">QuickBooks Online</span><span class="ks">{{ qbo.detail }}</span></div>
+      <div class="lft"><span class="kt">QuickBooks Online</span><span class="ks">{{ qbo.detail }}</span>
+        {% if qbo.status != "ok" %}<span class="ks">redirect URI sent to Intuit (register EXACTLY this, Production tab): <b>{{ qbo_redirect_uri }}</b></span>{% endif %}
+      </div>
       <div style="display:flex;gap:8px;align-items:center">
         {% if qbo.status == "ok" %}<span class="pill green">connected</span>
         {% elif qbo.status == "not_configured" %}<span class="pill ghost">not configured</span>

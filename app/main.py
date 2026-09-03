@@ -457,6 +457,7 @@ def settings_page(request: Request, msg: str | None = None):
         routines=_load_routines(),
         qbo=qbo_status(),
         qbo_configured=qbo_configured(),
+        qbo_redirect_uri=_qbo_redirect_uri(request),
         outbound_ip=outbound_ip,
         msg=msg,
     )
