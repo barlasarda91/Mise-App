@@ -136,6 +136,8 @@ def test_run_with_tool_use_completes_and_persists(session_factory, routine_id):
         # runtime context injected as first user message
         assert "Ember Room" in msgs[0].content["text"]
         assert "File quarterly sales tax" in msgs[0].content["text"]
+        # first-ever run: cold start scans ~3 months of backlog
+        assert "past 90 days" in msgs[0].content["text"]
         # tool call captured on the assistant message
         assert msgs[1].tool_calls == [{"id": "tu_1", "name": "list_open_leads", "input": {}}]
         # tool result carried real data from the DB

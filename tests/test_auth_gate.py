@@ -64,3 +64,19 @@ def test_tampered_cookie_rejected(client):
     client.cookies.set("mise_session", "forged-token")
     r = client.get("/", follow_redirects=False)
     assert r.status_code == 303
+
+
+def test_settings_page_without_db(client):
+    client.post("/login", data={"password": "test-password"})
+    r = client.get("/settings")
+    assert r.status_code == 200
+    assert "No routines" in r.text  # degrades gracefully with no DATABASE_URL
+
+
+def test_run_now_without_db_reports_error(client):
+    client.post("/login", data={"password": "test-password"})
+    r = client.post("/routines/1/run", follow_redirects=False)
+    assert r.status_code == 303
+    from urllib.parse import unquote
+
+    assert "scheduler is not running" in unquote(r.headers["location"])

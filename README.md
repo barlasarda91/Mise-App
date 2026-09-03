@@ -20,7 +20,11 @@ UX reference: [`docs/boxx-routines-hub-mockups.html`](docs/boxx-routines-hub-moc
   Sonnet 5), runtime-context injection, single-phase agentic tool-use loop
   with per-step `run_messages` persistence, tool registry, refusal handling,
   startup orphan-run sweep. Needs `ANTHROPIC_API_KEY` set to execute real
-  runs. ✅
+  runs. First-ever runs (no sync state) scan the past 90 days of backlog. ✅
+- Milestone 5 — scheduling: APScheduler with a persistent Postgres jobstore,
+  cron per routine in LA time, routines seeded on startup (disabled, with
+  placeholder prompts until milestones 7–8), Settings shows routines with
+  enable/disable toggles and a background "Run now". ✅
 
 ## Google connector provisioning
 

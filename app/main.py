@@ -32,7 +32,24 @@ async def lifespan(app: FastAPI):
             log.warning("startup sweep: marked %d orphaned run(s) failed", swept)
     except Exception as exc:
         log.warning("startup sweep skipped: %s", exc)
+    # Seed the standing routines, then start the scheduler (both need the DB).
+    try:
+        from app.routines.seed import seed_routines
+
+        seed_routines()
+    except Exception as exc:
+        log.warning("routine seed skipped: %s", exc)
+    try:
+        from app.scheduler import start_scheduler, stop_scheduler
+
+        start_scheduler()
+    except Exception as exc:
+        log.warning("scheduler not started: %s", exc)
     yield
+    try:
+        stop_scheduler()
+    except Exception:
+        pass
 
 
 app = FastAPI(title="Mise", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
@@ -151,8 +168,21 @@ def drafts(request: Request):
     return render_page(request, "placeholder.html", "drafts", title="Email Drafts", milestone="9")
 
 
+def _load_routines() -> list:
+    from sqlalchemy import select
+
+    from app.db import db_session
+    from app.models import Routine
+
+    try:
+        with db_session() as s:
+            return list(s.scalars(select(Routine).order_by(Routine.id)))
+    except Exception:
+        return []
+
+
 @app.get("/settings", response_class=HTMLResponse)
-def settings_page(request: Request):
+def settings_page(request: Request, msg: str | None = None):
     from app.tools.check_google import connectivity_report
 
     settings = get_settings()
@@ -164,5 +194,44 @@ def settings_page(request: Request):
         "ANTHROPIC_API_KEY": bool(settings.anthropic_api_key),
     }
     return render_page(
-        request, "settings.html", "settings", report=connectivity_report(), secrets=secrets
+        request,
+        "settings.html",
+        "settings",
+        report=connectivity_report(),
+        secrets=secrets,
+        routines=_load_routines(),
+        msg=msg,
     )
+
+
+@app.post("/routines/{routine_id}/run")
+def routine_run_now(routine_id: int):
+    from app.scheduler import trigger_run_now
+
+    if trigger_run_now(routine_id):
+        msg = "Run started in the background — transcript appears in Runs."
+    else:
+        msg = "Cannot run: scheduler is not running (DATABASE_URL not configured)."
+    return RedirectResponse(f"/settings?msg={msg}", status_code=303)
+
+
+@app.post("/routines/{routine_id}/toggle")
+def routine_toggle(routine_id: int):
+    from app.db import db_session
+    from app.models import Routine
+    from app.scheduler import get_scheduler, sync_jobs
+
+    try:
+        with db_session() as s:
+            routine = s.get(Routine, routine_id)
+            if routine is None:
+                return RedirectResponse("/settings?msg=Routine not found.", status_code=303)
+            routine.enabled = not routine.enabled
+            state = "enabled" if routine.enabled else "disabled"
+            name = routine.name
+    except Exception:
+        return RedirectResponse("/settings?msg=Database not configured.", status_code=303)
+    sched = get_scheduler()
+    if sched is not None:
+        sync_jobs(sched)
+    return RedirectResponse(f"/settings?msg={name} {state}.", status_code=303)

@@ -315,7 +315,7 @@ Two functional accents only (ember for attention, green for confirmation) over a
 - APScheduler cron jobs per routine, in **America/Los_Angeles**, persistent jobstore in Postgres, plus manual "Run now."
 - **Runtime context injected into every run** (the API model doesn't know the wall-clock date):
   - current datetime + timezone,
-  - `last_run_at` for the routine's sources,
+  - `last_run_at` for the routine's sources — **when a source has no `last_run_at` (the first ever run), the gather window defaults to the past 90 days (~3 months) of backlog** (`COLD_START_DAYS`), matching §7.1's cold-start reconstruction,
   - a compact state snapshot relevant to the routine (open leads for the tracker; incomplete tasks + prior-day agenda items for the agenda).
   This is what enables incremental behavior and keeps token usage down versus dumping full history.
 

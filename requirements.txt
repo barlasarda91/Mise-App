@@ -10,3 +10,4 @@ psycopg[binary]>=3.2
 google-api-python-client>=2.140
 google-auth>=2.30
 anthropic>=1.0
+APScheduler>=3.10,<4

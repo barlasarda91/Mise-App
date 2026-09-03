@@ -9,6 +9,30 @@
   {% else %}<span class="pill ember">error</span>{% endif %}
 {%- endmacro %}
 
+{% if msg %}<div class="note" style="margin:0 0 14px">▸ {{ msg }}</div>{% endif %}
+
+<div class="box">
+  <div class="box-hd"><span class="lbl">Scheduled Routines</span><span class="ix">{{ routines | selectattr("enabled") | list | length }} ENABLED</span></div>
+  <div>
+    {% for r in routines %}
+    <div class="kv">
+      <div class="lft">
+        <span class="kt">{{ r.name }}</span>
+        <span class="ks">cron {{ r.schedule_cron }} · {{ r.timezone }} · model: {{ r.model }}</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        {% if r.enabled %}<span class="pill green">on</span>{% else %}<span class="pill ghost">off</span>{% endif %}
+        <form method="post" action="/routines/{{ r.id }}/toggle" style="display:inline"><button class="linkish" type="submit">{{ "Disable" if r.enabled else "Enable" }}</button></form>
+        <form method="post" action="/routines/{{ r.id }}/run" style="display:inline"><button class="linkish" type="submit">Run now</button></form>
+      </div>
+    </div>
+    {% else %}
+    <div class="kv"><div class="lft"><span class="kt">No routines</span><span class="ks">seeded on startup once the database is connected</span></div></div>
+    {% endfor %}
+  </div>
+</div>
+<div class="note" style="margin:-8px 0 14px">Routines are seeded disabled with placeholder prompts — the real Lead Tracker and Agenda prompts land in milestones 7–8. "Run now" queues a background run.</div>
+
 <div class="box">
   <div class="box-hd"><span class="lbl">Google Workspace · Service Account</span><span class="ix">DOMAIN-WIDE DELEGATION</span></div>
   <div>

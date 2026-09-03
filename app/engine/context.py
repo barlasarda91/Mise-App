@@ -17,6 +17,10 @@ from app.settings import get_settings
 MAX_LEADS = 40
 MAX_TASKS = 25
 
+# First-ever-run gather window: with no last_run_at for a source, routines
+# scan the past 90 days (~3 months) of backlog instead of "everything".
+COLD_START_DAYS = 90
+
 
 def build_runtime_context(session, routine: Routine) -> str:
     tz = ZoneInfo(routine.timezone or get_settings().default_tz)
@@ -30,13 +34,20 @@ def build_runtime_context(session, routine: Routine) -> str:
     sync_rows = session.scalars(
         select(SyncState).where(SyncState.routine_id == routine.id).order_by(SyncState.source)
     ).all()
-    if sync_rows:
+    if sync_rows and any(r.last_run_at for r in sync_rows):
         lines.append("Last successful gather per source:")
         for row in sync_rows:
-            stamp = row.last_run_at.astimezone(tz).strftime("%Y-%m-%d %H:%M") if row.last_run_at else "never"
+            stamp = (
+                row.last_run_at.astimezone(tz).strftime("%Y-%m-%d %H:%M")
+                if row.last_run_at
+                else f"never — scan the past {COLD_START_DAYS} days of backlog for this source"
+            )
             lines.append(f"- {row.source.value}: {stamp}")
     else:
-        lines.append("No sync state yet — this is this routine's first run (cold start).")
+        lines.append(
+            f"No sync state yet — this is this routine's FIRST EVER run (cold start): "
+            f"scan the past {COLD_START_DAYS} days (~3 months) of backlog across your sources."
+        )
 
     leads = session.scalars(
         select(Lead).where(Lead.stage.in_(OPEN_LEAD_STAGES)).order_by(Lead.id)
