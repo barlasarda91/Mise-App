@@ -52,6 +52,17 @@ def authorize_url(redirect_uri: str, state: str) -> str:
     )
 
 
+def _raise_for_status(resp: requests.Response, context: str) -> None:
+    """Like raise_for_status, but logs and carries Intuit's intuit_tid header
+    so failures can be traced with Intuit support."""
+    if resp.status_code < 400:
+        return
+    tid = resp.headers.get("intuit_tid", "-")
+    log.error("QuickBooks %s failed: HTTP %s · intuit_tid=%s · %s",
+              context, resp.status_code, tid, resp.text[:500])
+    raise RuntimeError(f"QuickBooks {context} failed: HTTP {resp.status_code} (intuit_tid={tid})")
+
+
 def _basic_auth() -> dict:
     s = get_settings()
     creds = base64.b64encode(f"{s.qbo_client_id}:{s.qbo_client_secret}".encode()).decode()
@@ -87,7 +98,7 @@ def exchange_code(code: str, redirect_uri: str, realm_id: str, session_factory=d
         data={"grant_type": "authorization_code", "code": code, "redirect_uri": redirect_uri},
         timeout=TIMEOUT,
     )
-    resp.raise_for_status()
+    _raise_for_status(resp, "code exchange")
     data = resp.json()
     _save_tokens(data["refresh_token"], realm_id, session_factory)
 
@@ -106,7 +117,7 @@ def get_access_token(session_factory=db_session) -> tuple[str, str]:
         data={"grant_type": "refresh_token", "refresh_token": tokens["refresh_token"]},
         timeout=TIMEOUT,
     )
-    resp.raise_for_status()
+    _raise_for_status(resp, "token refresh")
     data = resp.json()
     realm_id = tokens.get("realm_id") or get_settings().qbo_realm_id
     # Persist the rotated token FIRST — losing it locks us out (spec §5).
@@ -124,7 +135,7 @@ def _query(sql: str, session_factory=db_session) -> dict:
         headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
         timeout=TIMEOUT,
     )
-    resp.raise_for_status()
+    _raise_for_status(resp, "query")
     return resp.json()
 
 
@@ -177,7 +188,7 @@ def qbo_status(session_factory=db_session) -> dict:
             headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
             timeout=TIMEOUT,
         )
-        resp.raise_for_status()
+        _raise_for_status(resp, "company info")
         name = resp.json().get("CompanyInfo", {}).get("CompanyName", "?")
         return {"status": "ok", "detail": f"{name} · realm {realm_id}"}
     except Exception as exc:
