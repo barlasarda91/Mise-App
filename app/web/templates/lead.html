@@ -37,6 +37,44 @@
     {% endif %}
 
     <div class="box">
+      <div class="box-hd"><span class="lbl">Email</span>
+        <span class="ix">{% if email_ctx and email_ctx.messages %}{{ email_ctx.messages | length }} · VIA {{ email_ctx.mailbox | upper }}@{% else %}NO HISTORY{% endif %}</span>
+      </div>
+      <div class="box-bd">
+        {% if email_ctx and email_ctx.error %}
+        <div class="note">Couldn't load email history: {{ email_ctx.error }}</div>
+        {% elif email_ctx and email_ctx.messages %}
+        {% for m in email_ctx.messages %}
+        {% if loop.last %}
+        <div class="msg">
+          <div class="who">{{ m.from }} · {{ m.date }}</div>
+          <div class="mailbody" style="font-size:13.5px">{{ m.body }}</div>
+        </div>
+        {% else %}
+        <details class="threadmsg">
+          <summary>{{ m.from }} · {{ m.date }}</summary>
+          <div class="mailbody" style="font-size:13.5px;padding:10px 12px">{{ m.body }}</div>
+        </details>
+        {% endif %}
+        {% endfor %}
+        {% else %}
+        <div class="note">No email history with {{ lead.contact_email or "this lead (no email on file)" }}.</div>
+        {% endif %}
+
+        {% if lead.drafts %}
+        <div class="note" style="margin-top:12px">Drafts for this lead:</div>
+        {% for d in lead.drafts %}
+        <div class="row" style="padding:8px 0">
+          <a class="name" href="/drafts?draft={{ d.id }}" style="font-size:13.5px">✉ {{ d.subject }}</a>
+          <span class="spacer"></span>
+          <span class="pill ghost">{{ d.status }}</span>
+        </div>
+        {% endfor %}
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="box">
       <div class="box-hd"><span class="lbl">Activity</span><span class="ix">{{ lead.activities | length }}</span></div>
       <div>
         {% for a in lead.activities %}
@@ -49,6 +87,24 @@
   </div>
 
   <div>
+    <div class="box">
+      <div class="box-hd"><span class="lbl">Draft email</span><span class="ix">CLAUDE · {% if email_ctx and email_ctx.thread_id %}REPLIES ON-THREAD{% else %}FRESH{% endif %}</span></div>
+      <div class="box-bd">
+        <form method="post" action="/leads/{{ lead.id }}/draft" class="stack">
+          <input type="hidden" name="thread_id" value="{{ email_ctx.thread_id if email_ctx and email_ctx.thread_id else '' }}">
+          <label>Instruction<input name="instruction" placeholder="reply: qualify their volume, propose a tasting" required></label>
+          <label>From mailbox
+            <select name="mailbox">
+              <option value="arda" {% if lead.source != "inbound_email" %}selected{% endif %}>arda@ (personal voice)</option>
+              <option value="hello" {% if lead.source == "inbound_email" %}selected{% endif %}>hello@ (brand voice)</option>
+            </select>
+          </label>
+          <button class="linkish solid" type="submit">Generate draft</button>
+        </form>
+        <div class="note">Opens in Drafts with this lead linked{% if email_ctx and email_ctx.thread_id %} and the reply on the thread above{% endif %}. To is pre-filled from the lead.</div>
+      </div>
+    </div>
+
     <div class="box">
       <div class="box-hd"><span class="lbl">Log activity</span><span class="ix">CALL · TEXT · VISIT · NOTE</span></div>
       <div class="box-bd">

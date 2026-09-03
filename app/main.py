@@ -303,12 +303,32 @@ def pipeline(request: Request, msg: str | None = None):
 
 @app.get("/pipeline/lead/{lead_id}", response_class=HTMLResponse)
 def lead_detail(request: Request, lead_id: int, msg: str | None = None):
-    from app.web.pipeline_view import load_lead
+    from app.web.pipeline_view import load_email_context, load_lead
 
     lead = load_lead(lead_id)
     if lead is None:
         return RedirectResponse("/pipeline?msg=Lead not found.", status_code=303)
-    return render_page(request, "lead.html", "pipeline", lead=lead, msg=msg)
+    return render_page(
+        request, "lead.html", "pipeline", lead=lead, email_ctx=load_email_context(lead), msg=msg
+    )
+
+
+@app.post("/leads/{lead_id}/draft")
+def lead_draft_email(
+    lead_id: int,
+    instruction: str = Form(""),
+    mailbox: str = Form("arda"),
+    thread_id: str = Form(""),
+):
+    from app.web.drafts_view import start_generation
+
+    try:
+        msg, draft_id = start_generation(instruction, mailbox, str(lead_id), thread_id)
+    except Exception as exc:
+        msg, draft_id = f"Error: {exc}", None
+    if draft_id:
+        return RedirectResponse(f"/drafts?draft={draft_id}&msg={msg}", status_code=303)
+    return RedirectResponse(f"/pipeline/lead/{lead_id}?msg={msg}", status_code=303)
 
 
 @app.post("/pipeline/leads")

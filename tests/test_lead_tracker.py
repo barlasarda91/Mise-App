@@ -278,6 +278,42 @@ def test_pipeline_confirm_pending_applies(session_factory, monkeypatch):
         assert s.query(LeadActivity).one().gmail_msg_id == "m-2"
 
 
+def test_load_email_context_prefers_newest_mailbox(monkeypatch):
+    import app.web.drafts_view as dv
+    import app.web.pipeline_view as pv
+
+    contexts = {
+        "hello": {"error": None, "label": "history", "thread_id": "t-h", "mailbox": "hello",
+                  "messages": [{"from": "k", "date": "Mon, 01 Sep 2026 10:00:00 +0000", "subject": "", "body": ""}]},
+        "arda": {"error": None, "label": "history", "thread_id": "t-a", "mailbox": "arda",
+                 "messages": [{"from": "k", "date": "Wed, 03 Sep 2026 10:00:00 +0000", "subject": "", "body": ""}]},
+    }
+    monkeypatch.setattr(dv, "load_thread", lambda sel: contexts.get(sel["mailbox"]))
+    ctx = pv.load_email_context({"contact_email": "k@u.com"})
+    assert ctx["thread_id"] == "t-a"  # arda thread is newer
+
+    assert pv.load_email_context({"contact_email": None}) is None
+    assert pv.load_email_context(None) is None
+
+
+def test_load_lead_includes_linked_drafts(session_factory, monkeypatch):
+    import app.web.pipeline_view as pv
+    from app.models import DraftStatus, EmailDraft
+    from app.models.enums import FromMailbox
+
+    monkeypatch.setattr(pv, "db_session", session_factory)
+    with session_factory() as s:
+        lead = _lead(LeadStage.NEW, None, stage_since=date(2026, 9, 3))
+        s.add(lead)
+        s.flush()
+        s.add(EmailDraft(subject="Boxx wholesale — samples", from_mailbox=FromMailbox.HELLO,
+                         related_lead_id=lead.id, status=DraftStatus.COMPOSED))
+        lead_id = lead.id
+    detail = pv.load_lead(lead_id)
+    assert detail["drafts"][0]["subject"] == "Boxx wholesale — samples"
+    assert detail["drafts"][0]["status"] == "composed"
+
+
 def test_pipeline_manual_call_advances_timer(session_factory, monkeypatch):
     import app.web.pipeline_view as pv
 

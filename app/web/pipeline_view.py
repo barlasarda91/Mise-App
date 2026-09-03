@@ -12,6 +12,7 @@ from sqlalchemy import select
 from app.db import db_session
 from app.models import (
     ActivitySource,
+    EmailDraft,
     ExternalMutation,
     Lead,
     LeadActivity,
@@ -95,6 +96,19 @@ def load_lead(lead_id: int) -> dict | None:
                 "location": lead.location,
                 "loss_reason": lead.loss_reason,
                 "closed": lead.stage not in OPEN_LEAD_STAGES,
+                "drafts": [
+                    {
+                        "id": d.id,
+                        "subject": d.subject or "(no subject)",
+                        "status": "sent ✓" if d.sent_at else d.status.value,
+                    }
+                    for d in s.scalars(
+                        select(EmailDraft)
+                        .where(EmailDraft.related_lead_id == lead_id)
+                        .order_by(EmailDraft.id.desc())
+                        .limit(8)
+                    )
+                ],
                 "activities": [
                     {
                         "type": a.type.value,
@@ -107,6 +121,36 @@ def load_lead(lead_id: int) -> dict | None:
             }
     except Exception:
         return None
+
+
+def load_email_context(lead: dict | None) -> dict | None:
+    """Recent Gmail history with the lead's contact, checked across both
+    mailboxes (inbound usually lands in hello@, outreach in arda@). Returns
+    the conversation with the newest activity."""
+    if not lead or not lead.get("contact_email"):
+        return None
+    from email.utils import parsedate_to_datetime
+
+    from app.web.drafts_view import load_thread
+
+    def last_stamp(ctx) -> float:
+        try:
+            return parsedate_to_datetime(ctx["messages"][-1]["date"]).timestamp()
+        except Exception:
+            return 0.0
+
+    best = None
+    error_ctx = None
+    for mailbox in ("hello", "arda"):
+        ctx = load_thread({"thread_id": None, "mailbox": mailbox, "to": lead["contact_email"]})
+        if ctx is None:
+            continue
+        if ctx.get("error"):
+            error_ctx = error_ctx or ctx
+            continue
+        if best is None or last_stamp(ctx) > last_stamp(best):
+            best = ctx
+    return best or error_ctx
 
 
 # ---------- manual-entry services (return a status message for the UI) ----------

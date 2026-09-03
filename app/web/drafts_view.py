@@ -242,7 +242,8 @@ def load_thread(selected: dict | None) -> dict | None:
             label = "history"
         messages = gmail.get_thread_messages(mailbox, thread_id, last_n=8)
     except Exception as exc:
-        return {"error": f"{type(exc).__name__}: {exc}", "messages": [], "label": label}
+        return {"error": f"{type(exc).__name__}: {exc}", "messages": [], "label": label,
+                "thread_id": thread_id, "mailbox": selected["mailbox"]}
     shaped = []
     for m in messages:
         body = (m.get("body") or m.get("snippet") or "").strip()
@@ -255,7 +256,8 @@ def load_thread(selected: dict | None) -> dict | None:
                 "body": body[:THREAD_BODY_CHARS] + ("\n… (truncated)" if truncated else ""),
             }
         )
-    return {"error": None, "messages": shaped, "label": label}
+    return {"error": None, "messages": shaped, "label": label,
+            "thread_id": thread_id, "mailbox": selected["mailbox"]}
 
 
 # ---------- services ----------
