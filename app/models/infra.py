@@ -43,6 +43,18 @@ class ExternalMutation(Base):
     )
 
 
+class MutedSender(Base):
+    """Senders marked unimportant — hidden from the Inbox tab and its count."""
+
+    __tablename__ = "muted_senders"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(320), unique=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 class User(Base):
     """Single row for v1 (the login gate currently checks APP_PASSWORD; this
     table is the forward path for a DB-backed credential)."""

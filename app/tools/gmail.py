@@ -176,6 +176,13 @@ def search_messages(
     return out
 
 
+def count_messages(mailbox: FromMailbox, query: str) -> int:
+    """Fast size estimate for a query (no per-message fetches)."""
+    svc = gmail_service(mailbox_address(mailbox))
+    resp = svc.users().messages().list(userId="me", q=query, maxResults=1).execute()
+    return int(resp.get("resultSizeEstimate", 0))
+
+
 def get_message(mailbox: FromMailbox, msg_id: str) -> dict:
     """Full message: header summary + extracted plain-text body."""
     svc = gmail_service(mailbox_address(mailbox))

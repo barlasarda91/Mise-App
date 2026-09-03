@@ -68,6 +68,23 @@
 </div>
 
 <div class="box">
+  <div class="box-hd"><span class="lbl">Muted senders</span><span class="ix">{{ muted | length }} · HIDDEN FROM INBOX</span></div>
+  <div>
+    {% for email in muted %}
+    <div class="kv">
+      <div class="lft"><span class="kt">{{ email }}</span></div>
+      <form method="post" action="/inbox/unmute">
+        <input type="hidden" name="email" value="{{ email }}">
+        <button class="linkish" type="submit">Unmute</button>
+      </form>
+    </div>
+    {% else %}
+    <div class="kv"><div class="lft"><span class="ks">Nobody muted — use "Mute" on an Inbox row to hide a sender.</span></div></div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="box">
   <div class="box-hd"><span class="lbl">Server</span><span class="ix">NETWORK</span></div>
   <div>
     <div class="kv">

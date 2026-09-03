@@ -64,6 +64,7 @@ PUBLIC_PATHS = {"/login", "/health", "/legal/terms", "/legal/privacy"}
 
 NAV = [
     {"view": "home", "ix": "00", "label": "Today", "path": "/"},
+    {"view": "inbox", "ix": "I", "label": "Inbox", "path": "/inbox"},
     {"view": "runs", "ix": "R", "label": "Runs", "path": "/runs"},
     {"view": "pipeline", "ix": "P", "label": "Pipeline", "path": "/pipeline"},
     {"view": "board", "ix": "B", "label": "Board", "path": "/board"},
@@ -94,10 +95,16 @@ def _clock() -> str:
 
 
 def render_page(request: Request, template: str, view: str, **context) -> HTMLResponse:
+    try:
+        from app.web.inbox_view import unread_count
+
+        unread = unread_count()
+    except Exception:
+        unread = None
     return templates.TemplateResponse(
         request,
         template,
-        {"nav": NAV, "active_view": view, "clock": _clock(), **context},
+        {"nav": NAV, "active_view": view, "clock": _clock(), "unread": unread, **context},
     )
 
 
@@ -279,6 +286,63 @@ def home(request: Request):
     return render_page(
         request, "home.html", "home", db_status=check_db(), stats=stats, priority=priority, waiting=waiting
     )
+
+
+@app.get("/inbox", response_class=HTMLResponse)
+def inbox(request: Request, open: str | None = None, msg: str | None = None):
+    from app.web.inbox_view import load_inbox, load_open_message
+
+    data = load_inbox()
+    opened = None
+    if open and ":" in open:
+        mailbox, _, msg_id = open.partition(":")
+        opened = load_open_message(mailbox, msg_id)
+    return render_page(
+        request, "inbox.html", "inbox",
+        inbox=data, opened=opened, msg=msg,
+    )
+
+
+@app.post("/inbox/mute")
+def inbox_mute(email: str = Form(...), back: str = Form("/inbox")):
+    from app.web.inbox_view import mute_sender
+
+    try:
+        message = mute_sender(email)
+    except Exception as exc:
+        message = f"Error: {exc}"
+    target = back if back.startswith("/") and not back.startswith("//") else "/inbox"
+    return RedirectResponse(f"{target}?msg={message}", status_code=303)
+
+
+@app.post("/inbox/unmute")
+def inbox_unmute(email: str = Form(...), back: str = Form("/settings")):
+    from app.web.inbox_view import unmute_sender
+
+    try:
+        message = unmute_sender(email)
+    except Exception as exc:
+        message = f"Error: {exc}"
+    target = back if back.startswith("/") and not back.startswith("//") else "/settings"
+    return RedirectResponse(f"{target}?msg={message}", status_code=303)
+
+
+@app.post("/inbox/draft")
+def inbox_draft(
+    instruction: str = Form(""),
+    mailbox: str = Form("arda"),
+    thread_id: str = Form(""),
+    to: str = Form(""),
+):
+    from app.web.drafts_view import start_generation
+
+    try:
+        message, draft_id = start_generation(instruction, mailbox, "", thread_id, to=to)
+    except Exception as exc:
+        message, draft_id = f"Error: {exc}", None
+    if draft_id:
+        return RedirectResponse(f"/drafts?draft={draft_id}&msg={message}", status_code=303)
+    return RedirectResponse(f"/inbox?msg={message}", status_code=303)
 
 
 @app.get("/runs", response_class=HTMLResponse)
@@ -648,6 +712,7 @@ def settings_page(request: Request, msg: str | None = None):
     }
     from app.tools.quickbooks import configured as qbo_configured
     from app.tools.quickbooks import qbo_status
+    from app.web.inbox_view import muted_list
 
     outbound_ip = "unavailable"
     try:
@@ -668,6 +733,7 @@ def settings_page(request: Request, msg: str | None = None):
         qbo_configured=qbo_configured(),
         qbo_redirect_uri=_qbo_redirect_uri(request),
         outbound_ip=outbound_ip,
+        muted=muted_list(),
         msg=msg,
     )
 

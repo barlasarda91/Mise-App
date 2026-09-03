@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Inbox{% endblock %}
+{% block heading %}Inbox{% endblock %}
+{% block content %}
+
+{% if msg %}<div class="note" style="margin:0 0 14px">▸ {{ msg }}</div>{% endif %}
+
+{% if inbox.error %}
+<div class="box"><div class="box-bd"><div class="note">{{ inbox.error }}</div></div></div>
+{% endif %}
+
+<div class="runwrap{% if opened %} withthread{% endif %}" style="grid-template-columns:{% if opened %}minmax(0,1fr) minmax(0,1.2fr){% else %}1fr{% endif %}">
+  <div class="box" style="align-self:start;min-width:0">
+    <div class="box-hd"><span class="lbl">Unread</span><span class="ix">{{ inbox.messages | length }} · BOTH MAILBOXES</span></div>
+    <div>
+      {% for m in inbox.messages %}
+      <div class="inboxrow{% if opened and opened.id == m.id %} sel{% endif %}">
+        <a class="inboxmain" href="/inbox?open={{ m.mailbox }}:{{ m.id }}">
+          <span class="ifrom">{{ m.from }}</span>
+          <span class="isubj">{{ m.subject }}</span>
+          <span class="isnip">{{ m.snippet }}</span>
+        </a>
+        <div class="iside">
+          <span class="pill ghost">{{ m.mailbox }}@</span>
+          <form method="post" action="/inbox/mute">
+            <input type="hidden" name="email" value="{{ m.from_addr }}">
+            <button class="linkish" type="submit" title="Hide this sender from Mise">Mute</button>
+          </form>
+        </div>
+      </div>
+      {% else %}
+      <div class="box-bd"><span class="note">Inbox zero{% if not inbox.error %} — nothing unread (muted senders excluded){% endif %}.</span></div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if opened %}
+  <div class="box" style="align-self:start;min-width:0">
+    <div class="box-hd"><span class="lbl">Message</span><span class="ix">{{ opened.mailbox | upper }}@</span></div>
+    <div class="box-bd">
+      {% if opened.error %}
+      <div class="note">{{ opened.error }}</div>
+      {% else %}
+      <div class="who" style="font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:4px">{{ opened.from }}</div>
+      <div class="who" style="font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;color:var(--ink-soft);margin-bottom:10px">{{ opened.date }}{% if opened.cc %} · CC {{ opened.cc }}{% endif %}</div>
+      <div style="font-weight:600;font-size:15px;margin-bottom:10px">{{ opened.subject }}</div>
+      <div class="mailbody" style="font-size:14px">{{ opened.body }}</div>
+
+      <div class="box" style="margin-top:16px">
+        <div class="box-hd"><span class="lbl">Reply</span><span class="ix">CLAUDE · ON-THREAD</span></div>
+        <div class="box-bd">
+          <form method="post" action="/inbox/draft" class="stack">
+            <input type="hidden" name="thread_id" value="{{ opened.thread_id }}">
+            <input type="hidden" name="to" value="{{ opened.from_addr }}">
+            <label>Instruction<input name="instruction" placeholder="reply: thank them, answer the pricing question" required></label>
+            <label>From mailbox
+              <select name="mailbox">
+                <option value="arda" {% if opened.mailbox == "arda" %}selected{% endif %}>arda@ (personal voice)</option>
+                <option value="hello" {% if opened.mailbox == "hello" %}selected{% endif %}>hello@ (brand voice)</option>
+              </select>
+            </label>
+            <button class="linkish solid" type="submit">Generate reply</button>
+          </form>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+        <form method="post" action="/inbox/mute">
+          <input type="hidden" name="email" value="{{ opened.from_addr }}">
+          <button class="linkish" type="submit">Mark sender unimportant</button>
+        </form>
+        <a class="linkish" href="https://mail.google.com/mail/u/0/#all/{{ opened.id }}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center">Open in Gmail ↗</a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="note" style="margin-top:14px">Mise reads mail and drafts replies but can't mark messages read — unread clears in Gmail. Muted senders are managed in Settings.</div>
+{% endblock %}
