@@ -375,6 +375,14 @@ def settings_page(request: Request, msg: str | None = None):
     from app.tools.quickbooks import configured as qbo_configured
     from app.tools.quickbooks import qbo_status
 
+    outbound_ip = "unavailable"
+    try:
+        import requests
+
+        outbound_ip = requests.get("https://api.ipify.org", timeout=5).text.strip()
+    except Exception:
+        pass
+
     return render_page(
         request,
         "settings.html",
@@ -384,6 +392,7 @@ def settings_page(request: Request, msg: str | None = None):
         routines=_load_routines(),
         qbo=qbo_status(),
         qbo_configured=qbo_configured(),
+        outbound_ip=outbound_ip,
         msg=msg,
     )
 
