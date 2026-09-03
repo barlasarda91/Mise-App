@@ -25,6 +25,9 @@ UX reference: [`docs/boxx-routines-hub-mockups.html`](docs/boxx-routines-hub-moc
   cron per routine in LA time, routines seeded on startup (disabled, with
   placeholder prompts until milestones 7–8), Settings shows routines with
   enable/disable toggles and a background "Run now". ✅
+- Milestone 6 — Runs transcript view: read-only review surface with the
+  mockup's history-list + transcript layout, tool-call chips, collapsible
+  tool results, failure display, and auto-refresh while a run is executing. ✅
 
 ## Google connector provisioning
 

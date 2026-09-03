@@ -66,6 +66,13 @@ def test_tampered_cookie_rejected(client):
     assert r.status_code == 303
 
 
+def test_runs_page_without_db(client):
+    client.post("/login", data={"password": "test-password"})
+    r = client.get("/runs")
+    assert r.status_code == 200
+    assert "No runs yet" in r.text
+
+
 def test_settings_page_without_db(client):
     client.post("/login", data={"password": "test-password"})
     r = client.get("/settings")

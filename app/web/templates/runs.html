@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Runs{% endblock %}
+{% block heading %}Runs{% endblock %}
+{% block content %}
+
+{% macro status_bits(status) -%}
+  {% if status == "completed" %}<span class="dot green"></span>
+  {% elif status == "running" %}<span class="dot ember"></span>
+  {% else %}<span class="dot ember"></span>{% endif %}
+{%- endmacro %}
+
+{% if not runs %}
+<div class="box">
+  <div class="box-hd"><span class="lbl">Runs</span><span class="ix">EMPTY</span></div>
+  <div class="box-bd"><p style="font-size:14px">No runs yet. Trigger one from Settings → "Run now", or enable a routine's schedule.</p></div>
+</div>
+{% else %}
+<div class="runwrap">
+  <div class="box runlist" style="align-self:start">
+    <div class="box-hd"><span class="lbl">History</span><span class="ix">{{ runs | length }}</span></div>
+    <div>
+      {% for r in runs %}
+      <a class="item{% if selected and r.id == selected.id %} sel{% endif %}" href="/runs?run={{ r.id }}">
+        <div class="h"><span class="rn">{{ r.name }}</span>{{ status_bits(r.status) }}</div>
+        <div class="tm">{{ r.code }} · {{ r.time }} · {{ r.status | upper }}</div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if selected %}
+  <div class="box" style="align-self:start;min-width:0">
+    <div class="box-hd">
+      <span class="lbl">{{ selected.name }} · {{ selected.code }}</span>
+      <span class="ix">{{ selected.started }} · {{ selected.status | upper }}{% if selected.trigger == "manual" %} · MANUAL{% endif %}</span>
+    </div>
+    <div class="box-bd">
+      {% if selected.error %}
+      <div class="msg" style="border-color:var(--ember)">
+        <div class="who"><span class="dot ember"></span>Failed</div>
+        <div style="font-size:14px">{{ selected.error }}</div>
+      </div>
+      {% endif %}
+
+      {% for entry in transcript %}
+      <div class="msg{% if entry.role == 'user' %} user{% endif %}">
+        <div class="who">
+          {% if entry.role == "assistant" %}<span class="dot green"></span>Autonomous run
+          {% elif entry.role == "user" %}Runtime context
+          {% else %}Tool results{% endif %}
+          · {{ entry.time }}
+        </div>
+        {% for block in entry.blocks %}
+          {% if block.kind == "text" %}
+            <div class="mailbody" style="font-size:14px">{{ block.text }}</div>
+          {% elif block.kind == "tool_use" %}
+            <div class="chips" style="margin-top:8px"><span class="chip">⚙ {{ block.name }} {{ block.args }}</span></div>
+          {% elif block.kind == "tool_result" %}
+            <details class="toolresult{% if block.is_error %} err{% endif %}">
+              <summary>{% if block.is_error %}✕ tool error{% else %}↳ result{% endif %}</summary>
+              <pre>{{ block.content }}</pre>
+            </details>
+          {% endif %}
+        {% endfor %}
+      </div>
+      {% endfor %}
+
+      <div class="note">Runs are single-phase and close on their own — everything above is already saved to the hub. Manual input happens in Pipeline and Board.</div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{% if selected and selected.status == "running" %}
+<script>setTimeout(function(){ location.reload(); }, 5000);</script>
+{% endif %}
+{% endif %}
+{% endblock %}

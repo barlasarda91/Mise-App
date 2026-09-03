@@ -18,6 +18,10 @@ from app.db import check_db
 from app.settings import get_settings
 
 BASE_DIR = Path(__file__).parent
+
+# Surface app/scheduler/engine INFO logs in the deploy logs (uvicorn only
+# configures its own loggers).
+logging.basicConfig(level=logging.INFO, format="%(levelname)s [%(name)s] %(message)s")
 log = logging.getLogger(__name__)
 
 
@@ -149,8 +153,16 @@ def home(request: Request):
 
 
 @app.get("/runs", response_class=HTMLResponse)
-def runs(request: Request):
-    return render_page(request, "placeholder.html", "runs", title="Runs", milestone="4–6")
+def runs(request: Request, run: int | None = None):
+    from app.web.runs_view import load_runs_index, load_transcript
+
+    index = load_runs_index()
+    selected, transcript = (None, [])
+    if index:
+        selected, transcript = load_transcript(run if run is not None else index[0]["id"])
+    return render_page(
+        request, "runs.html", "runs", runs=index, selected=selected, transcript=transcript
+    )
 
 
 @app.get("/pipeline", response_class=HTMLResponse)

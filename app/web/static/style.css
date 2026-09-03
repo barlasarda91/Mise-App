@@ -90,6 +90,31 @@ main{padding:26px 30px 60px;max-width:1180px}
 
 .note{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);letter-spacing:.03em;margin-top:10px;line-height:1.6}
 
+/* runs: history list + transcript */
+.runwrap{display:grid;grid-template-columns:250px 1fr;gap:18px}
+.runlist .item{display:block;padding:11px 13px;border-bottom:1px solid var(--line);cursor:pointer;text-decoration:none}
+.runlist .item:last-child{border-bottom:0}
+.runlist .item:hover{background:var(--panel-2)}
+.runlist .item.sel{background:var(--panel-2);border-left:3px solid var(--ember);padding-left:10px}
+.runlist .item .h{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.runlist .item .rn{font-weight:600;font-size:13.5px}
+.runlist .item .tm{font-family:var(--font-mono);font-size:10.5px;color:var(--ink-soft);letter-spacing:.06em;margin-top:3px}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex:none}
+.dot.ember{background:var(--ember)}
+.dot.green{background:var(--green)}
+.msg{padding:14px;border:1px solid var(--line);background:var(--paper);margin-bottom:14px;min-width:0}
+.msg.user{background:var(--panel-2);border-color:var(--ink)}
+.msg .who{font-family:var(--font-mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:9px;display:flex;align-items:center;gap:7px}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.05em;border:1px solid var(--ink-soft);color:var(--ink-soft);padding:4px 8px;display:inline-flex;gap:6px;align-items:center;max-width:100%;overflow-wrap:anywhere}
+.mailbody{white-space:pre-line;line-height:1.6;overflow-wrap:anywhere}
+.toolresult{margin-top:8px;border:1px solid var(--line)}
+.toolresult summary{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);padding:6px 9px;cursor:pointer}
+.toolresult pre{font-family:var(--font-mono);font-size:11.5px;padding:9px;border-top:1px solid var(--line);overflow-x:auto;white-space:pre-wrap;overflow-wrap:anywhere;max-height:340px;overflow-y:auto}
+.toolresult.err{border-color:var(--ember)}
+.toolresult.err summary{color:var(--ember)}
+@media(max-width:860px){.runwrap{grid-template-columns:1fr}}
+
 /* key/value rows (settings) */
 .kv{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line);gap:12px}
 .kv:last-child{border-bottom:0}
