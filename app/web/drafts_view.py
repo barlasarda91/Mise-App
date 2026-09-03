@@ -75,6 +75,7 @@ def load_draft(draft_id: int) -> dict | None:
                 "body": draft.body or "",
                 "lead_name": lead_name,
                 "gmail_draft_id": draft.gmail_draft_id,
+                "thread_id": draft.gmail_thread_id,
             }
     except Exception:
         return None
@@ -89,6 +90,37 @@ def open_leads_for_picker() -> list[dict]:
             return [{"id": l.id, "name": l.business_name} for l in leads]
     except Exception:
         return []
+
+
+THREAD_BODY_CHARS = 4000
+
+
+def load_thread(selected: dict | None) -> dict | None:
+    """The Gmail conversation a reply draft answers — rendered beside the
+    editor. Returns None for non-replies; errors degrade to a note."""
+    if not selected or not selected.get("thread_id"):
+        return None
+    from app.tools import gmail
+
+    try:
+        messages = gmail.get_thread_messages(
+            FromMailbox(selected["mailbox"]), selected["thread_id"], last_n=8
+        )
+    except Exception as exc:
+        return {"error": f"{type(exc).__name__}: {exc}", "messages": []}
+    shaped = []
+    for m in messages:
+        body = (m.get("body") or m.get("snippet") or "").strip()
+        truncated = len(body) > THREAD_BODY_CHARS
+        shaped.append(
+            {
+                "from": m.get("from", ""),
+                "date": m.get("date", ""),
+                "subject": m.get("subject", ""),
+                "body": body[:THREAD_BODY_CHARS] + ("\n… (truncated)" if truncated else ""),
+            }
+        )
+    return {"error": None, "messages": shaped}
 
 
 # ---------- services ----------

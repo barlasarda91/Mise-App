@@ -180,6 +180,39 @@ def test_save_requires_to_and_subject(session_factory, monkeypatch):
     assert "To address" in dv.save_to_gmail(draft_id)
 
 
+def test_load_thread_shapes_and_truncates(monkeypatch):
+    import app.tools.gmail as gm
+    from app.web.drafts_view import load_thread
+
+    monkeypatch.setattr(
+        gm, "get_thread_messages",
+        lambda mailbox, thread_id, last_n=8: [
+            {"from": "Tamara <t@cc.com>", "date": "Wed, 2 Sep", "subject": "Re: x", "body": "first"},
+            {"from": "Arda", "date": "Thu, 3 Sep", "subject": "Re: x", "body": "y" * 10_000},
+        ],
+    )
+    thread = load_thread({"thread_id": "t-1", "mailbox": "arda"})
+    assert thread["error"] is None
+    assert len(thread["messages"]) == 2
+    assert thread["messages"][1]["body"].endswith("(truncated)")
+
+    assert load_thread({"thread_id": None, "mailbox": "arda"}) is None
+    assert load_thread(None) is None
+
+
+def test_load_thread_error_degrades(monkeypatch):
+    import app.tools.gmail as gm
+    from app.web.drafts_view import load_thread
+
+    def boom(*a, **k):
+        raise RuntimeError("no creds")
+
+    monkeypatch.setattr(gm, "get_thread_messages", boom)
+    thread = load_thread({"thread_id": "t-1", "mailbox": "hello"})
+    assert "no creds" in thread["error"]
+    assert thread["messages"] == []
+
+
 def test_send_now_syncs_then_sends_and_locks(session_factory, monkeypatch):
     import app.web.drafts_view as dv
 

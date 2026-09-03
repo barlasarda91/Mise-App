@@ -5,7 +5,7 @@
 
 {% if msg %}<div class="note" style="margin:0 0 14px">▸ {{ msg }}</div>{% endif %}
 
-<div class="runwrap">
+<div class="runwrap{% if thread %} withthread{% endif %}">
   <div>
     <div class="box" style="align-self:start">
       <div class="box-hd"><span class="lbl">Drafts</span><span class="ix">{{ drafts | length }}</span></div>
@@ -77,6 +77,30 @@
       </div>
       <div class="note">Send delivers what's in the editor{% if selected.is_reply %} on its thread{% endif %}, after your confirmation. Save to Gmail parks it as a native draft instead. Routines can only ever draft — sending is yours alone.</div>
       {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if thread %}
+  <div class="box" style="align-self:start;min-width:0">
+    <div class="box-hd"><span class="lbl">Thread</span><span class="ix">{{ thread.messages | length }} MESSAGES · OLDEST FIRST</span></div>
+    <div class="box-bd">
+      {% if thread.error %}
+      <div class="note">Couldn't load the thread: {{ thread.error }}</div>
+      {% endif %}
+      {% for m in thread.messages %}
+      {% if loop.last %}
+      <div class="msg">
+        <div class="who">{{ m.from }} · {{ m.date }}</div>
+        <div class="mailbody" style="font-size:13.5px">{{ m.body }}</div>
+      </div>
+      {% else %}
+      <details class="threadmsg">
+        <summary>{{ m.from }} · {{ m.date }}</summary>
+        <div class="mailbody" style="font-size:13.5px;padding:10px 12px">{{ m.body }}</div>
+      </details>
+      {% endif %}
+      {% endfor %}
     </div>
   </div>
   {% endif %}

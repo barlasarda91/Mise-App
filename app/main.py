@@ -409,7 +409,7 @@ def task_set_status(task_id: int, status: str = Form(...), waiting_on: str = For
 
 @app.get("/drafts", response_class=HTMLResponse)
 def drafts(request: Request, draft: int | None = None, msg: str | None = None):
-    from app.web.drafts_view import load_draft, load_drafts_index, open_leads_for_picker
+    from app.web.drafts_view import load_draft, load_drafts_index, load_thread, open_leads_for_picker
 
     index = load_drafts_index()
     selected = None
@@ -417,7 +417,8 @@ def drafts(request: Request, draft: int | None = None, msg: str | None = None):
         selected = load_draft(draft if draft is not None else index[0]["id"])
     return render_page(
         request, "drafts.html", "drafts",
-        drafts=index, selected=selected, leads=open_leads_for_picker(), msg=msg,
+        drafts=index, selected=selected, thread=load_thread(selected),
+        leads=open_leads_for_picker(), msg=msg,
     )
 
 
