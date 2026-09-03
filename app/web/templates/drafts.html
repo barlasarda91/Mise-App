@@ -53,6 +53,9 @@
     <div class="box-bd">
       {% if selected.status == "drafting" %}
       <p style="font-size:14px">Claude is writing this one — the page refreshes itself.</p>
+      {% elif selected.sent %}
+      <div class="mailbody" style="font-size:14px">{{ selected.body }}</div>
+      <div class="note">Sent ✓ from {{ "ardabarlas" if selected.mailbox == "arda" else "hello" }}@boxxcoffee.com — this draft is read-only now. Start a new draft for a follow-up.</div>
       {% else %}
       <form method="post" action="/drafts/{{ selected.id }}" class="stack">
         <label>From
@@ -68,10 +71,11 @@
         <button class="linkish" type="submit">Save changes</button>
       </form>
       <div style="display:flex;gap:10px;margin-top:14px">
-        <form method="post" action="/drafts/{{ selected.id }}/save-to-gmail"><button class="linkish solid" type="submit">Save to Gmail</button></form>
+        <form method="post" action="/drafts/{{ selected.id }}/send" onsubmit="return confirm('Send this email now from {{ 'ardabarlas' if selected.mailbox == 'arda' else 'hello' }}@boxxcoffee.com? This cannot be undone.')"><button class="linkish solid" type="submit">Send</button></form>
+        <form method="post" action="/drafts/{{ selected.id }}/save-to-gmail"><button class="linkish" type="submit">Save to Gmail</button></form>
         <form method="post" action="/drafts/{{ selected.id }}/discard"><button class="linkish" type="submit">Discard</button></form>
       </div>
-      <div class="note">Saving places a native draft in the {{ "arda" if selected.mailbox == "arda" else "hello" }}@ mailbox{% if selected.is_reply %} on its thread{% endif %}. You review and send from Gmail — the hub never sends on its own.</div>
+      <div class="note">Send delivers what's in the editor{% if selected.is_reply %} on its thread{% endif %}, after your confirmation. Save to Gmail parks it as a native draft instead. Routines can only ever draft — sending is yours alone.</div>
       {% endif %}
     </div>
   </div>

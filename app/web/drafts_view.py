@@ -37,7 +37,8 @@ def _row(draft: EmailDraft) -> dict:
         "subject": draft.subject or "(no subject)",
         "mailbox": draft.from_mailbox.value,
         "status": draft.status.value,
-        "status_label": STATUS_LABELS[draft.status],
+        "status_label": "sent ✓" if draft.sent_at else STATUS_LABELS[draft.status],
+        "sent": bool(draft.sent_at),
         "lead_id": draft.related_lead_id,
         "is_reply": bool(draft.gmail_thread_id),
     }
@@ -130,6 +131,8 @@ def update_fields(draft_id: int, from_mailbox: str, to: str, cc: str, subject: s
         draft = s.get(EmailDraft, draft_id)
         if draft is None:
             return "Draft not found."
+        if draft.sent_at:
+            return "Already sent — start a new draft for a follow-up."
         draft.from_mailbox = FromMailbox(from_mailbox)
         draft.to_addrs = _parse_addrs(to)
         draft.cc_addrs = _parse_addrs(cc)
@@ -140,17 +143,26 @@ def update_fields(draft_id: int, from_mailbox: str, to: str, cc: str, subject: s
     return "Saved."
 
 
-def save_to_gmail(draft_id: int) -> str:
+def _mailbox_address(mailbox: FromMailbox) -> str:
+    settings = get_settings()
+    return settings.gmail_arda_address if mailbox == FromMailbox.ARDA else settings.gmail_hello_address
+
+
+def _sync_to_gmail(draft_id: int) -> tuple[bool, str]:
+    """Create/update the native Gmail draft with the hub's latest content.
+    Returns (ok, message)."""
     with db_session() as s:
         draft = s.get(EmailDraft, draft_id)
         if draft is None:
-            return "Draft not found."
+            return False, "Draft not found."
+        if draft.sent_at:
+            return False, "Already sent — start a new draft for a follow-up."
         if draft.status == DraftStatus.DRAFTING:
-            return "Still generating — wait for it to finish."
+            return False, "Still generating — wait for it to finish."
         if not draft.to_addrs:
-            return "Add a To address first."
+            return False, "Add a To address first."
         if not draft.subject:
-            return "Add a subject first."
+            return False, "Add a subject first."
         mailbox = draft.from_mailbox
         payload = dict(
             to=list(draft.to_addrs),
@@ -169,7 +181,7 @@ def save_to_gmail(draft_id: int) -> str:
         else:
             result = gmail.create_draft(mailbox, **payload)
     except Exception as exc:
-        return f"Gmail error: {type(exc).__name__}: {exc}"
+        return False, f"Gmail error: {type(exc).__name__}: {exc}"
 
     with db_session() as s:
         draft = s.get(EmailDraft, draft_id)
@@ -177,8 +189,40 @@ def save_to_gmail(draft_id: int) -> str:
         if result.get("thread_id"):
             draft.gmail_thread_id = result["thread_id"]
         draft.status = DraftStatus.SAVED_TO_GMAIL
-    address = get_settings().gmail_arda_address if mailbox == FromMailbox.ARDA else get_settings().gmail_hello_address
-    return f"Saved as a Gmail draft in {address} — review and send from Gmail."
+    return True, f"Saved as a Gmail draft in {_mailbox_address(mailbox)}."
+
+
+def save_to_gmail(draft_id: int) -> str:
+    ok, msg = _sync_to_gmail(draft_id)
+    return msg + " Review and send from Gmail, or hit Send here." if ok else msg
+
+
+def send_now(draft_id: int) -> str:
+    """OPERATOR send: sync the latest content to the Gmail draft, then send it.
+    Only ever triggered by the Send button in the Drafts UI."""
+    ok, msg = _sync_to_gmail(draft_id)
+    if not ok:
+        return msg
+
+    with db_session() as s:
+        draft = s.get(EmailDraft, draft_id)
+        mailbox = draft.from_mailbox
+        gmail_id = draft.gmail_draft_id
+
+    from app.tools import gmail
+
+    try:
+        result = gmail.send_draft(mailbox, gmail_id)
+    except Exception as exc:
+        return f"Gmail error on send: {type(exc).__name__}: {exc}"
+
+    with db_session() as s:
+        draft = s.get(EmailDraft, draft_id)
+        draft.sent_at = datetime.now(ZoneInfo(get_settings().default_tz))
+        draft.gmail_draft_id = None  # sending consumes the Gmail draft
+        if result.get("thread_id"):
+            draft.gmail_thread_id = result["thread_id"]
+    return f"Sent from {_mailbox_address(mailbox)}."
 
 
 def discard(draft_id: int) -> str:

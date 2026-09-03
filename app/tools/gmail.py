@@ -1,8 +1,10 @@
-"""Gmail tool layer: read both mailboxes, create/update drafts.
+"""Gmail tool layer: read both mailboxes, create/update drafts, and send a
+draft the OPERATOR explicitly approved.
 
-INVARIANT (spec §5): no send function exists in this module — or anywhere in
-the tool layer. Drafts are saved natively to Gmail; Arda reviews and sends
-from Gmail. Do not add a send wrapper.
+INVARIANT (spec §5, amended 2026-09-03): the model-facing tool layer (the
+engine toolkit registry) must never expose a send capability — routines can
+only draft. send_draft below exists solely for the Drafts UI's Send button,
+which Arda clicks after reviewing; never wire it into a model tool.
 """
 
 import base64
@@ -155,6 +157,14 @@ def get_message(mailbox: FromMailbox, msg_id: str) -> dict:
     summary = _summarize(message)
     summary["body"] = extract_body(message.get("payload") or {})
     return summary
+
+
+def send_draft(mailbox: FromMailbox, draft_id: str) -> dict:
+    """Send an existing Gmail draft. OPERATOR-ONLY: called from the Drafts
+    UI's Send button after Arda's review — never from a model tool."""
+    svc = gmail_service(mailbox_address(mailbox))
+    message = svc.users().drafts().send(userId="me", body={"id": draft_id}).execute()
+    return {"message_id": message["id"], "thread_id": message.get("threadId")}
 
 
 def get_thread_messages(mailbox: FromMailbox, thread_id: str, last_n: int = 3) -> list[dict]:

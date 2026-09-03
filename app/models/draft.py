@@ -1,6 +1,10 @@
-"""Email drafts — composed in-app, saved as native Gmail drafts, never sent."""
+"""Email drafts — composed in-app, saved as native Gmail drafts. Sending is
+operator-only: the Drafts UI's Send button (which sets sent_at); the model
+tool layer has no send capability."""
 
-from sqlalchemy import ForeignKey, String, Text
+from datetime import datetime
+
+from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, PortableJSON, TimestampMixin, db_enum
@@ -31,3 +35,5 @@ class EmailDraft(TimestampMixin, Base):
         db_enum(DraftStatus), default=DraftStatus.DRAFTING
     )
     run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id", ondelete="SET NULL"))
+    # Set when Arda sends from the hub (operator-initiated only).
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

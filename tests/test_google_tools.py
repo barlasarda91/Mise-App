@@ -110,13 +110,23 @@ def test_connectivity_report_without_credentials():
         assert entry["status"] == "not_configured"
 
 
-def test_no_send_function_in_tool_layer():
-    """The never-send guarantee is structural (spec §5): the Gmail tool module
-    must not grow a send capability."""
-    import app.tools.gmail as gmail_tools
-
-    exported = [name for name in dir(gmail_tools) if "send" in name.lower()]
-    assert exported == []
+def test_model_tool_layer_cannot_send():
+    """Amended invariant (2026-09-03): sending is OPERATOR-ONLY via the Drafts
+    UI's Send button. The model-facing tool registry must never expose a send
+    capability, and no routine/engine code may call gmail.send_draft."""
     import inspect
 
-    assert "messages().send" not in inspect.getsource(gmail_tools)
+    import app.routines.tools  # noqa: F401 - ensure registry is populated
+    from app.engine.toolkit import tool_specs
+
+    for spec in tool_specs():
+        assert "send" not in spec["name"].lower(), spec["name"]
+        assert "auto-send" not in spec["description"].lower()
+
+    import app.engine.drafter as drafter
+    import app.engine.runner as runner
+    import app.routines.tools as routine_tools
+
+    for module in (routine_tools, runner, drafter):
+        assert "send_draft" not in inspect.getsource(module), module.__name__
+        assert "messages().send" not in inspect.getsource(module), module.__name__

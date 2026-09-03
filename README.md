@@ -45,7 +45,9 @@ UX reference: [`docs/boxx-routines-hub-mockups.html`](docs/boxx-routines-hub-moc
   `app/routines/prompts/voice_*.md`), Drafts UI with editable From/To/Cc/
   subject/body, background generation from lead + thread context, save as
   native Gmail draft (on-thread for replies), discard; routines can prepare
-  drafts via `create_email_draft` (deduped). The hub never sends email. ✅
+  drafts via `create_email_draft` (deduped). Operator-only Send button with
+  confirmation (syncs latest content, sends, locks the draft); the model
+  tool layer can never send — enforced by a test. ✅
 
 ## QuickBooks provisioning
 

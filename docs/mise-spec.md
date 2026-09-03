@@ -254,7 +254,7 @@ Both routines are refactored from "re-derive daily" to **state-first + increment
 ### 8.2 Email Drafting
 - Compose model-assisted drafts in-app (e.g., a follow-up to an overdue lead, generated from lead context).
 - **From, To, and Cc are editable** in the draft UI before saving. Replies to an existing conversation carry `gmail_thread_id` and land **on the thread** in Gmail, not as a fresh compose.
-- **Save as a native Gmail draft** in the correct mailbox (ardabarlas@ or hello@) via the Gmail tool, for Arda to review and send from Gmail. **Never auto-send** — enforced structurally: the tool layer exposes no send function (see §5).
+- **Save as a native Gmail draft** in the correct mailbox (ardabarlas@ or hello@) via the Gmail tool, for Arda to review and send from Gmail — or **send directly from the Drafts UI** (added 2026-09-03): a Send button with a confirmation, which syncs the editor's latest content to the Gmail draft and sends it; sent drafts lock read-only. **Never auto-send** — sending is operator-only: the model-facing tool registry exposes no send capability (enforced by a test); routines can only draft.
 - Drafts are linked to their lead/task and tracked in `email_drafts`.
 - **Voice & tone:** drafts follow `mise-voice-and-tone.md` (derived from Arda's real sent mail). Two complete profiles keyed to the sending mailbox — Voice A (arda@, personal operator voice) and Voice B (hello@, brand front-desk voice: self-introduces, brand-plural "we", service-recovery patterns, EN/TR bilingual). The drafting prompt loads the profile matching the chosen `from_mailbox`.
 - Support reusable follow-up templates (later enhancement).
@@ -363,6 +363,7 @@ Items defaulted so the spec is complete:
 - Draft From/To/Cc editable; reply drafts thread via `gmail_thread_id`; `drafting` status added.
 - Task board columns fixed at `todo|doing|waiting|done` for v1; single contact per lead for v1.
 - Mockup demo data is aesthetic/illustrative only.
+- **2026-09-03:** operator-initiated Send added to the Drafts UI (confirm dialog, sent_at lock). The no-auto-send invariant narrows to its real intent: the model/routines can never send; only Arda can, explicitly.
 
 ---
 

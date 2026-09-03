@@ -478,6 +478,17 @@ def drafts_save_to_gmail(draft_id: int):
     return RedirectResponse(f"/drafts?draft={draft_id}&msg={msg}", status_code=303)
 
 
+@app.post("/drafts/{draft_id}/send")
+def drafts_send(draft_id: int):
+    from app.web.drafts_view import send_now
+
+    try:
+        msg = send_now(draft_id)
+    except Exception as exc:
+        msg = f"Error: {exc}"
+    return RedirectResponse(f"/drafts?draft={draft_id}&msg={msg}", status_code=303)
+
+
 @app.post("/drafts/{draft_id}/discard")
 def drafts_discard(draft_id: int):
     from app.web.drafts_view import discard

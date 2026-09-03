@@ -180,6 +180,59 @@ def test_save_requires_to_and_subject(session_factory, monkeypatch):
     assert "To address" in dv.save_to_gmail(draft_id)
 
 
+def test_send_now_syncs_then_sends_and_locks(session_factory, monkeypatch):
+    import app.web.drafts_view as dv
+
+    monkeypatch.setattr(dv, "db_session", session_factory)
+    calls = []
+
+    import app.tools.gmail as gm
+
+    monkeypatch.setattr(
+        gm, "create_draft",
+        lambda mailbox, to, subject, body, cc=None, thread_id=None: (
+            calls.append("create") or {"draft_id": "gd-7", "message_id": "m", "thread_id": "t-1"}
+        ),
+    )
+    monkeypatch.setattr(
+        gm, "send_draft",
+        lambda mailbox, draft_id: calls.append(("send", draft_id)) or {"message_id": "m2", "thread_id": "t-1"},
+    )
+
+    with session_factory() as s:
+        draft = EmailDraft(
+            subject="Boxx wholesale", body="Hey,\n\nBest\nArda", from_mailbox=FromMailbox.ARDA,
+            to_addrs=["deniz@emberroom.la"], status=DraftStatus.COMPOSED,
+        )
+        s.add(draft)
+        s.flush()
+        draft_id = draft.id
+
+    msg = dv.send_now(draft_id)
+    assert msg == "Sent from ardabarlas@boxxcoffee.com."
+    assert calls == ["create", ("send", "gd-7")]  # latest content synced, then sent
+    with session_factory() as s:
+        draft = s.get(EmailDraft, draft_id)
+        assert draft.sent_at is not None
+        assert draft.gmail_draft_id is None  # consumed by sending
+
+    # sent drafts are locked
+    assert "Already sent" in dv.send_now(draft_id)
+    assert "Already sent" in dv.update_fields(draft_id, "arda", "x@y.com", "", "s", "b")
+
+
+def test_send_now_blocks_invalid_drafts(session_factory, monkeypatch):
+    import app.web.drafts_view as dv
+
+    monkeypatch.setattr(dv, "db_session", session_factory)
+    with session_factory() as s:
+        draft = EmailDraft(subject="", from_mailbox=FromMailbox.ARDA, status=DraftStatus.COMPOSED)
+        s.add(draft)
+        s.flush()
+        draft_id = draft.id
+    assert "To address" in dv.send_now(draft_id)
+
+
 def test_create_email_draft_tool_dedups_per_run(session_factory):
     lead_id = _seed_lead(session_factory)
     set_run_context(run_id=42, routine_id=1, started_at=datetime(2026, 9, 3, tzinfo=timezone.utc))
