@@ -52,7 +52,8 @@
         </div>
         {% for block in entry.blocks %}
           {% if block.kind == "text" %}
-            <div class="mailbody" style="font-size:14px">{{ block.text }}</div>
+            {% if block.html %}<div class="md" style="font-size:14px">{{ block.html | safe }}</div>
+            {% else %}<div class="mailbody" style="font-size:14px">{{ block.text }}</div>{% endif %}
           {% elif block.kind == "tool_use" %}
             <div class="chips" style="margin-top:8px"><span class="chip">⚙ {{ block.name }} {{ block.args }}</span></div>
           {% elif block.kind == "tool_result" %}

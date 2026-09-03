@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Pipeline{% endblock %}
+{% block heading %}Wholesale Pipeline{% endblock %}
+{% block content %}
+
+{% if msg %}<div class="note" style="margin:0 0 14px">▸ {{ msg }}</div>{% endif %}
+
+<div class="lanes">
+  {% for lane in lanes %}
+  <div class="lane">
+    <div class="lane-hd"><span class="ln">{{ lane.label }}</span><span class="ct">{{ "%02d" | format(lane.cards | length) }}</span></div>
+    {% for c in lane.cards %}
+    <a class="card" href="/pipeline/lead/{{ c.id }}">
+      <div class="cn">{{ c.name }}</div>
+      <div class="cmeta">
+        {% if c.source %}<span>{{ c.source }}</span>{% endif %}
+        <span>last {{ c.last or "—" }}</span>
+      </div>
+      <div class="cbadges">
+        {% if c.pending %}<span class="pill ember">confirm?</span>{% endif %}
+        {% if c.overdue %}<span class="pill ember">{{ c.idle }}d · overdue</span>
+        {% elif c.idle is not none %}<span class="pill ghost">{{ c.idle }}d idle</span>
+        {% else %}<span class="pill ghost">no action yet</span>{% endif %}
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>
+<div class="note">Idle days count from <b>last confirmed action</b>. Cadence: New daily · Contacted 3d · Sampled 3/7/every-5 · Negotiating 7d. Click a card for the activity log and manual entry.</div>
+
+<div class="box" style="margin-top:18px;max-width:640px">
+  <div class="box-hd"><span class="lbl">Add lead</span><span class="ix">MANUAL</span></div>
+  <div class="box-bd">
+    <form method="post" action="/pipeline/leads" class="stack">
+      <label>Business name<input name="business_name" required></label>
+      <label>Contact name<input name="contact_name"></label>
+      <label>Contact email<input name="contact_email" type="email"></label>
+      <label>Contact phone<input name="contact_phone"></label>
+      <label>Source<input name="lead_source" placeholder="walk-in / referral / event"></label>
+      <button class="linkish solid" type="submit">Add lead</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

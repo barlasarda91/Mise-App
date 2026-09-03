@@ -28,6 +28,13 @@ UX reference: [`docs/boxx-routines-hub-mockups.html`](docs/boxx-routines-hub-moc
 - Milestone 6 — Runs transcript view: read-only review surface with the
   mockup's history-list + transcript layout, tool-call chips, collapsible
   tool results, failure display, and auto-refresh while a run is executing. ✅
+- Milestone 7 — Lead Tracker routine + Pipeline page: state-first system
+  prompt (versioned in `app/routines/prompts/`, synced on startup), Gmail
+  search/read tools, lead/task mutation tools with hold-and-confirm and
+  dedup, cadence rules, sync-cursor advancement (`mark_gather_complete`),
+  Pipeline kanban with lead detail, manual entry (activity/stage/reminder)
+  and one-click pending confirmations. Enable the routine in Settings to
+  start daily runs. ✅
 
 ## Google connector provisioning
 

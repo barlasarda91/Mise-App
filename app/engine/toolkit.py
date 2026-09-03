@@ -8,6 +8,7 @@ INVARIANT: nothing here (or registered later) may send email — drafts only.
 """
 
 import json
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import date
 from typing import Any, Callable
@@ -27,6 +28,22 @@ class ToolDef:
 
 
 _REGISTRY: dict[str, ToolDef] = {}
+
+# Ambient run context so handlers know which run/routine is executing
+# (e.g. mark_gather_complete needs the run's start time and routine id).
+_RUN_CONTEXT: ContextVar[dict | None] = ContextVar("run_context", default=None)
+
+
+def set_run_context(**kwargs) -> None:
+    _RUN_CONTEXT.set(kwargs)
+
+
+def get_run_context() -> dict:
+    return _RUN_CONTEXT.get() or {}
+
+
+def clear_run_context() -> None:
+    _RUN_CONTEXT.set(None)
 
 
 def register(tool: ToolDef) -> ToolDef:

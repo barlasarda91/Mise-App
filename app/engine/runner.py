@@ -15,8 +15,9 @@ from sqlalchemy import func, select, update
 from app.db import db_session
 from app.engine.anthropic_client import get_client, resolve_model
 from app.engine.context import build_runtime_context
-from app.engine.toolkit import dispatch, tool_specs
+from app.engine.toolkit import clear_run_context, dispatch, set_run_context, tool_specs
 from app.models import MessageRole, Routine, Run, RunMessage, RunStatus, RunTrigger
+import app.routines.tools  # noqa: F401  (registers the routine tools)
 
 log = logging.getLogger(__name__)
 
@@ -65,6 +66,9 @@ def execute_run(
         s.add(run)
         s.flush()
         run_id = run.id
+        run_started_at = run.started_at or datetime.now(timezone.utc)
+
+    set_run_context(run_id=run_id, routine_id=routine_id, started_at=run_started_at)
 
     messages: list[dict] = [{"role": "user", "content": context_text}]
     _persist_message(session_factory, run_id, MessageRole.USER, {"text": context_text})
@@ -130,6 +134,8 @@ def execute_run(
     except Exception as exc:
         log.exception("run %s failed", run_id)
         _set_run_status(session_factory, run_id, RunStatus.FAILED, f"{type(exc).__name__}: {exc}")
+    finally:
+        clear_run_context()
     return run_id
 
 

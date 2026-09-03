@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}{{ lead.name }}{% endblock %}
+{% block heading %}{{ lead.name }}{% endblock %}
+{% block content %}
+
+{% if msg %}<div class="note" style="margin:0 0 14px">▸ {{ msg }}</div>{% endif %}
+<div class="note" style="margin:0 0 14px"><a href="/pipeline">← back to pipeline</a></div>
+
+<div class="grid2">
+  <div>
+    <div class="box">
+      <div class="box-hd"><span class="lbl">Lead</span>
+        <span class="ix">{{ lead.stage | upper }}{% if lead.overdue %} · <span style="color:var(--ember)">{{ lead.idle }}D OVERDUE</span>{% endif %}</span>
+      </div>
+      <div class="box-bd" style="font-size:14px">
+        <div class="kv"><span class="ks">Contact</span><span>{{ lead.contact_name or "—" }}</span></div>
+        <div class="kv"><span class="ks">Email</span><span>{{ lead.contact_email or "—" }}</span></div>
+        <div class="kv"><span class="ks">Phone</span><span>{{ lead.contact_phone or "—" }}</span></div>
+        <div class="kv"><span class="ks">Source</span><span>{{ lead.source or "—" }}</span></div>
+        <div class="kv"><span class="ks">Stage since</span><span>{{ lead.stage_since or "—" }}</span></div>
+        <div class="kv"><span class="ks">Last confirmed action</span><span>{{ lead.last or "—" }}</span></div>
+        {% if lead.loss_reason %}<div class="kv"><span class="ks">Loss reason</span><span>{{ lead.loss_reason }}</span></div>{% endif %}
+      </div>
+    </div>
+
+    {% if lead.pending %}
+    <div class="box" style="border-color:var(--ember)">
+      <div class="box-hd"><span class="lbl">Pending confirmation</span><span class="ix" style="color:var(--ember)">HOLD</span></div>
+      <div class="box-bd" style="font-size:14px">
+        <p>A run found a sent email on <b>{{ lead.pending.occurred_on }}</b> — "{{ lead.pending.detail }}" — that would clear this lead's overdue alert. Reset the idle timer?</p>
+        <div style="display:flex;gap:10px;margin-top:12px">
+          <form method="post" action="/leads/{{ lead.id }}/pending"><input type="hidden" name="action" value="confirm"><button class="linkish solid" type="submit">Confirm — reset timer</button></form>
+          <form method="post" action="/leads/{{ lead.id }}/pending"><input type="hidden" name="action" value="dismiss"><button class="linkish" type="submit">Dismiss</button></form>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="box">
+      <div class="box-hd"><span class="lbl">Activity</span><span class="ix">{{ lead.activities | length }}</span></div>
+      <div>
+        {% for a in lead.activities %}
+        <div class="row"><span class="code">{{ a.occurred_on }}</span><span class="name" style="font-size:13.5px">{{ a.type }}</span><span class="meta">{{ a.detail or "" }}</span><span class="spacer"></span><span class="pill ghost">{{ a.source }}</span></div>
+        {% else %}
+        <div class="box-bd"><span class="note">No activity yet.</span></div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="box">
+      <div class="box-hd"><span class="lbl">Log activity</span><span class="ix">CALL · TEXT · VISIT · NOTE</span></div>
+      <div class="box-bd">
+        <form method="post" action="/leads/{{ lead.id }}/activity" class="stack">
+          <label>Type
+            <select name="type">
+              <option value="call">call</option><option value="text">text</option>
+              <option value="visit">visit</option><option value="note">note</option>
+              <option value="email_sent">email (manual)</option>
+            </select>
+          </label>
+          <label>Date it happened<input type="date" name="occurred_on" required></label>
+          <label>Detail<input name="detail" placeholder="e.g. wants 5 lb/wk Blend No:1"></label>
+          <button class="linkish solid" type="submit">Log</button>
+        </form>
+        <div class="note">Calls/texts/visits/emails reset the idle timer from the date entered.</div>
+      </div>
+    </div>
+
+    <div class="box">
+      <div class="box-hd"><span class="lbl">Change stage</span><span class="ix">NOW: {{ lead.stage | upper }}</span></div>
+      <div class="box-bd">
+        <form method="post" action="/leads/{{ lead.id }}/stage" class="stack">
+          <label>Stage
+            <select name="stage">
+              {% for s in ["new","contacted","sampled","negotiating","closed_won","closed_lost"] %}
+              <option value="{{ s }}" {% if s == lead.stage %}selected{% endif %}>{{ s }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>Loss reason (required if lost)<input name="loss_reason"></label>
+          <button class="linkish solid" type="submit">Update stage</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="box">
+      <div class="box-hd"><span class="lbl">Reminder</span><span class="ix">CALENDAR · 9AM</span></div>
+      <div class="box-bd">
+        <form method="post" action="/leads/{{ lead.id }}/reminder" class="stack">
+          <label>Remind on<input type="date" name="remind_on" required></label>
+          <label>Context<input name="note" placeholder="send agreement"></label>
+          <button class="linkish solid" type="submit">Create reminder</button>
+        </form>
+        <div class="note">Popup event on arda's calendar at 9 AM (10/11 if taken). Deduped per lead + date.</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,7 +1,10 @@
 """View-model builders for the Runs page (read-only transcript, spec §9)."""
 
+import html
 import json
 from datetime import datetime
+
+import markdown as _markdown
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
@@ -15,6 +18,12 @@ TOOL_RESULT_PREVIEW_CHARS = 3000
 
 # Mockup vernacular: R-041 for the tracker, A-118 for the agenda.
 CODE_PREFIXES = {"lead_tracker": "R", "daily_agenda": "A"}
+
+
+def render_markdown(text: str) -> str:
+    """Assistant text -> safe HTML: escape first (no raw HTML passes through),
+    then render markdown so the routines' bold/headers/tables display."""
+    return _markdown.markdown(html.escape(text), extensions=["tables", "nl2br"])
 
 
 def run_code(routine_key: str, run_id: int) -> str:
@@ -48,7 +57,9 @@ def build_transcript(messages) -> list[dict]:
             for block in content if isinstance(content, list) else []:
                 btype = block.get("type")
                 if btype == "text" and block.get("text", "").strip():
-                    entry["blocks"].append({"kind": "text", "text": block["text"]})
+                    entry["blocks"].append(
+                        {"kind": "text", "text": block["text"], "html": render_markdown(block["text"])}
+                    )
                 elif btype == "tool_use":
                     args = json.dumps(block.get("input") or {}, ensure_ascii=False)
                     entry["blocks"].append(

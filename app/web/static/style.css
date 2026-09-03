@@ -90,6 +90,44 @@ main{padding:26px 30px 60px;max-width:1180px}
 
 .note{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);letter-spacing:.03em;margin-top:10px;line-height:1.6}
 
+/* kanban lanes (pipeline / board) */
+.lanes{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:start}
+.lane .lane-hd{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border:1px solid var(--ink);background:var(--ink);color:var(--paper)}
+.lane .lane-hd .ln{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase}
+.lane .lane-hd .ct{font-family:var(--font-mono);font-size:11px;color:var(--rail-soft)}
+.card{display:block;border:1px solid var(--ink);border-top:0;background:var(--panel);padding:11px 12px;text-decoration:none}
+.card:hover{background:var(--panel-2)}
+.card .cn{font-weight:600;font-size:14px}
+.card .cmeta{font-family:var(--font-mono);font-size:10.5px;color:var(--ink-soft);letter-spacing:.04em;margin-top:5px;display:flex;flex-wrap:wrap;gap:5px 10px}
+.card .cbadges{margin-top:9px;display:flex;gap:6px;flex-wrap:wrap}
+@media(max-width:860px){.lanes{grid-template-columns:1fr 1fr}}
+
+/* forms */
+.stack{display:flex;flex-direction:column;gap:11px}
+.stack label{font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-soft);display:flex;flex-direction:column;gap:5px}
+.stack input,.stack select{border:1px solid var(--ink);background:var(--paper);padding:9px 11px;font-family:var(--font-body);font-size:14px;color:var(--ink)}
+.stack input:focus,.stack select:focus{outline:2px solid var(--ember);outline-offset:-2px}
+.linkish.solid{background:var(--ink);color:var(--paper)}
+.linkish.solid:hover{background:var(--ember)}
+
+/* agenda-style rows */
+.row{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row .code{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);letter-spacing:.08em;min-width:84px}
+.row .name{font-weight:600;font-size:14.5px}
+.row .meta{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);letter-spacing:.05em;overflow-wrap:anywhere}
+.row .spacer{flex:1}
+
+/* rendered markdown in transcripts */
+.md{line-height:1.6;overflow-wrap:anywhere}
+.md p{margin:0 0 10px}
+.md h1,.md h2,.md h3,.md h4{font-family:var(--font-mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;margin:16px 0 8px;color:var(--ink)}
+.md ul,.md ol{margin:0 0 10px 20px}
+.md table{width:100%;border-collapse:collapse;font-size:13px;margin:0 0 12px;display:block;overflow-x:auto}
+.md th{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);text-align:left;padding:6px 10px;border-bottom:1px solid var(--ink)}
+.md td{padding:8px 10px;border-bottom:1px solid var(--line)}
+.md code{font-family:var(--font-mono);font-size:12px;background:var(--panel-2);padding:1px 4px}
+
 /* runs: history list + transcript */
 .runwrap{display:grid;grid-template-columns:250px 1fr;gap:18px}
 .runlist .item{display:block;padding:11px 13px;border-bottom:1px solid var(--line);cursor:pointer;text-decoration:none}

@@ -149,7 +149,30 @@ def health():
 
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
-    return render_page(request, "home.html", "home", db_status=check_db())
+    stats = {"open": "—", "overdue": "—", "due_today": "—", "drafts": "—"}
+    try:
+        from sqlalchemy import select
+
+        from app.db import db_session
+        from app.models import DraftStatus, EmailDraft, Lead, OPEN_LEAD_STAGES, Task, TaskStatus
+        from app.routines.cadence import is_overdue
+
+        today = datetime.now(ZoneInfo(get_settings().default_tz)).date()
+        with db_session() as s:
+            leads = s.scalars(select(Lead).where(Lead.stage.in_(OPEN_LEAD_STAGES))).all()
+            stats["open"] = len(leads)
+            stats["overdue"] = sum(1 for lead in leads if is_overdue(lead, today))
+            stats["due_today"] = len(
+                s.scalars(
+                    select(Task).where(Task.status != TaskStatus.DONE, Task.due_date <= today)
+                ).all()
+            )
+            stats["drafts"] = len(
+                s.scalars(select(EmailDraft).where(EmailDraft.status == DraftStatus.COMPOSED)).all()
+            )
+    except Exception:
+        pass
+    return render_page(request, "home.html", "home", db_status=check_db(), stats=stats)
 
 
 @app.get("/runs", response_class=HTMLResponse)
@@ -166,8 +189,82 @@ def runs(request: Request, run: int | None = None):
 
 
 @app.get("/pipeline", response_class=HTMLResponse)
-def pipeline(request: Request):
-    return render_page(request, "placeholder.html", "pipeline", title="Wholesale Pipeline", milestone="7")
+def pipeline(request: Request, msg: str | None = None):
+    from app.web.pipeline_view import load_board
+
+    lanes, _stats = load_board()
+    return render_page(request, "pipeline.html", "pipeline", lanes=lanes, msg=msg)
+
+
+@app.get("/pipeline/lead/{lead_id}", response_class=HTMLResponse)
+def lead_detail(request: Request, lead_id: int, msg: str | None = None):
+    from app.web.pipeline_view import load_lead
+
+    lead = load_lead(lead_id)
+    if lead is None:
+        return RedirectResponse("/pipeline?msg=Lead not found.", status_code=303)
+    return render_page(request, "lead.html", "pipeline", lead=lead, msg=msg)
+
+
+@app.post("/pipeline/leads")
+def pipeline_add_lead(
+    business_name: str = Form(""),
+    contact_name: str = Form(""),
+    contact_email: str = Form(""),
+    contact_phone: str = Form(""),
+    lead_source: str = Form(""),
+):
+    from app.web.pipeline_view import create_lead_manual
+
+    try:
+        msg = create_lead_manual(business_name, contact_name, contact_email, contact_phone, lead_source)
+    except Exception as exc:
+        msg = f"Error: {exc}"
+    return RedirectResponse(f"/pipeline?msg={msg}", status_code=303)
+
+
+@app.post("/leads/{lead_id}/activity")
+def lead_log_activity(lead_id: int, type: str = Form(...), occurred_on: str = Form(""), detail: str = Form("")):
+    from app.web.pipeline_view import log_activity_manual
+
+    try:
+        msg = log_activity_manual(lead_id, type, occurred_on, detail)
+    except Exception as exc:
+        msg = f"Error: {exc}"
+    return RedirectResponse(f"/pipeline/lead/{lead_id}?msg={msg}", status_code=303)
+
+
+@app.post("/leads/{lead_id}/stage")
+def lead_change_stage(lead_id: int, stage: str = Form(...), loss_reason: str = Form("")):
+    from app.web.pipeline_view import change_stage_manual
+
+    try:
+        msg = change_stage_manual(lead_id, stage, loss_reason)
+    except Exception as exc:
+        msg = f"Error: {exc}"
+    return RedirectResponse(f"/pipeline/lead/{lead_id}?msg={msg}", status_code=303)
+
+
+@app.post("/leads/{lead_id}/pending")
+def lead_resolve_pending(lead_id: int, action: str = Form(...)):
+    from app.web.pipeline_view import resolve_pending
+
+    try:
+        msg = resolve_pending(lead_id, action)
+    except Exception as exc:
+        msg = f"Error: {exc}"
+    return RedirectResponse(f"/pipeline/lead/{lead_id}?msg={msg}", status_code=303)
+
+
+@app.post("/leads/{lead_id}/reminder")
+def lead_create_reminder(lead_id: int, remind_on: str = Form(...), note: str = Form("")):
+    from app.web.pipeline_view import create_reminder_manual
+
+    try:
+        msg = create_reminder_manual(lead_id, remind_on, note)
+    except Exception as exc:
+        msg = f"Error: {exc}"
+    return RedirectResponse(f"/pipeline/lead/{lead_id}?msg={msg}", status_code=303)
 
 
 @app.get("/board", response_class=HTMLResponse)
