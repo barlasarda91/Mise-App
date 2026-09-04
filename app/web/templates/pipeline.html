@@ -48,6 +48,24 @@
 </div>
 <div class="note">Idle days count from <b>last confirmed action</b>. Cadence: New daily · Contacted 3d · Sampled 3/7/every-5 · Negotiating 7d. Won/Lost show the 10 most recent closes. Click a card for the activity log and manual entry.</div>
 
+{% if discarded %}
+<details style="margin-top:14px;max-width:640px">
+  <summary class="note" style="cursor:pointer">{{ discarded | length }} discarded lead{{ "s" if discarded | length != 1 }} (hidden from pipeline and board)</summary>
+  <div class="box" style="margin-top:8px">
+    <div>
+      {% for d in discarded %}
+      <div class="row">
+        <a class="name" href="/pipeline/lead/{{ d.id }}" style="font-size:13.5px">{{ d.name }}</a>
+        <span class="meta">discarded {{ d.when or "" }}</span>
+        <span class="spacer"></span>
+        <form method="post" action="/leads/{{ d.id }}/restore"><button class="linkish" type="submit">Restore</button></form>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</details>
+{% endif %}
+
 <div class="box" style="margin-top:18px;max-width:640px">
   <div class="box-hd"><span class="lbl">Add lead</span><span class="ix">MANUAL</span></div>
   <div class="box-bd">

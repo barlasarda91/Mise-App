@@ -172,6 +172,142 @@ def test_board_gets_won_lost_lanes_and_overdue_count(session_factory, monkeypatc
 # ---------- board: link task to lead ----------
 
 
+def test_todo_count_counts_all_categories(session_factory, monkeypatch):
+    import app.web.board_view as bv
+
+    monkeypatch.setattr(bv, "db_session", session_factory)
+    with session_factory() as s:
+        s.add(Task(category=TaskCategory.GOVERNANCE, title="a", status=TaskStatus.TODO))
+        s.add(Task(category=TaskCategory.INVOICE_TRACKING, title="b", status=TaskStatus.TODO))
+        s.add(Task(category=TaskCategory.WHOLESALE_LEADS, title="c", status=TaskStatus.DOING))
+        s.add(Task(category=TaskCategory.POP_UPS, title="d", status=TaskStatus.DONE))
+    assert bv.todo_count() == 2
+
+
+# ---------- lead discard ----------
+
+
+def test_discard_hides_lead_and_closes_its_tasks(session_factory, monkeypatch):
+    import app.web.pipeline_view as pv
+
+    monkeypatch.setattr(pv, "db_session", session_factory)
+    with session_factory() as s:
+        lead = Lead(business_name="Spam Cafe", stage=LeadStage.NEW, stage_since=date(2026, 8, 1))
+        s.add(lead)
+        s.flush()
+        lead_id = lead.id
+        s.add(
+            Task(
+                category=TaskCategory.WHOLESALE_LEADS,
+                title="Qualify Spam Cafe",
+                status=TaskStatus.TODO,
+                source_ref={"lead_id": lead_id},
+            )
+        )
+
+    assert pv.overdue_count() == 1
+    msg = pv.discard_lead(lead_id)
+    assert "Discarded Spam Cafe" in msg and "Qualify Spam Cafe" in msg
+
+    lanes, stats = pv.load_board()
+    assert all(not lane["cards"] for lane in lanes)  # gone from every lane
+    assert stats["open"] == 0
+    assert pv.overdue_count() == 0
+    with session_factory() as s:
+        assert s.query(Task).one().status == TaskStatus.DONE
+
+    assert pv.discarded_leads()[0]["name"] == "Spam Cafe"
+    assert "Restored" in pv.restore_lead(lead_id)
+    assert pv.load_board()[1]["open"] == 1
+
+
+def test_routines_cannot_resurrect_discarded_lead(session_factory):
+    from datetime import datetime, timezone
+
+    from app.routines.tools import _create_lead
+
+    with session_factory() as s:
+        s.add(
+            Lead(
+                business_name="Spam Cafe",
+                contact_email="spam@x.com",
+                stage=LeadStage.NEW,
+                discarded_at=datetime.now(timezone.utc),
+            )
+        )
+        s.commit()
+        result = _create_lead(s, "Spam Cafe", "inbound_email", contact_email="other@x.com")
+        assert result["outcome"] == "duplicate"
+        assert "discarded" in result["note"]
+        assert s.query(Lead).count() == 1
+
+
+# ---------- automatic task -> lead linking ----------
+
+
+def test_auto_link_by_confident_name_match(session_factory, monkeypatch):
+    import app.web.board_view as bv
+    from app.routines.task_sync import match_lead_for_task
+
+    monkeypatch.setattr(bv, "db_session", session_factory)
+    with session_factory() as s:
+        s.add(Lead(business_name="LA Coffee Club", stage=LeadStage.CONTACTED))
+        s.add(Lead(business_name="Golden Nook", stage=LeadStage.NEW))
+        s.commit()
+
+        matched = match_lead_for_task(s, "LA Coffee Club (Adam) — send order cutoff date")
+        assert matched.business_name == "LA Coffee Club"
+        assert match_lead_for_task(s, "File quarterly sales tax") is None
+        # two unrelated names in one title -> ambiguous, no guess
+        assert match_lead_for_task(s, "Intro LA Coffee Club to Golden Nook") is None
+
+    msg = bv.create_task_manual(
+        "wholesale_leads", "Send pricing to Golden Nook", "", "", "normal"
+    )
+    assert "Auto-linked to Golden Nook" in msg
+    with session_factory() as s:
+        task = s.query(Task).one()
+        golden = s.query(Lead).filter(Lead.business_name == "Golden Nook").one()
+        assert task.source_ref == {"lead_id": golden.id}
+
+
+def test_auto_link_skips_discarded_and_short_names(session_factory):
+    from datetime import datetime, timezone
+
+    from app.routines.task_sync import match_lead_for_task
+
+    with session_factory() as s:
+        s.add(
+            Lead(
+                business_name="Umbral Collective",
+                stage=LeadStage.NEW,
+                discarded_at=datetime.now(timezone.utc),
+            )
+        )
+        s.add(Lead(business_name="Ivy", stage=LeadStage.NEW))  # too short to trust
+        s.commit()
+        assert match_lead_for_task(s, "Call Umbral Collective about samples") is None
+        assert match_lead_for_task(s, "Ivy budget review") is None
+
+
+def test_startup_sweep_links_open_tasks(session_factory, monkeypatch):
+    import app.db as app_db
+    from app.routines.task_sync import auto_link_open_tasks
+
+    monkeypatch.setattr(app_db, "db_session", session_factory)
+    with session_factory() as s:
+        s.add(Lead(business_name="RNT Coffee", stage=LeadStage.NEGOTIATING))
+        s.add(Task(category=TaskCategory.WHOLESALE_LEADS, title="RNT Coffee — chase signed docs", status=TaskStatus.WAITING))
+        s.add(Task(category=TaskCategory.GOVERNANCE, title="Renew insurance", status=TaskStatus.TODO))
+        s.add(Task(category=TaskCategory.WHOLESALE_LEADS, title="RNT Coffee tasting", status=TaskStatus.DONE))
+
+    assert auto_link_open_tasks() == 1  # waiting task linked; done + unmatched skipped
+    with session_factory() as s:
+        rnt = s.query(Lead).one()
+        linked = [t for t in s.query(Task).all() if (t.source_ref or {}).get("lead_id") == rnt.id]
+        assert len(linked) == 1 and linked[0].status == TaskStatus.WAITING
+
+
 def test_link_and_unlink_task_lead(session_factory, monkeypatch):
     import app.web.board_view as bv
 

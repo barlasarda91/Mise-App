@@ -94,7 +94,9 @@ def _idle_days(lead: Lead, today: date) -> int | None:
 def _list_open_leads(session: Session) -> list[dict]:
     today = date.today()
     leads = session.scalars(
-        select(Lead).where(Lead.stage.in_(OPEN_LEAD_STAGES)).order_by(Lead.id)
+        select(Lead)
+        .where(Lead.stage.in_(OPEN_LEAD_STAGES), Lead.discarded_at.is_(None))
+        .order_by(Lead.id)
     ).all()
     rows = [
         {

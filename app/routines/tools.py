@@ -194,14 +194,26 @@ def _create_lead(
     notes=None,
     gmail_msg_id=None,
 ):
-    open_leads = session.scalars(select(Lead).where(Lead.stage.in_(OPEN_LEAD_STAGES))).all()
-    for existing in open_leads:
+    # Dupe check spans open AND discarded leads: a lead Arda discarded must
+    # never be resurrected by a routine.
+    known = session.scalars(
+        select(Lead).where(
+            (Lead.stage.in_(OPEN_LEAD_STAGES)) | (Lead.discarded_at.isnot(None))
+        )
+    ).all()
+    for existing in known:
         same_email = (
             contact_email
             and existing.contact_email
             and existing.contact_email.lower() == contact_email.lower()
         )
         if same_email or existing.business_name.lower() == business_name.lower():
+            if existing.discarded_at is not None:
+                return {
+                    "outcome": "duplicate",
+                    "existing_lead_id": existing.id,
+                    "note": "This lead was discarded by Arda — do not re-create or act on it.",
+                }
             return {"outcome": "duplicate", "existing_lead_id": existing.id}
 
     today = datetime.now(_tz()).date()
@@ -356,6 +368,12 @@ def _create_task_impl(session, category, title, dedup_key, description, due_date
     )
     session.add(task)
     session.flush()
+    if not (source_ref or {}).get("lead_id"):
+        from app.routines.task_sync import auto_link_lead
+
+        matched = auto_link_lead(session, task)
+    else:
+        matched = None
     if ledger is None:
         session.add(
             ExternalMutation(
@@ -367,7 +385,10 @@ def _create_task_impl(session, category, title, dedup_key, description, due_date
         )
     else:
         ledger.external_id = str(task.id)
-    return {"outcome": "created", "task_id": task.id, "title": title}
+    result = {"outcome": "created", "task_id": task.id, "title": title}
+    if matched is not None:
+        result["auto_linked_lead_id"] = matched.id
+    return result
 
 
 def _create_task(

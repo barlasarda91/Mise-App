@@ -87,6 +87,22 @@ def load_boards() -> list[dict]:
     return boards
 
 
+def todo_count() -> int:
+    """Tasks sitting in To do across all categories — the Board nav badge."""
+    from sqlalchemy import func
+
+    try:
+        with db_session() as s:
+            return (
+                s.scalar(
+                    select(func.count()).select_from(Task).where(Task.status == TaskStatus.TODO)
+                )
+                or 0
+            )
+    except Exception:
+        return 0
+
+
 def load_task(task_id: int) -> dict | None:
     today = _today()
     try:
@@ -221,7 +237,11 @@ def create_task_manual(category: str, title: str, due_date: str, assignee: str, 
         s.add(task)
         s.flush()
         s.add(TaskActivity(task_id=task.id, type="created", detail=title.strip(), actor="Arda"))
-    return f"Task added: {title.strip()}."
+        from app.routines.task_sync import auto_link_lead
+
+        matched = auto_link_lead(s, task)
+        note = f" Auto-linked to {matched.business_name}." if matched else ""
+    return f"Task added: {title.strip()}.{note}"
 
 
 def edit_task_manual(task_id: int, due_date: str, assignee: str, priority: str, description: str) -> str:

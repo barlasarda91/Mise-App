@@ -41,6 +41,9 @@ class Lead(TimestampMixin, Base):
     # resets (hold-and-confirm, spec §7.1). Shape: {activity: {...}, found_by_run_id}.
     pending_confirmation: Mapped[dict | None] = mapped_column(PortableJSON)
     loss_reason: Mapped[str | None] = mapped_column(Text)
+    # Operator discard: hides the lead from pipeline, board sync, pickers, and
+    # run context, and blocks routines from re-creating it. Restorable.
+    discarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     activities: Mapped[list["LeadActivity"]] = relationship(
         back_populates="lead",

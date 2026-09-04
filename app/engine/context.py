@@ -50,7 +50,9 @@ def build_runtime_context(session, routine: Routine) -> str:
         )
 
     leads = session.scalars(
-        select(Lead).where(Lead.stage.in_(OPEN_LEAD_STAGES)).order_by(Lead.id)
+        select(Lead)
+        .where(Lead.stage.in_(OPEN_LEAD_STAGES), Lead.discarded_at.is_(None))
+        .order_by(Lead.id)
     ).all()
     lines.append(f"\n## Open leads ({len(leads)})")
     def idle(lead: Lead) -> int:

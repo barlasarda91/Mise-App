@@ -6,6 +6,16 @@
 {% if msg %}<div class="note" style="margin:0 0 14px">▸ {{ msg }}</div>{% endif %}
 <div class="note" style="margin:0 0 14px"><a href="/pipeline">← back to pipeline</a></div>
 
+{% if lead.discarded %}
+<div class="box" style="border-color:var(--ember);margin-bottom:14px">
+  <div class="box-hd"><span class="lbl">Discarded</span><span class="ix" style="color:var(--ember)">HIDDEN FROM PIPELINE &amp; BOARD</span></div>
+  <div class="box-bd" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+    <span style="font-size:14px">This lead is discarded — routines won't chase it or re-create it.</span>
+    <form method="post" action="/leads/{{ lead.id }}/restore"><button class="linkish solid" type="submit">Restore to pipeline</button></form>
+  </div>
+</div>
+{% endif %}
+
 <div class="grid2">
   <div>
     <div class="box">
@@ -141,6 +151,12 @@
           <label>Loss reason (required if lost)<input name="loss_reason"></label>
           <button class="linkish solid" type="submit">Update stage</button>
         </form>
+        {% if not lead.discarded %}
+        <form method="post" action="/leads/{{ lead.id }}/discard" style="margin-top:12px" onsubmit="return confirm('Discard {{ lead.name }}? It disappears from the pipeline and board, its open tasks close, and routines stop chasing it. You can restore it from the pipeline page.')">
+          <button class="linkish" type="submit" style="color:var(--ember)">Discard lead</button>
+        </form>
+        <div class="note">Discard hides the lead everywhere without recording a win or loss — for spam, dead ends, and mistakes. Closing as lost keeps it on the board's Lost lane instead.</div>
+        {% endif %}
       </div>
     </div>
 

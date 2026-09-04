@@ -139,7 +139,9 @@ def open_leads_for_picker() -> list[dict]:
     try:
         with db_session() as s:
             leads = s.scalars(
-                select(Lead).where(Lead.stage.in_(OPEN_LEAD_STAGES)).order_by(Lead.business_name)
+                select(Lead)
+                .where(Lead.stage.in_(OPEN_LEAD_STAGES), Lead.discarded_at.is_(None))
+                .order_by(Lead.business_name)
             ).all()
             return [{"id": l.id, "name": l.business_name} for l in leads]
     except Exception:
@@ -447,6 +449,7 @@ def send_now(draft_id: int) -> str:
             lead = s.scalar(
                 select(Lead).where(
                     Lead.stage.in_(OPEN_LEAD_STAGES),
+                    Lead.discarded_at.is_(None),
                     func.lower(Lead.contact_email) == first_to,
                 )
             )

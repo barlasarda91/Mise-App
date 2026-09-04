@@ -79,7 +79,7 @@ def load_board() -> tuple[list[dict], dict]:
     today = _today()
     try:
         with db_session() as s:
-            all_leads = s.scalars(select(Lead)).all()
+            all_leads = s.scalars(select(Lead).where(Lead.discarded_at.is_(None))).all()
     except Exception:
         return [], {"open": 0, "overdue": 0}
     leads = [l for l in all_leads if l.stage in OPEN_LEAD_STAGES]
@@ -109,7 +109,9 @@ def overdue_count() -> int:
     today = _today()
     try:
         with db_session() as s:
-            leads = s.scalars(select(Lead).where(Lead.stage.in_(OPEN_LEAD_STAGES))).all()
+            leads = s.scalars(
+                select(Lead).where(Lead.stage.in_(OPEN_LEAD_STAGES), Lead.discarded_at.is_(None))
+            ).all()
             return sum(1 for l in leads if is_overdue(l, today))
     except Exception:
         return 0
@@ -129,6 +131,7 @@ def load_lead(lead_id: int) -> dict | None:
             ).all()
             return {
                 **_card(lead, today),
+                "discarded": lead.discarded_at is not None,
                 "stage": lead.stage.value,
                 "stage_since": lead.stage_since,
                 "contact_name": lead.contact_name,
@@ -194,7 +197,71 @@ def load_email_context(lead: dict | None) -> dict | None:
     return best or error_ctx
 
 
+def discarded_leads() -> list[dict]:
+    """Discarded leads, newest first, for the pipeline page's restore list."""
+    try:
+        with db_session() as s:
+            leads = s.scalars(
+                select(Lead).where(Lead.discarded_at.isnot(None)).order_by(Lead.discarded_at.desc())
+            ).all()
+            return [
+                {
+                    "id": l.id,
+                    "name": l.business_name,
+                    "when": l.discarded_at.date() if l.discarded_at else None,
+                }
+                for l in leads
+            ]
+    except Exception:
+        return []
+
+
 # ---------- manual-entry services (return a status message for the UI) ----------
+
+
+def discard_lead(lead_id: int) -> str:
+    """Drop a lead from view entirely: pipeline, board sync, pickers, and run
+    context. Its open board tasks complete themselves; routines are blocked
+    from re-creating it. Restorable from the pipeline page."""
+    with db_session() as s:
+        lead = s.get(Lead, lead_id)
+        if lead is None:
+            return "Lead not found."
+        if lead.discarded_at is not None:
+            return "Already discarded."
+        lead.discarded_at = datetime.now(ZoneInfo(get_settings().default_tz))
+        from app.models import Task, TaskActivity, TaskStatus
+        from sqlalchemy import func as sa_func
+
+        open_tasks = s.scalars(select(Task).where(Task.status != TaskStatus.DONE)).all()
+        closed = []
+        for task in open_tasks:
+            if (task.source_ref or {}).get("lead_id") != lead_id:
+                continue
+            task.status = TaskStatus.DONE
+            task.completed_at = sa_func.now()
+            s.add(
+                TaskActivity(
+                    task_id=task.id, type="status_change",
+                    detail="auto: lead discarded", actor="Mise",
+                )
+            )
+            closed.append(task.title)
+        name = lead.business_name
+    suffix = f" Closed board tasks: {', '.join(closed)}." if closed else ""
+    return f"Discarded {name} — hidden from pipeline and board. Restore from the list at the bottom of this page.{suffix}"
+
+
+def restore_lead(lead_id: int) -> str:
+    with db_session() as s:
+        lead = s.get(Lead, lead_id)
+        if lead is None:
+            return "Lead not found."
+        if lead.discarded_at is None:
+            return "Not discarded."
+        lead.discarded_at = None
+        name = lead.business_name
+    return f"Restored {name} to the pipeline."
 
 
 def create_lead_manual(business_name: str, contact_name: str, contact_email: str, contact_phone: str, lead_source: str) -> str:

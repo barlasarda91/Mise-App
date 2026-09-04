@@ -43,6 +43,16 @@ async def lifespan(app: FastAPI):
         seed_routines()
     except Exception as exc:
         log.warning("routine seed skipped: %s", exc)
+    # Backfill: attach open, unlinked board tasks to leads by confident name
+    # match (new tasks link at creation time).
+    try:
+        from app.routines.task_sync import auto_link_open_tasks
+
+        linked = auto_link_open_tasks()
+        if linked:
+            log.info("startup auto-link: attached %d task(s) to leads", linked)
+    except Exception as exc:
+        log.warning("startup auto-link skipped: %s", exc)
     try:
         from app.scheduler import start_scheduler, stop_scheduler
 
@@ -125,6 +135,12 @@ def _nav_badges() -> dict:
         from app.web.drafts_view import auto_ready_count
 
         badges["drafts"] = auto_ready_count()
+    except Exception:
+        pass
+    try:
+        from app.web.board_view import todo_count
+
+        badges["board"] = todo_count()
     except Exception:
         pass
     return badges
@@ -274,7 +290,9 @@ def home(request: Request):
 
         today = datetime.now(ZoneInfo(get_settings().default_tz)).date()
         with db_session() as s:
-            leads = s.scalars(select(Lead).where(Lead.stage.in_(OPEN_LEAD_STAGES))).all()
+            leads = s.scalars(
+                select(Lead).where(Lead.stage.in_(OPEN_LEAD_STAGES), Lead.discarded_at.is_(None))
+            ).all()
             stats["open"] = len(leads)
             stats["overdue"] = sum(1 for lead in leads if is_overdue(lead, today))
             open_tasks = s.scalars(
@@ -408,10 +426,12 @@ def runs(request: Request, run: int | None = None):
 
 @app.get("/pipeline", response_class=HTMLResponse)
 def pipeline(request: Request, msg: str | None = None):
-    from app.web.pipeline_view import load_board
+    from app.web.pipeline_view import discarded_leads, load_board
 
     lanes, _stats = load_board()
-    return render_page(request, "pipeline.html", "pipeline", lanes=lanes, msg=msg)
+    return render_page(
+        request, "pipeline.html", "pipeline", lanes=lanes, discarded=discarded_leads(), msg=msg
+    )
 
 
 @app.get("/pipeline/lead/{lead_id}", response_class=HTMLResponse)
@@ -478,6 +498,28 @@ def lead_change_stage(lead_id: int, stage: str = Form(...), loss_reason: str = F
 
     try:
         msg = change_stage_manual(lead_id, stage, loss_reason)
+    except Exception as exc:
+        msg = f"Error: {exc}"
+    return RedirectResponse(f"/pipeline/lead/{lead_id}?msg={msg}", status_code=303)
+
+
+@app.post("/leads/{lead_id}/discard")
+def lead_discard(lead_id: int):
+    from app.web.pipeline_view import discard_lead
+
+    try:
+        msg = discard_lead(lead_id)
+    except Exception as exc:
+        msg = f"Error: {exc}"
+    return RedirectResponse(f"/pipeline?msg={msg}", status_code=303)
+
+
+@app.post("/leads/{lead_id}/restore")
+def lead_restore(lead_id: int):
+    from app.web.pipeline_view import restore_lead
+
+    try:
+        msg = restore_lead(lead_id)
     except Exception as exc:
         msg = f"Error: {exc}"
     return RedirectResponse(f"/pipeline/lead/{lead_id}?msg={msg}", status_code=303)
