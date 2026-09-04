@@ -82,6 +82,36 @@ def lead_context(session, lead_id: int) -> str:
     return "\n".join(lines)
 
 
+def task_context(session, task_id: int) -> str:
+    """Ground a task-linked draft in the task itself — for tasks with no lead
+    or thread (e.g. routine-created governance items), this is often the only
+    context the drafter gets."""
+    from app.models import Task, TaskActivity
+
+    task = session.get(Task, task_id)
+    if task is None:
+        return ""
+    lines = [
+        "## Board task this email is for",
+        f"Task: {task.title}",
+        f"Category: {task.category.value} · status {task.status.value} · due {task.due_date or '—'}",
+    ]
+    if task.description:
+        lines.append(f"Details: {task.description}")
+    if task.waiting_on:
+        lines.append(f"Waiting on: {task.waiting_on}")
+    activities = session.scalars(
+        select(TaskActivity)
+        .where(TaskActivity.task_id == task_id)
+        .order_by(TaskActivity.id.desc())
+        .limit(5)
+    ).all()
+    if activities:
+        lines.append("Recent activity:")
+        lines += [f"- {a.type} · {a.detail or ''}" for a in activities]
+    return "\n".join(lines)
+
+
 def thread_context(mailbox: FromMailbox, thread_id: str) -> str:
     try:
         from app.tools.gmail import get_thread_messages
@@ -124,6 +154,8 @@ def generate_draft_job(draft_id: int, instruction: str, client=None, session_fac
         context_parts = []
         if draft.related_lead_id:
             context_parts.append(lead_context(s, draft.related_lead_id))
+        if draft.related_task_id:
+            context_parts.append(task_context(s, draft.related_task_id))
         thread_id = draft.gmail_thread_id
 
     if thread_id:
@@ -144,9 +176,11 @@ def generate_draft_job(draft_id: int, instruction: str, client=None, session_fac
         draft = s.get(EmailDraft, draft_id)
         draft.subject = content.get("subject") or draft.subject
         draft.body = content.get("body") or ""
-        if content.get("to"):
+        # Operator- or lead-provided recipients always win; the model only
+        # fills the gaps it found in context.
+        if content.get("to") and not draft.to_addrs:
             draft.to_addrs = content["to"]
-        if content.get("cc"):
+        if content.get("cc") and not draft.cc_addrs:
             draft.cc_addrs = content["cc"]
         draft.status = DraftStatus.COMPOSED
 

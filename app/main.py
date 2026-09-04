@@ -452,11 +452,12 @@ def lead_draft_email(
     instruction: str = Form(""),
     mailbox: str = Form("arda"),
     thread_id: str = Form(""),
+    to: str = Form(""),
 ):
     from app.web.drafts_view import start_generation
 
     try:
-        msg, draft_id = start_generation(instruction, mailbox, str(lead_id), thread_id)
+        msg, draft_id = start_generation(instruction, mailbox, str(lead_id), thread_id, to=to)
     except Exception as exc:
         msg, draft_id = f"Error: {exc}", None
     if draft_id:

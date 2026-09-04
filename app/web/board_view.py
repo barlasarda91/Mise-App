@@ -145,6 +145,7 @@ def load_task(task_id: int) -> dict | None:
                 **_card(task, today),
                 "lead_name": lead_name,
                 "gmail_msg_id": ref.get("gmail_msg_id"),
+                "contact_email": ref.get("contact_email"),
                 "description": task.description,
                 "category": task.category.value,
                 "category_label": dict((c.value, l) for c, l in CATEGORIES)[task.category.value],
@@ -196,23 +197,36 @@ def load_task_email_context(task: dict | None) -> dict | None:
         return ctx
 
     msg_id = task.get("gmail_msg_id")
-    if not msg_id:
-        return None
-    from app.models.enums import FromMailbox
-    from app.tools import gmail
-    from app.web.drafts_view import load_thread
-
     last_error = None
-    for mailbox in ("arda", "hello"):
-        try:
-            message = gmail.get_message(FromMailbox(mailbox), msg_id)
-        except Exception as exc:
-            last_error = f"{type(exc).__name__}: {exc}"
-            continue
-        ctx = load_thread({"thread_id": message.get("thread_id"), "mailbox": mailbox, "to": ""})
+    if msg_id:
+        from app.models.enums import FromMailbox
+        from app.tools import gmail
+        from app.web.drafts_view import load_thread
+
+        for mailbox in ("arda", "hello"):
+            try:
+                message = gmail.get_message(FromMailbox(mailbox), msg_id)
+            except Exception as exc:
+                last_error = f"{type(exc).__name__}: {exc}"
+                continue
+            ctx = load_thread({"thread_id": message.get("thread_id"), "mailbox": mailbox, "to": ""})
+            if ctx is not None:
+                ctx["reply_addr"] = _counterpart_addr(ctx.get("messages") or [])
+                return ctx
+
+    # No message link (or it couldn't be fetched) but the routine recorded the
+    # counterparty's address: pull recent history with them instead.
+    contact = task.get("contact_email")
+    if contact:
+        from app.web.pipeline_view import load_email_context
+
+        ctx = load_email_context({"contact_email": contact})
         if ctx is not None:
-            ctx["reply_addr"] = _counterpart_addr(ctx.get("messages") or [])
+            ctx["reply_addr"] = contact
             return ctx
+        return {"error": None, "messages": [], "label": "history", "thread_id": None,
+                "mailbox": "arda", "reply_addr": contact, "action_links": []}
+
     if last_error:
         return {"error": last_error, "messages": [], "label": "thread", "thread_id": None,
                 "mailbox": "arda", "reply_addr": "", "action_links": []}

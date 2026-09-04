@@ -112,6 +112,43 @@ def test_generate_draft_job_fills_row(session_factory):
     assert "Voice A" in request["system"]
 
 
+def test_task_linked_draft_gets_task_context_and_keeps_operator_to(session_factory):
+    from app.models import Task, TaskCategory, TaskStatus
+
+    with session_factory() as s:
+        task = Task(
+            category=TaskCategory.GOVERNANCE,
+            title="TLR open items: Chase CC .csv, questions sheet, payroll go-ahead",
+            description="Tax & Law Research is blocked on the Chase credit-card .csv.",
+            status=TaskStatus.TODO,
+        )
+        s.add(task)
+        s.flush()
+        draft = EmailDraft(
+            subject="", from_mailbox=FromMailbox.ARDA,
+            related_task_id=task.id, status=DraftStatus.DRAFTING,
+            to_addrs=["cindy@taxlawresearch.com"],  # typed by the operator
+        )
+        s.add(draft)
+        s.flush()
+        draft_id = draft.id
+
+    client = FakeClient(
+        payload={"to": ["wrong@model.guess"], "cc": ["ardabarlas@boxxcoffee.com"],
+                 "subject": "Payments going forward", "body": "Hey,\n\n..."}
+    )
+    generate_draft_job(draft_id, "answer the open items", client=client, session_factory=session_factory)
+
+    prompt = client.requests[0]["messages"][0]["content"]
+    assert "Board task this email is for" in prompt
+    assert "TLR open items" in prompt and "blocked on the Chase" in prompt
+
+    with session_factory() as s:
+        draft = s.get(EmailDraft, draft_id)
+        assert draft.to_addrs == ["cindy@taxlawresearch.com"]  # operator's To survives
+        assert draft.cc_addrs == ["ardabarlas@boxxcoffee.com"]  # empty cc gap filled
+
+
 def test_generate_failure_is_visible_not_stuck(session_factory):
     with session_factory() as s:
         draft = EmailDraft(subject="", from_mailbox=FromMailbox.HELLO, status=DraftStatus.DRAFTING)

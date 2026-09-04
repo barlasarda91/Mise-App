@@ -308,6 +308,39 @@ def test_startup_sweep_links_open_tasks(session_factory, monkeypatch):
         assert len(linked) == 1 and linked[0].status == TaskStatus.WAITING
 
 
+def test_create_task_tool_stores_contact_email(session_factory):
+    from app.routines.tools import _create_task
+
+    with session_factory() as s:
+        result = _create_task(
+            s, "governance", "TLR open items", "task:m-tlr",
+            gmail_msg_id="m-tlr", contact_email="cindy@taxlawresearch.com",
+        )
+        s.commit()
+        task = s.get(Task, result["task_id"])
+        assert task.source_ref["contact_email"] == "cindy@taxlawresearch.com"
+        assert task.source_ref["gmail_msg_id"] == "m-tlr"
+
+
+def test_task_email_context_falls_back_to_contact_email(monkeypatch):
+    import app.web.board_view as bv
+    import app.web.pipeline_view as pv
+
+    calls = []
+
+    def fake_load_email_context(lead):
+        calls.append(lead)
+        return {"error": None, "messages": [{"from": "Cindy <cindy@tlr.com>", "date": "Fri"}],
+                "label": "history", "thread_id": "t-9", "mailbox": "arda", "action_links": []}
+
+    monkeypatch.setattr(pv, "load_email_context", fake_load_email_context)
+    ctx = bv.load_task_email_context(
+        {"lead_id": None, "gmail_msg_id": None, "contact_email": "cindy@tlr.com"}
+    )
+    assert calls == [{"contact_email": "cindy@tlr.com"}]
+    assert ctx["reply_addr"] == "cindy@tlr.com"  # the To prefill for replies
+
+
 def test_link_and_unlink_task_lead(session_factory, monkeypatch):
     import app.web.board_view as bv
 

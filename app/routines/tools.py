@@ -394,6 +394,7 @@ def _create_task_impl(session, category, title, dedup_key, description, due_date
 def _create_task(
     session: Session, category, title, dedup_key, description=None, due_date=None,
     assignee=None, lead_id=None, qbo_invoice_id=None, gmail_msg_id=None,
+    contact_email=None,
 ):
     source_ref = {
         k: v
@@ -401,6 +402,7 @@ def _create_task(
             "lead_id": lead_id,
             "qbo_invoice_id": qbo_invoice_id,
             "gmail_msg_id": gmail_msg_id,
+            "contact_email": contact_email,
         }.items()
         if v
     } or None
@@ -415,7 +417,10 @@ register(
             "re-running with the same key updates instead of duplicating. Use stable keys: "
             "'followup:<lead_id>' for overdue-lead follow-ups, 'task:<gmail_msg_id>' for "
             "email-derived items, 'invoice:<qbo_invoice_id>' for A/R. Also pass "
-            "qbo_invoice_id / gmail_msg_id / lead_id so the task links to its source."
+            "qbo_invoice_id / gmail_msg_id / lead_id so the task links to its source. "
+            "For ANY task learned from email, ALWAYS pass gmail_msg_id of the most relevant "
+            "message AND contact_email (the counterparty's email address) — without them the "
+            "task card cannot show the conversation or address a reply."
         ),
         input_schema={
             "type": "object",
@@ -429,6 +434,10 @@ register(
                 "lead_id": {"type": ["integer", "null"]},
                 "qbo_invoice_id": NULLABLE_STR,
                 "gmail_msg_id": NULLABLE_STR,
+                "contact_email": {
+                    "type": ["string", "null"],
+                    "description": "The counterparty's email address, for email-derived tasks",
+                },
             },
             "required": ["category", "title", "dedup_key"],
             "additionalProperties": False,

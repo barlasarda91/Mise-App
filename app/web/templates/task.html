@@ -86,7 +86,7 @@
       <div class="box-bd">
         <form method="post" action="/tasks/{{ task.id }}/draft" class="stack">
           <input type="hidden" name="thread_id" value="{{ email_ctx.thread_id if email_ctx and email_ctx.thread_id else '' }}">
-          <input type="hidden" name="to" value="{{ email_ctx.reply_addr if email_ctx and email_ctx.reply_addr else '' }}">
+          <label>To<input name="to" value="{{ email_ctx.reply_addr if email_ctx and email_ctx.reply_addr else (task.contact_email or '') }}" placeholder="recipient — fill in when there's no email history to infer it from"></label>
           <label>Instruction<input name="instruction" placeholder="reply with cutoff dates and roast turnaround" required></label>
           <label>From mailbox
             <select name="mailbox">

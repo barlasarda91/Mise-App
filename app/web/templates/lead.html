@@ -105,6 +105,7 @@
       <div class="box-bd">
         <form method="post" action="/leads/{{ lead.id }}/draft" class="stack">
           <input type="hidden" name="thread_id" value="{{ email_ctx.thread_id if email_ctx and email_ctx.thread_id else '' }}">
+          <label>To<input name="to" value="{{ lead.contact_email or '' }}" placeholder="recipient — no email on file for this lead yet"></label>
           <label>Instruction<input name="instruction" placeholder="reply: qualify their volume, propose a tasting" required></label>
           <label>From mailbox
             <select name="mailbox">

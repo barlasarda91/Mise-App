@@ -311,12 +311,14 @@ def start_generation(
             gmail_thread_id=thread_id.strip() or None,
             status=DraftStatus.DRAFTING,
         )
-        if draft.related_lead_id:
+        # Explicit To from the form wins (the operator typed or confirmed it);
+        # the linked lead's contact fills in otherwise.
+        if to.strip():
+            draft.to_addrs = _parse_addrs(to)
+        elif draft.related_lead_id:
             lead = s.get(Lead, draft.related_lead_id)
             if lead and lead.contact_email:
                 draft.to_addrs = [lead.contact_email]
-        if not draft.to_addrs and to.strip():
-            draft.to_addrs = [to.strip()]
         s.add(draft)
         s.flush()
         draft_id = draft.id
