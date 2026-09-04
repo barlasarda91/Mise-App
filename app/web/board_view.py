@@ -119,8 +119,15 @@ def load_task(task_id: int) -> dict | None:
             activities = s.scalars(
                 select(TaskActivity).where(TaskActivity.task_id == task_id).order_by(TaskActivity.id.desc())
             ).all()
+            lead_name = None
+            if ref.get("lead_id"):
+                from app.models import Lead
+
+                lead = s.get(Lead, ref["lead_id"])
+                lead_name = lead.business_name if lead else None
             return {
                 **_card(task, today),
+                "lead_name": lead_name,
                 "gmail_msg_id": ref.get("gmail_msg_id"),
                 "description": task.description,
                 "category": task.category.value,
@@ -192,7 +199,7 @@ def load_task_email_context(task: dict | None) -> dict | None:
             return ctx
     if last_error:
         return {"error": last_error, "messages": [], "label": "thread", "thread_id": None,
-                "mailbox": "arda", "reply_addr": ""}
+                "mailbox": "arda", "reply_addr": "", "action_links": []}
     return None
 
 
@@ -228,6 +235,44 @@ def edit_task_manual(task_id: int, due_date: str, assignee: str, priority: str, 
         task.description = description.strip() or None
         s.add(TaskActivity(task_id=task_id, type="edited", detail="details updated", actor="Arda"))
     return "Task updated."
+
+
+def link_task_to_lead(task_id: int, lead_id: int) -> str:
+    """Attach a board task to a wholesale lead: its email workstation, Related
+    links, and (for wholesale-category tasks) auto-completion follow the lead."""
+    from app.models import Lead
+
+    with db_session() as s:
+        task = s.get(Task, task_id)
+        lead = s.get(Lead, lead_id)
+        if task is None or lead is None:
+            return "Not found."
+        ref = dict(task.source_ref or {})
+        if ref.get("lead_id") == lead_id:
+            return f"Already linked to {lead.business_name}."
+        ref["lead_id"] = lead_id
+        task.source_ref = ref  # reassign: JSON columns don't track in-place edits
+        s.add(
+            TaskActivity(
+                task_id=task_id, type="linked",
+                detail=f"linked to lead: {lead.business_name}", actor="Arda",
+            )
+        )
+        name = lead.business_name
+    return f"Linked to {name} — email history and pipeline sync now follow this lead."
+
+
+def unlink_task_lead(task_id: int) -> str:
+    with db_session() as s:
+        task = s.get(Task, task_id)
+        if task is None:
+            return "Not found."
+        ref = dict(task.source_ref or {})
+        if not ref.pop("lead_id", None):
+            return "No lead linked."
+        task.source_ref = ref or None
+        s.add(TaskActivity(task_id=task_id, type="linked", detail="lead unlinked", actor="Arda"))
+    return "Lead unlinked."
 
 
 def set_task_status(task_id: int, status: str, waiting_on: str = "") -> str:

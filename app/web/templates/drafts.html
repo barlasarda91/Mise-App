@@ -12,7 +12,7 @@
       <div>
         {% for d in drafts %}
         <a class="item{% if selected and d.id == selected.id %} sel{% endif %}" href="/drafts?draft={{ d.id }}" style="display:block;padding:12px 13px;border-bottom:1px solid var(--line);text-decoration:none{% if selected and d.id == selected.id %};background:var(--panel-2);border-left:3px solid var(--ink);padding-left:10px{% endif %}">
-          <div style="font-weight:600;font-size:13.5px">{{ d.subject }}</div>
+          <div style="font-weight:600;font-size:13.5px">{{ d.subject }}{% if d.auto and not d.sent and d.status == "composed" %} <span class="pill ember" style="font-size:9px;vertical-align:2px">AUTO</span>{% endif %}</div>
           <div style="font-family:var(--font-mono);font-size:10.5px;color:var(--ink-soft);margin-top:4px;letter-spacing:.04em">{{ d.mailbox }}@ · {{ d.status_label | upper }}{% if d.is_reply %} · REPLY{% endif %}</div>
         </a>
         {% else %}
@@ -115,7 +115,10 @@
   {% endif %}
 
   {% if thread %}
-  <div class="box" style="align-self:start;min-width:0">
+  <div style="align-self:start;min-width:0">
+  {% set alinks = thread.action_links %}
+  {% include "_action_links.html" %}
+  <div class="box" style="min-width:0">
     <div class="box-hd"><span class="lbl">{{ "Thread" if thread.label == "thread" else "Recent history" }}</span><span class="ix">{{ thread.messages | length }} MESSAGES · OLDEST FIRST</span></div>
     <div class="box-bd">
       {% if thread.error %}
@@ -135,6 +138,7 @@
       {% endif %}
       {% endfor %}
     </div>
+  </div>
   </div>
   {% endif %}
 </div>

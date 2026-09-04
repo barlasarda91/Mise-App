@@ -61,21 +61,45 @@ def _row(draft: EmailDraft) -> dict:
         "sent": bool(draft.sent_at),
         "lead_id": draft.related_lead_id,
         "is_reply": bool(draft.gmail_thread_id),
+        "auto": bool(draft.run_id),
     }
 
 
 def load_drafts_index(limit: int = 40) -> list[dict]:
+    """Actionable drafts (unsent) first, newest first within each group, so a
+    fresh routine-prepared draft always surfaces at the top of the list."""
     try:
         with db_session() as s:
             drafts = s.scalars(
                 select(EmailDraft)
                 .where(EmailDraft.status != DraftStatus.DISCARDED)
-                .order_by(EmailDraft.id.desc())
+                .order_by(EmailDraft.sent_at.isnot(None), EmailDraft.id.desc())
                 .limit(limit)
             ).all()
             return [_row(d) for d in drafts]
     except Exception:
         return []
+
+
+def auto_ready_count() -> int:
+    """Routine-prepared drafts awaiting Arda — the Drafts nav badge. A draft
+    drops off once it's sent, saved to Gmail, or discarded."""
+    try:
+        with db_session() as s:
+            return (
+                s.scalar(
+                    select(func.count())
+                    .select_from(EmailDraft)
+                    .where(
+                        EmailDraft.run_id.isnot(None),
+                        EmailDraft.sent_at.is_(None),
+                        EmailDraft.status == DraftStatus.COMPOSED,
+                    )
+                )
+                or 0
+            )
+    except Exception:
+        return 0
 
 
 def load_draft(draft_id: int) -> dict | None:
@@ -246,7 +270,9 @@ def load_thread(selected: dict | None) -> dict | None:
         messages = gmail.get_thread_messages(mailbox, thread_id, last_n=8)
     except Exception as exc:
         return {"error": f"{type(exc).__name__}: {exc}", "messages": [], "label": label,
-                "thread_id": thread_id, "mailbox": selected["mailbox"]}
+                "thread_id": thread_id, "mailbox": selected["mailbox"], "action_links": []}
+    from app.web.action_links import extract_action_links
+
     shaped = []
     for m in messages:
         body = (m.get("body") or m.get("snippet") or "").strip()
@@ -260,7 +286,9 @@ def load_thread(selected: dict | None) -> dict | None:
             }
         )
     return {"error": None, "messages": shaped, "label": label,
-            "thread_id": thread_id, "mailbox": selected["mailbox"]}
+            "thread_id": thread_id, "mailbox": selected["mailbox"],
+            # extracted from the full bodies, before display truncation
+            "action_links": extract_action_links(messages)}
 
 
 # ---------- services ----------

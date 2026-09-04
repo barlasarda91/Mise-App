@@ -126,7 +126,10 @@ def load_open_message(mailbox: str, msg_id: str) -> dict | None:
         message = gmail.get_message(FromMailbox(mailbox), msg_id)
     except Exception as exc:
         return {"error": f"{type(exc).__name__}: {exc}"}
+    from app.web.action_links import extract_action_links
+
     return {
+        "action_links": extract_action_links([message]),
         "error": None,
         "mailbox": mailbox,
         "id": message["id"],

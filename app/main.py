@@ -105,17 +105,36 @@ def _clock() -> str:
     return now.strftime("%a · %d %b %Y · %H:%M LA").upper()
 
 
-def render_page(request: Request, template: str, view: str, **context) -> HTMLResponse:
+def _nav_badges() -> dict:
+    """Per-tab notification counts: unread mail, overdue pipeline leads, and
+    routine-prepared drafts awaiting review. Each fails soft to no badge."""
+    badges = {}
     try:
         from app.web.inbox_view import unread_count
 
-        unread = unread_count()
+        badges["inbox"] = unread_count()
     except Exception:
-        unread = None
+        pass
+    try:
+        from app.web.pipeline_view import overdue_count
+
+        badges["pipeline"] = overdue_count()
+    except Exception:
+        pass
+    try:
+        from app.web.drafts_view import auto_ready_count
+
+        badges["drafts"] = auto_ready_count()
+    except Exception:
+        pass
+    return badges
+
+
+def render_page(request: Request, template: str, view: str, **context) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
         template,
-        {"nav": NAV, "active_view": view, "clock": _clock(), "unread": unread, **context},
+        {"nav": NAV, "active_view": view, "clock": _clock(), "badges": _nav_badges(), **context},
     )
 
 
@@ -513,13 +532,26 @@ def board_add_task(
 @app.get("/board/task/{task_id}", response_class=HTMLResponse)
 def task_detail(request: Request, task_id: int, msg: str | None = None):
     from app.web.board_view import load_task, load_task_email_context
+    from app.web.drafts_view import open_leads_for_picker
 
     task = load_task(task_id)
     if task is None:
         return RedirectResponse("/board?msg=Task not found.", status_code=303)
     return render_page(
-        request, "task.html", "board", task=task, email_ctx=load_task_email_context(task), msg=msg
+        request, "task.html", "board", task=task, email_ctx=load_task_email_context(task),
+        leads=open_leads_for_picker(), msg=msg,
     )
+
+
+@app.post("/tasks/{task_id}/link-lead")
+def task_link_lead(task_id: int, lead_id: str = Form("")):
+    from app.web.board_view import link_task_to_lead, unlink_task_lead
+
+    try:
+        msg = link_task_to_lead(task_id, int(lead_id)) if lead_id else unlink_task_lead(task_id)
+    except Exception as exc:
+        msg = f"Error: {exc}"
+    return RedirectResponse(f"/board/task/{task_id}?msg={msg}", status_code=303)
 
 
 @app.post("/tasks/{task_id}/status")

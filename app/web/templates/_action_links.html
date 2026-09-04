@@ -1,0 +1,16 @@
+{# Actionable links pulled from the conversation (set `alinks` before including). #}
+{% if alinks %}
+<div class="box" style="border-color:var(--ember)">
+  <div class="box-hd"><span class="lbl">Action links</span><span class="ix" style="color:var(--ember)">{{ alinks | length }} · FOUND IN THIS EMAIL</span></div>
+  <div>
+    {% for link in alinks %}
+    <a class="row" href="{{ link.url }}" target="_blank" rel="noopener noreferrer" style="text-decoration:none">
+      <span class="name" style="font-size:13.5px">{{ link.label }}</span>
+      <span class="meta">{{ link.from }}{% if link.date %} · {{ link.date }}{% endif %}</span>
+      <span class="spacer"></span>
+      <span class="pill ember">↗ open</span>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}

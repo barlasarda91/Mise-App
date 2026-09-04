@@ -38,6 +38,9 @@
     </div>
     {% endif %}
 
+    {% set alinks = email_ctx.action_links if email_ctx else none %}
+    {% include "_action_links.html" %}
+
     <div class="box">
       <div class="box-hd"><span class="lbl">Email</span>
         <span class="ix">{% if email_ctx and email_ctx.messages %}{{ email_ctx.messages | length }} · VIA {{ email_ctx.mailbox | upper }}@{% else %}NO HISTORY{% endif %}</span>
@@ -112,6 +115,22 @@
           <label>Waiting on (when parking)<input name="waiting_on" value="{{ task.waiting_on or '' }}"></label>
           <button class="linkish solid" type="submit">Move</button>
         </form>
+      </div>
+    </div>
+
+    <div class="box">
+      <div class="box-hd"><span class="lbl">Pipeline link</span><span class="ix">{% if task.lead_name %}↳ {{ task.lead_name | upper }}{% else %}NOT LINKED{% endif %}</span></div>
+      <div class="box-bd">
+        <form method="post" action="/tasks/{{ task.id }}/link-lead" class="stack">
+          <label>Wholesale lead
+            <select name="lead_id">
+              <option value="">— none —</option>
+              {% for l in leads %}<option value="{{ l.id }}" {% if l.id == task.lead_id %}selected{% endif %}>{{ l.name }}</option>{% endfor %}
+            </select>
+          </label>
+          <button class="linkish solid" type="submit">{{ "Update link" if task.lead_id else "Link to lead" }}</button>
+        </form>
+        <div class="note">Linking pulls the lead's email history into this card and lets pipeline moves auto-complete it. Picking "— none —" unlinks.</div>
       </div>
     </div>
 

@@ -36,6 +36,9 @@
     </div>
     {% endif %}
 
+    {% set alinks = email_ctx.action_links if email_ctx else none %}
+    {% include "_action_links.html" %}
+
     <div class="box">
       <div class="box-hd"><span class="lbl">Email</span>
         <span class="ix">{% if email_ctx and email_ctx.messages %}{{ email_ctx.messages | length }} · VIA {{ email_ctx.mailbox | upper }}@{% else %}NO HISTORY{% endif %}</span>

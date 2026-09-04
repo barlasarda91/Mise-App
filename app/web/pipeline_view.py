@@ -38,6 +38,13 @@ STAGE_LABELS = [
     (LeadStage.NEGOTIATING, "Negotiating"),
 ]
 
+CLOSED_LABELS = [
+    (LeadStage.CLOSED_WON, "Won"),
+    (LeadStage.CLOSED_LOST, "Lost"),
+]
+
+CLOSED_SHOWN = 10  # recent closes per lane; full history stays in the DB
+
 
 def _today() -> date:
     return datetime.now(ZoneInfo(get_settings().default_tz)).date()
@@ -58,20 +65,54 @@ def _card(lead: Lead, today: date) -> dict:
     }
 
 
+def _closed_card(lead: Lead) -> dict:
+    return {
+        "id": lead.id,
+        "name": lead.business_name,
+        "source": lead.lead_source or "",
+        "closed_on": lead.stage_since,
+        "loss_reason": lead.loss_reason,
+    }
+
+
 def load_board() -> tuple[list[dict], dict]:
     today = _today()
     try:
         with db_session() as s:
-            leads = s.scalars(select(Lead).where(Lead.stage.in_(OPEN_LEAD_STAGES))).all()
+            all_leads = s.scalars(select(Lead)).all()
     except Exception:
         return [], {"open": 0, "overdue": 0}
+    leads = [l for l in all_leads if l.stage in OPEN_LEAD_STAGES]
     lanes = []
     for stage, label in STAGE_LABELS:
         cards = [_card(lead, today) for lead in leads if lead.stage == stage]
         cards.sort(key=lambda c: (c["idle"] is None, -(c["idle"] or 0)))
-        lanes.append({"stage": stage.value, "label": label, "cards": cards})
+        lanes.append({"stage": stage.value, "label": label, "closed": False, "cards": cards})
+    for stage, label in CLOSED_LABELS:
+        closed = [l for l in all_leads if l.stage == stage]
+        closed.sort(key=lambda l: l.stage_since or date.min, reverse=True)  # newest close first
+        lanes.append(
+            {
+                "stage": stage.value,
+                "label": label,
+                "closed": True,
+                "total": len(closed),
+                "cards": [_closed_card(l) for l in closed[:CLOSED_SHOWN]],
+            }
+        )
     stats = {"open": len(leads), "overdue": sum(1 for l in leads if is_overdue(l, today))}
     return lanes, stats
+
+
+def overdue_count() -> int:
+    """Open leads past their cadence — the Pipeline nav badge."""
+    today = _today()
+    try:
+        with db_session() as s:
+            leads = s.scalars(select(Lead).where(Lead.stage.in_(OPEN_LEAD_STAGES))).all()
+            return sum(1 for l in leads if is_overdue(l, today))
+    except Exception:
+        return 0
 
 
 def load_lead(lead_id: int) -> dict | None:

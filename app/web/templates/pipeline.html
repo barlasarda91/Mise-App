@@ -5,10 +5,28 @@
 
 {% if msg %}<div class="note" style="margin:0 0 14px">▸ {{ msg }}</div>{% endif %}
 
-<div class="lanes">
+<div class="lanes lanes6">
   {% for lane in lanes %}
   <div class="lane">
-    <div class="lane-hd"><span class="ln">{{ lane.label }}</span><span class="ct">{{ "%02d" | format(lane.cards | length) }}</span></div>
+    <div class="lane-hd"><span class="ln">{{ lane.label }}</span><span class="ct">{{ "%02d" | format(lane.total if lane.closed else lane.cards | length) }}</span></div>
+    {% if lane.closed %}
+    {% for c in lane.cards %}
+    <a class="card" href="/pipeline/lead/{{ c.id }}">
+      <div class="cn">{{ c.name }}</div>
+      <div class="cmeta">
+        {% if c.source %}<span>{{ c.source }}</span>{% endif %}
+        <span>closed {{ c.closed_on or "—" }}</span>
+      </div>
+      <div class="cbadges">
+        {% if lane.stage == "closed_won" %}<span class="pill ghost">won ✓</span>
+        {% else %}<span class="pill ghost">{{ c.loss_reason or "lost" }}</span>{% endif %}
+      </div>
+    </a>
+    {% endfor %}
+    {% if lane.total > lane.cards | length %}
+    <div class="note" style="padding:8px 4px">+ {{ lane.total - lane.cards | length }} older</div>
+    {% endif %}
+    {% else %}
     {% for c in lane.cards %}
     <a class="card" href="/pipeline/lead/{{ c.id }}">
       <div class="cn">{{ c.name }}</div>
@@ -24,10 +42,11 @@
       </div>
     </a>
     {% endfor %}
+    {% endif %}
   </div>
   {% endfor %}
 </div>
-<div class="note">Idle days count from <b>last confirmed action</b>. Cadence: New daily · Contacted 3d · Sampled 3/7/every-5 · Negotiating 7d. Click a card for the activity log and manual entry.</div>
+<div class="note">Idle days count from <b>last confirmed action</b>. Cadence: New daily · Contacted 3d · Sampled 3/7/every-5 · Negotiating 7d. Won/Lost show the 10 most recent closes. Click a card for the activity log and manual entry.</div>
 
 <div class="box" style="margin-top:18px;max-width:640px">
   <div class="box-hd"><span class="lbl">Add lead</span><span class="ix">MANUAL</span></div>

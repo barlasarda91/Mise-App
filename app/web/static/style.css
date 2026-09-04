@@ -102,7 +102,9 @@ a.row:hover{background:var(--panel-2)}
 .card .cn{font-weight:600;font-size:14px}
 .card .cmeta{font-family:var(--font-mono);font-size:10.5px;color:var(--ink-soft);letter-spacing:.04em;margin-top:5px;display:flex;flex-wrap:wrap;gap:5px 10px}
 .card .cbadges{margin-top:9px;display:flex;gap:6px;flex-wrap:wrap}
-@media(max-width:860px){.lanes{grid-template-columns:1fr 1fr}}
+.lanes.lanes6{grid-template-columns:repeat(6,1fr)}
+@media(max-width:1280px){.lanes.lanes6{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:860px){.lanes,.lanes.lanes6{grid-template-columns:1fr 1fr}}
 
 /* board tabs */
 .tabbar{display:flex;flex-wrap:wrap;border:1px solid var(--ink);margin-bottom:16px}

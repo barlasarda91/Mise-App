@@ -44,6 +44,8 @@
       <div class="who" style="font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:4px">{{ opened.from }}</div>
       <div class="who" style="font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;color:var(--ink-soft);margin-bottom:10px">{{ opened.date }}{% if opened.cc %} · CC {{ opened.cc }}{% endif %}</div>
       <div style="font-weight:600;font-size:15px;margin-bottom:10px">{{ opened.subject }}</div>
+      {% set alinks = opened.action_links %}
+      {% include "_action_links.html" %}
       <div class="mailbody" style="font-size:14px">{{ opened.body }}</div>
 
       <div class="box" style="margin-top:16px">
