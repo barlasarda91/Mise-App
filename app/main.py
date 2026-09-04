@@ -549,10 +549,15 @@ def lead_create_reminder(lead_id: int, remind_on: str = Form(...), note: str = F
 
 
 @app.get("/board", response_class=HTMLResponse)
-def board(request: Request, msg: str | None = None):
+def board(request: Request, msg: str | None = None, tab: str | None = None):
     from app.web.board_view import load_boards
 
-    return render_page(request, "board.html", "board", boards=load_boards(), msg=msg)
+    boards = load_boards()
+    keys = [b["key"] for b in boards]
+    active_tab = tab if tab in keys else (keys[0] if keys else None)
+    return render_page(
+        request, "board.html", "board", boards=boards, active_tab=active_tab, msg=msg
+    )
 
 
 @app.post("/board/tasks")
@@ -569,7 +574,7 @@ def board_add_task(
         msg = create_task_manual(category, title, due_date, assignee, priority)
     except Exception as exc:
         msg = f"Error: {exc}"
-    return RedirectResponse(f"/board?msg={msg}", status_code=303)
+    return RedirectResponse(f"/board?tab={category}&msg={msg}", status_code=303)
 
 
 @app.get("/board/task/{task_id}", response_class=HTMLResponse)
@@ -606,7 +611,8 @@ def task_set_status(task_id: int, status: str = Form(...), waiting_on: str = For
     except Exception as exc:
         msg = f"Error: {exc}"
     target = next if next.startswith("/") and not next.startswith("//") else "/board"
-    return RedirectResponse(f"{target}?msg={msg}", status_code=303)
+    sep = "&" if "?" in target else "?"
+    return RedirectResponse(f"{target}{sep}msg={msg}", status_code=303)
 
 
 @app.post("/tasks/{task_id}/draft")

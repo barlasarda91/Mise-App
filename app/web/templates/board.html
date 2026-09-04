@@ -7,12 +7,12 @@
 
 <div class="tabbar" id="catTabs">
   {% for b in boards %}
-  <span class="tab{% if loop.first %} on{% endif %}" data-cat="{{ b.key }}">{{ b.label }}{% if b.open %} · {{ b.open }}{% endif %}</span>
+  <span class="tab{% if b.key == active_tab %} on{% endif %}" data-cat="{{ b.key }}">{{ b.label }}{% if b.open %} · {{ b.open }}{% endif %}</span>
   {% endfor %}
 </div>
 
 {% for b in boards %}
-<div class="catboard{% if loop.first %} on{% endif %}" data-cat="{{ b.key }}">
+<div class="catboard{% if b.key == active_tab %} on{% endif %}" data-cat="{{ b.key }}">
   <div class="lanes">
     {% for lane in b.lanes %}
     <div class="lane">
@@ -32,6 +32,7 @@
           {% if c.lead_id %}<a class="pill ghost" href="/pipeline/lead/{{ c.lead_id }}">lead ↗</a>{% endif %}
         </div>
         <form method="post" action="/tasks/{{ c.id }}/status" class="cardmove">
+          <input type="hidden" name="next" value="/board?tab={{ b.key }}">
           <select name="status">
             {% for s in ["todo","doing","waiting","done"] %}
             <option value="{{ s }}" {% if s == c.status %}selected{% endif %}>{{ s }}</option>
@@ -54,7 +55,7 @@
     <form method="post" action="/board/tasks" class="stack">
       <label>Category
         <select name="category">
-          {% for b in boards %}<option value="{{ b.key }}">{{ b.label }}</option>{% endfor %}
+          {% for b in boards %}<option value="{{ b.key }}" {% if b.key == active_tab %}selected{% endif %}>{{ b.label }}</option>{% endfor %}
         </select>
       </label>
       <label>Title<input name="title" required></label>
@@ -76,6 +77,10 @@
     const t = e.target.closest('.tab'); if (!t) return;
     catTabs.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === t));
     document.querySelectorAll('.catboard').forEach(b => b.classList.toggle('on', b.dataset.cat === t.dataset.cat));
+    // keep the tab in the URL so refreshes and post-move redirects come back here
+    const url = new URL(location); url.searchParams.set('tab', t.dataset.cat); url.searchParams.delete('msg');
+    history.replaceState(null, '', url);
+    document.querySelector('form[action="/board/tasks"] select[name="category"]').value = t.dataset.cat;
   });
 </script>
 {% endblock %}

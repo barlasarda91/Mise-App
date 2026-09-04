@@ -4,7 +4,7 @@
 {% block content %}
 
 {% if msg %}<div class="note" style="margin:0 0 14px">▸ {{ msg }}</div>{% endif %}
-<div class="note" style="margin:0 0 14px"><a href="/board">← back to board</a></div>
+<div class="note" style="margin:0 0 14px"><a href="/board?tab={{ task.category }}">← back to board</a></div>
 
 <div class="grid2">
   <div>
