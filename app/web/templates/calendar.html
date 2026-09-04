@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Calendar{% endblock %}
+{% block heading %}Calendar{% endblock %}
+{% block content %}
+
+{% if cal.error %}
+<div class="box"><div class="box-bd"><div class="note">{{ cal.error }}</div></div></div>
+{% else %}
+<div class="grid2">
+  {% for day in cal.days %}
+  <div class="box" style="align-self:start">
+    <div class="box-hd"><span class="lbl">{{ day.label }}</span><span class="ix">{{ day.date }} · {{ day.events | length }} EVENTS</span></div>
+    <div>
+      {% for e in day.events %}
+      <div class="row">
+        <span class="code" style="min-width:96px">{{ e.time }}</span>
+        <span class="name" style="font-size:14px">{{ e.summary }}</span>
+        <span class="meta">{% if e.location %}{{ e.location }}{% endif %}{% if e.attendees > 1 %} · {{ e.attendees }} people{% endif %}</span>
+        <span class="spacer"></span>
+        {% if e.tz_mismatch %}<span class="pill ember" title="Invite timezone differs from America/Los_Angeles — double-check the join time">TZ?</span>{% endif %}
+      </div>
+      {% else %}
+      <div class="box-bd"><span class="note">Nothing scheduled.</span></div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+<div class="note" style="margin-top:14px">arda's Google Calendar · times in America/Los_Angeles · <span class="pill ember" style="font-size:9px">TZ?</span> flags invites whose stated timezone differs (join-time risk). Reminders created from Pipeline land here at 9 AM.</div>
+{% endif %}
+{% endblock %}

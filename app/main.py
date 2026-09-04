@@ -65,6 +65,7 @@ PUBLIC_PATHS = {"/login", "/health", "/legal/terms", "/legal/privacy"}
 NAV = [
     {"view": "home", "ix": "00", "label": "Today", "path": "/"},
     {"view": "inbox", "ix": "I", "label": "Inbox", "path": "/inbox"},
+    {"view": "calendar", "ix": "C", "label": "Calendar", "path": "/calendar"},
     {"view": "runs", "ix": "R", "label": "Runs", "path": "/runs"},
     {"view": "pipeline", "ix": "P", "label": "Pipeline", "path": "/pipeline"},
     {"view": "board", "ix": "B", "label": "Board", "path": "/board"},
@@ -364,6 +365,13 @@ def inbox_draft(
     if draft_id:
         return RedirectResponse(f"/drafts?draft={draft_id}&msg={message}", status_code=303)
     return RedirectResponse(f"/inbox?msg={message}", status_code=303)
+
+
+@app.get("/calendar", response_class=HTMLResponse)
+def calendar_page(request: Request):
+    from app.web.calendar_view import load_calendar
+
+    return render_page(request, "calendar.html", "calendar", cal=load_calendar())
 
 
 @app.get("/runs", response_class=HTMLResponse)

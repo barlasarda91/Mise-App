@@ -281,6 +281,13 @@ def test_send_now_syncs_then_sends_and_locks(session_factory, monkeypatch):
     assert "Already sent" in dv.update_fields(draft_id, "arda", "x@y.com", "", "s", "b")
 
 
+def _la_today():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    return datetime.now(ZoneInfo("America/Los_Angeles")).date()
+
+
 def test_send_advances_linked_lead(session_factory, monkeypatch):
     from datetime import date
 
@@ -315,7 +322,7 @@ def test_send_advances_linked_lead(session_factory, monkeypatch):
     with session_factory() as s:
         lead = s.get(Lead, lead_id)
         assert lead.stage == LeadStage.CONTACTED
-        assert lead.last_confirmed_action == date.today()
+        assert lead.last_confirmed_action == _la_today()
         activities = s.query(LeadActivity).filter_by(lead_id=lead_id).all()
         types = sorted(a.type.value for a in activities)
         assert types == ["email_sent", "stage_change"]
@@ -352,7 +359,7 @@ def test_send_matches_unlinked_draft_to_lead_by_address(session_factory, monkeyp
     with session_factory() as s:
         lead = s.query(Lead).one()
         assert lead.stage == LeadStage.CONTACTED
-        assert lead.last_confirmed_action == date.today()
+        assert lead.last_confirmed_action == _la_today()
         assert s.get(EmailDraft, draft_id).related_lead_id == lead.id  # link adopted
 
 
@@ -421,7 +428,7 @@ def test_send_resets_timer_without_stage_change_for_later_stages(session_factory
     with session_factory() as s:
         lead = s.get(Lead, lead_id)
         assert lead.stage == LeadStage.NEGOTIATING  # unchanged
-        assert lead.last_confirmed_action == date.today()
+        assert lead.last_confirmed_action == _la_today()
 
 
 def test_send_now_blocks_invalid_drafts(session_factory, monkeypatch):
