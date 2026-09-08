@@ -184,6 +184,75 @@ def test_todo_count_counts_all_categories(session_factory, monkeypatch):
     assert bv.todo_count() == 2
 
 
+def test_payments_category_is_first_board_tab(session_factory, monkeypatch):
+    import app.web.board_view as bv
+
+    monkeypatch.setattr(bv, "db_session", session_factory)
+    boards = bv.load_boards()
+    assert boards[0]["key"] == "payments"
+    assert boards[0]["label"] == "Payments"
+    assert [b["key"] for b in boards][1] == "wholesale_leads"
+
+
+def test_next_open_lead_cycles_in_lane_order(session_factory, monkeypatch):
+    import app.web.pipeline_view as pv
+
+    monkeypatch.setattr(pv, "db_session", session_factory)
+    with session_factory() as s:
+        a = Lead(business_name="A New Idle", stage=LeadStage.NEW,
+                 last_confirmed_action=date(2026, 8, 20))
+        b = Lead(business_name="B New Fresh", stage=LeadStage.NEW,
+                 last_confirmed_action=date(2026, 9, 3))
+        c = Lead(business_name="C Contacted", stage=LeadStage.CONTACTED)
+        d = Lead(business_name="D Won", stage=LeadStage.CLOSED_WON)
+        s.add_all([a, b, c, d])
+        s.flush()
+        ids = {"a": a.id, "b": b.id, "c": c.id, "d": d.id}
+
+    # New lane first (most idle first), then Contacted; closed leads excluded
+    assert pv.load_lead(ids["a"])["next_id"] == ids["b"]
+    assert pv.load_lead(ids["b"])["next_id"] == ids["c"]
+    assert pv.load_lead(ids["c"])["next_id"] == ids["a"]  # wraps around
+    # from a closed lead, "next" leads back into the open pipeline
+    assert pv.load_lead(ids["d"])["next_id"] == ids["a"]
+
+
+def test_seed_syncs_schedule_and_prompt(session_factory):
+    from sqlalchemy import select
+
+    from app.models import Routine
+    from app.routines.seed import ROUTINE_DEFAULTS, seed_routines
+
+    assert seed_routines(session_factory) == 2  # created fresh
+    with session_factory() as s:
+        tracker = s.scalars(select(Routine).where(Routine.key == "lead_tracker")).one()
+        tracker.schedule_cron = "30 8 * * *"  # pre-hourly value
+        tracker.enabled = True
+
+    assert seed_routines(session_factory) == 0
+    with session_factory() as s:
+        tracker = s.scalars(select(Routine).where(Routine.key == "lead_tracker")).one()
+        assert tracker.schedule_cron == ROUTINE_DEFAULTS[0]["schedule_cron"]
+        assert tracker.enabled is True  # Arda's switch untouched
+
+
+def test_gmail_summary_exposes_reply_to():
+    from app.tools.gmail import _summarize
+
+    message = {
+        "id": "m1",
+        "threadId": "t1",
+        "payload": {"headers": [
+            {"name": "From", "value": "Boxx Coffee Roasters Co. <hello@boxxcoffee.com>"},
+            {"name": "Reply-To", "value": "annie@parisiengourmandises.com"},
+            {"name": "Subject", "value": "New Wholesale Inquiry — Annie Benaroch"},
+        ]},
+        "snippet": "We received your inquiry, Annie.",
+    }
+    summary = _summarize(message)
+    assert summary["reply_to"] == "annie@parisiengourmandises.com"
+
+
 # ---------- lead discard ----------
 
 

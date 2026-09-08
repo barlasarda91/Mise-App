@@ -77,6 +77,7 @@ class ActivitySource(str, enum.Enum):
 
 
 class TaskCategory(str, enum.Enum):
+    PAYMENTS = "payments"  # money going out: bills, payroll approvals, tax payments
     WHOLESALE_LEADS = "wholesale_leads"
     CONSULTATION = "consultation"
     POP_UPS = "pop_ups"

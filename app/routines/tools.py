@@ -66,7 +66,7 @@ register(
             "'in:inbox wholesale'). after_date (YYYY-MM-DD, or null) bounds the search — "
             "derive it from the runtime context's last gather time, or the 90-day cold-start "
             "window on a first run. Returns header summaries (id, thread_id, from, to, "
-            "subject, date, snippet), newest first."
+            "subject, reply_to, date, snippet), newest first."
         ),
         input_schema={
             "type": "object",

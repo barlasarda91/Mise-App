@@ -4,7 +4,7 @@
 {% block content %}
 
 {% if msg %}<div class="note" style="margin:0 0 14px">▸ {{ msg }}</div>{% endif %}
-<div class="note" style="margin:0 0 14px"><a href="/pipeline">← back to pipeline</a></div>
+<div class="note" style="margin:0 0 14px;display:flex;align-items:baseline"><a href="/pipeline">← back to pipeline</a><span style="flex:1"></span>{% if lead.next_id %}<a href="/pipeline/lead/{{ lead.next_id }}" title="{{ lead.next_name }}">view next lead →</a>{% endif %}</div>
 
 {% if lead.discarded %}
 <div class="box" style="border-color:var(--ember);margin-bottom:14px">

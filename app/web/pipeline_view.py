@@ -117,6 +117,29 @@ def overdue_count() -> int:
         return 0
 
 
+def _next_open_lead(session, lead_id: int, today: date) -> Lead | None:
+    """The lead after this one in pipeline display order (stage lanes, most
+    idle first within each), wrapping around. None when there's nowhere to go."""
+    leads = session.scalars(
+        select(Lead).where(Lead.stage.in_(OPEN_LEAD_STAGES), Lead.discarded_at.is_(None))
+    ).all()
+    stage_order = {stage: ix for ix, (stage, _) in enumerate(STAGE_LABELS)}
+    leads.sort(
+        key=lambda l: (
+            stage_order.get(l.stage, 99),
+            idle_days(l, today) is None,
+            -(idle_days(l, today) or 0),
+            l.id,
+        )
+    )
+    ids = [l.id for l in leads]
+    if lead_id not in ids:
+        return leads[0] if leads else None  # viewing a closed/discarded lead
+    if len(ids) < 2:
+        return None
+    return leads[(ids.index(lead_id) + 1) % len(ids)]
+
+
 def load_lead(lead_id: int) -> dict | None:
     today = _today()
     try:
@@ -124,6 +147,7 @@ def load_lead(lead_id: int) -> dict | None:
             lead = s.get(Lead, lead_id)
             if lead is None:
                 return None
+            nxt = _next_open_lead(s, lead_id, today)
             activities = s.scalars(
                 select(LeadActivity)
                 .where(LeadActivity.lead_id == lead_id)
@@ -132,6 +156,8 @@ def load_lead(lead_id: int) -> dict | None:
             return {
                 **_card(lead, today),
                 "discarded": lead.discarded_at is not None,
+                "next_id": nxt.id if nxt else None,
+                "next_name": nxt.business_name if nxt else None,
                 "stage": lead.stage.value,
                 "stage_since": lead.stage_since,
                 "contact_name": lead.contact_name,

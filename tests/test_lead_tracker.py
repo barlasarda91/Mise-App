@@ -120,8 +120,16 @@ def test_create_lead_with_qualify_task_and_dedup(session_factory):
 
 
 def test_record_email_activity_advances_when_not_overdue(session_factory):
+    # Anchor to the app's LA "today" so the fixture stays 1d idle (not overdue)
+    # no matter when the suite runs.
+    from datetime import timedelta
+    from zoneinfo import ZoneInfo
+
+    from app.settings import get_settings
+
+    today = datetime.now(ZoneInfo(get_settings().default_tz)).date()
     with session_factory() as s:
-        s.add(_lead(LeadStage.CONTACTED, date(2026, 9, 2)))  # 1d idle: not overdue
+        s.add(_lead(LeadStage.CONTACTED, today - timedelta(days=1)))  # 1d idle
         s.flush()
         lead_id = s.query(Lead).one().id
     result = _call(
@@ -129,7 +137,7 @@ def test_record_email_activity_advances_when_not_overdue(session_factory):
         "record_email_activity",
         lead_id=lead_id,
         gmail_msg_id="m-1",
-        occurred_on="2026-09-03",
+        occurred_on=today.isoformat(),
         detail="Samples on the way",
     )
     assert result["outcome"] == "recorded" and result["advanced_timer"]
@@ -139,12 +147,12 @@ def test_record_email_activity_advances_when_not_overdue(session_factory):
         "record_email_activity",
         lead_id=lead_id,
         gmail_msg_id="m-1",
-        occurred_on="2026-09-03",
+        occurred_on=today.isoformat(),
         detail="Samples on the way",
     )
     assert again["outcome"] == "already_recorded"
     with session_factory() as s:
-        assert s.query(Lead).one().last_confirmed_action == date(2026, 9, 3)
+        assert s.query(Lead).one().last_confirmed_action == today
         assert s.query(LeadActivity).count() == 1
 
 

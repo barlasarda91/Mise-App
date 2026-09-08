@@ -10,6 +10,7 @@ from app.models import Task, TaskActivity, TaskCategory, TaskPriority, TaskSourc
 from app.settings import get_settings
 
 CATEGORIES = [
+    (TaskCategory.PAYMENTS, "Payments"),  # prioritized: money going out comes first
     (TaskCategory.WHOLESALE_LEADS, "Wholesale Leads"),
     (TaskCategory.CONSULTATION, "Consultation"),
     (TaskCategory.POP_UPS, "Pop-Ups"),

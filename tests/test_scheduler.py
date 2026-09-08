@@ -60,9 +60,9 @@ def test_sync_jobs_adds_enabled_and_removes_disabled(session_factory, sched):
     jobs = {j.id: j for j in sched.get_jobs()}
     assert set(jobs) == {"routine:lead_tracker"}
     assert jobs["routine:lead_tracker"].args == (tracker_id, "scheduled")
-    # cron 30 8 * * * in LA
+    # cron 30 7-16 * * * in LA (hourly workday runs)
     trigger = jobs["routine:lead_tracker"].trigger
-    assert "hour='8'" in str(trigger) and "minute='30'" in str(trigger)
+    assert "hour='7-16'" in str(trigger) and "minute='30'" in str(trigger)
 
     with session_factory() as s:
         s.query(Routine).filter_by(key="lead_tracker").one().enabled = False

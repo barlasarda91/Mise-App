@@ -27,13 +27,13 @@ ROUTINE_DEFAULTS = [
     {
         "key": "lead_tracker",
         "name": "Wholesale Lead Tracker",
-        "schedule_cron": "30 8 * * *",  # daily 08:30 LA (spec §7.1)
+        "schedule_cron": "30 7-16 * * *",  # hourly 07:30–16:30 LA (2026-09-08 request)
         "connectors": ["gmail_arda", "gmail_hello", "calendar"],
     },
     {
         "key": "daily_agenda",
         "name": "Daily Agenda",
-        "schedule_cron": "30 7 * * *",  # daily 07:30 LA (spec §7.2)
+        "schedule_cron": "0 7-17 * * *",  # hourly 07:00–17:00 LA (2026-09-08 request)
         "connectors": ["gmail_arda", "calendar", "quickbooks"],
     },
 ]
@@ -67,6 +67,10 @@ def seed_routines(session_factory=db_session) -> int:
                     )
                 )
                 created += 1
-            elif routine.system_prompt != prompt:
-                routine.system_prompt = prompt
+            else:
+                if routine.system_prompt != prompt:
+                    routine.system_prompt = prompt
+                # Schedules are versioned here too (no in-app editor yet).
+                if routine.schedule_cron != spec["schedule_cron"]:
+                    routine.schedule_cron = spec["schedule_cron"]
     return created
