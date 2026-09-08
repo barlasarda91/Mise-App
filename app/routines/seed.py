@@ -27,13 +27,13 @@ ROUTINE_DEFAULTS = [
     {
         "key": "lead_tracker",
         "name": "Wholesale Lead Tracker",
-        "schedule_cron": "30 7-16 * * *",  # hourly 07:30–16:30 LA (2026-09-08 request)
+        "schedule_cron": "30 7-16 * * 1-5",  # hourly 07:30–16:30 LA, weekdays only
         "connectors": ["gmail_arda", "gmail_hello", "calendar"],
     },
     {
         "key": "daily_agenda",
         "name": "Daily Agenda",
-        "schedule_cron": "0 7-17 * * *",  # hourly 07:00–17:00 LA (2026-09-08 request)
+        "schedule_cron": "0 7-17 * * 1-5",  # hourly 07:00–17:00 LA, weekdays only
         "connectors": ["gmail_arda", "calendar", "quickbooks"],
     },
 ]
