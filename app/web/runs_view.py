@@ -92,6 +92,69 @@ def build_transcript(messages) -> list[dict]:
     return out
 
 
+def final_report(messages) -> str:
+    """The run's written report: text blocks of its last assistant message."""
+    for message in reversed(list(messages)):
+        role = message.role.value if isinstance(message.role, MessageRole) else str(message.role)
+        if role != "assistant":
+            continue
+        content = message.content if isinstance(message.content, list) else []
+        texts = [b.get("text", "") for b in content if b.get("type") == "text" and b.get("text", "").strip()]
+        if texts:
+            return "\n\n".join(texts)
+    return ""
+
+
+def load_todays_briefing(routine_key: str = "daily_agenda") -> dict | None:
+    """Today's written agenda for the dashboard: the day's first completed
+    agenda run (the morning briefing), plus the newest later run's report as
+    a 'since then' update when there is one."""
+    from datetime import time as dt_time, timezone as dt_timezone
+
+    from app.models import Routine, RunStatus
+
+    tz = ZoneInfo(get_settings().default_tz)
+    day_start = datetime.combine(datetime.now(tz).date(), dt_time.min, tzinfo=tz)
+
+    def _aware(dt):
+        return dt.replace(tzinfo=dt_timezone.utc) if dt is not None and dt.tzinfo is None else dt
+
+    try:
+        with db_session() as s:
+            runs = s.scalars(
+                select(Run)
+                .join(Routine, Run.routine_id == Routine.id)
+                .where(Routine.key == routine_key, Run.status == RunStatus.COMPLETED)
+                .order_by(Run.started_at, Run.id)
+            ).all()
+            todays = [r for r in runs if _aware(r.started_at) and _aware(r.started_at) >= day_start]
+            if not todays:
+                return None
+
+            def shape(run):
+                messages = s.scalars(
+                    select(RunMessage).where(RunMessage.run_id == run.id).order_by(RunMessage.id)
+                ).all()
+                report = final_report(messages)
+                if not report:
+                    return None
+                return {
+                    "run_id": run.id,
+                    "code": run_code(routine_key, run.id),
+                    "time": _fmt_time(run.started_at),
+                    "html": render_markdown(report),
+                }
+
+            briefing = shape(todays[0])
+            if briefing is None:
+                return None
+            latest = shape(todays[-1]) if todays[-1].id != todays[0].id else None
+            briefing["latest"] = latest
+            return briefing
+    except Exception:
+        return None
+
+
 def load_runs_index(limit: int = 40) -> list[dict]:
     try:
         with db_session() as s:

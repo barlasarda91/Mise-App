@@ -61,3 +61,73 @@ def test_times_rendered_in_la(monkeypatch):
     messages = [_msg(MessageRole.USER, {"text": "hi"}, "2026-09-03T15:30:00+00:00")]
     entry = build_transcript(messages)[0]
     assert entry["time"] == "03 SEP 08:30"  # UTC 15:30 -> LA 08:30 (PDT)
+
+
+def test_final_report_takes_last_assistant_text():
+    from app.web.runs_view import final_report
+
+    messages = [
+        _msg(MessageRole.ASSISTANT, [{"type": "text", "text": "Checking mail."}]),
+        _msg(MessageRole.TOOL, [{"type": "tool_result", "content": "[]"}]),
+        _msg(MessageRole.ASSISTANT, [
+            {"type": "tool_use", "id": "t", "name": "list_tasks", "input": {}},
+        ]),
+        _msg(MessageRole.ASSISTANT, [{"type": "text", "text": "## Briefing\n- All clear."}]),
+    ]
+    assert final_report(messages) == "## Briefing\n- All clear."
+    assert final_report([]) == ""
+
+
+def test_load_todays_briefing_picks_first_run_plus_latest(monkeypatch):
+    from contextlib import contextmanager
+    from datetime import timedelta
+    from zoneinfo import ZoneInfo
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    import app.web.runs_view as rv
+    from app.models import Base, Routine, Run, RunMessage
+    from app.models.enums import RunStatus, RunTrigger
+    from app.settings import get_settings
+
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(engine)
+    maker = sessionmaker(bind=engine, expire_on_commit=False)
+
+    @contextmanager
+    def factory():
+        s = maker()
+        try:
+            yield s
+            s.commit()
+        finally:
+            s.close()
+
+    monkeypatch.setattr(rv, "db_session", factory)
+    tz = ZoneInfo(get_settings().default_tz)
+    now = datetime.now(tz)
+
+    with factory() as s:
+        routine = Routine(key="daily_agenda", name="Daily Agenda", system_prompt="p")
+        s.add(routine)
+        s.flush()
+
+        def add_run(started, report):
+            run = Run(routine_id=routine.id, status=RunStatus.COMPLETED,
+                      trigger=RunTrigger.SCHEDULED, started_at=started)
+            s.add(run)
+            s.flush()
+            s.add(RunMessage(run_id=run.id, role=MessageRole.ASSISTANT,
+                             content=[{"type": "text", "text": report}]))
+            return run.id
+
+        add_run(now - timedelta(days=1), "Yesterday's briefing")  # excluded
+        first_id = add_run(now.replace(hour=7, minute=2), "## Morning briefing\n- Vendors 10:30")
+        latest_id = add_run(now.replace(hour=11, minute=0), "No changes since 10:00.")
+
+    briefing = rv.load_todays_briefing()
+    assert briefing["run_id"] == first_id
+    assert "Morning briefing" in briefing["html"]
+    assert briefing["latest"]["run_id"] == latest_id
+    assert "No changes" in briefing["latest"]["html"]

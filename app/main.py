@@ -342,8 +342,11 @@ def home(request: Request):
             ][:8]
     except Exception:
         pass
+    from app.web.runs_view import load_todays_briefing
+
     return render_page(
-        request, "home.html", "home", db_status=check_db(), stats=stats, priority=priority, waiting=waiting
+        request, "home.html", "home", db_status=check_db(), stats=stats,
+        priority=priority, waiting=waiting, briefing=load_todays_briefing(),
     )
 
 
