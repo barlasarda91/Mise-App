@@ -722,11 +722,30 @@ def drafts_update(
     return RedirectResponse(f"/drafts?draft={draft_id}&msg={msg}", status_code=303)
 
 
+def _save_carried_edits(draft_id: int, form: dict) -> None:
+    """Draft action forms (attach/send/save) carry the editor's current fields
+    so unsaved edits survive the action instead of reverting on reload. Absent
+    fields (no-JS fallback) mean nothing to save."""
+    if form.get("body") is None and form.get("subject") is None and form.get("to") is None:
+        return
+    from app.web.drafts_view import update_fields
+
+    update_fields(
+        draft_id,
+        str(form.get("from_mailbox") or "arda"),
+        str(form.get("to") or ""),
+        str(form.get("cc") or ""),
+        str(form.get("subject") or ""),
+        str(form.get("body") or ""),
+    )
+
+
 @app.post("/drafts/{draft_id}/save-to-gmail")
-def drafts_save_to_gmail(draft_id: int):
+async def drafts_save_to_gmail(draft_id: int, request: Request):
     from app.web.drafts_view import save_to_gmail
 
     try:
+        _save_carried_edits(draft_id, dict(await request.form()))
         msg = save_to_gmail(draft_id)
     except Exception as exc:
         msg = f"Error: {exc}"
@@ -739,6 +758,7 @@ async def drafts_attach(draft_id: int, request: Request):
 
     try:
         form = await request.form()
+        _save_carried_edits(draft_id, form)
         upload = form.get("file")
         content = await upload.read() if upload is not None and upload.filename else b""
         msg = attach_upload(
@@ -755,10 +775,11 @@ async def drafts_attach(draft_id: int, request: Request):
 
 
 @app.post("/drafts/{draft_id}/attach-library")
-def drafts_attach_library(draft_id: int, file_id: int = Form(...)):
+async def drafts_attach_library(draft_id: int, request: Request, file_id: int = Form(...)):
     from app.web.drafts_view import attach_from_library
 
     try:
+        _save_carried_edits(draft_id, dict(await request.form()))
         msg = attach_from_library(draft_id, file_id)
     except Exception as exc:
         msg = f"Error: {exc}"
@@ -766,10 +787,11 @@ def drafts_attach_library(draft_id: int, file_id: int = Form(...)):
 
 
 @app.post("/drafts/{draft_id}/attachments/{attachment_id}/remove")
-def drafts_remove_attachment(draft_id: int, attachment_id: int):
+async def drafts_remove_attachment(draft_id: int, attachment_id: int, request: Request):
     from app.web.drafts_view import remove_attachment
 
     try:
+        _save_carried_edits(draft_id, dict(await request.form()))
         msg = remove_attachment(draft_id, attachment_id)
     except Exception as exc:
         msg = f"Error: {exc}"
@@ -777,10 +799,11 @@ def drafts_remove_attachment(draft_id: int, attachment_id: int):
 
 
 @app.post("/drafts/{draft_id}/send")
-def drafts_send(draft_id: int):
+async def drafts_send(draft_id: int, request: Request):
     from app.web.drafts_view import send_now
 
     try:
+        _save_carried_edits(draft_id, dict(await request.form()))
         msg = send_now(draft_id)
     except Exception as exc:
         msg = f"Error: {exc}"
