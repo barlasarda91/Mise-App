@@ -104,6 +104,47 @@ def todo_count() -> int:
         return 0
 
 
+STALE_AFTER_DAYS = 30
+
+
+def stale_tasks(min_age_days: int = STALE_AFTER_DAYS, limit: int = 8) -> list[dict]:
+    """Open tasks that have been sitting for a month or more, oldest first —
+    the Today page's 'long unresolved' list."""
+    now = datetime.now(ZoneInfo(get_settings().default_tz))
+    labels = {c.value: label for c, label in CATEGORIES}
+    try:
+        with db_session() as s:
+            tasks = s.scalars(
+                select(Task).where(Task.status != TaskStatus.DONE).order_by(Task.created_at, Task.id)
+            ).all()
+    except Exception:
+        return []
+    out = []
+    for task in tasks:
+        created = task.created_at
+        if created is None:
+            continue
+        if created.tzinfo is None:
+            from datetime import timezone
+
+            created = created.replace(tzinfo=timezone.utc)
+        age = (now - created).days
+        if age < min_age_days:
+            continue
+        out.append(
+            {
+                "id": task.id,
+                "title": task.title,
+                "age": age,
+                "category": labels.get(task.category.value, task.category.value),
+                "status": task.status.value,
+            }
+        )
+        if len(out) >= limit:
+            break
+    return out
+
+
 def load_task(task_id: int) -> dict | None:
     today = _today()
     try:

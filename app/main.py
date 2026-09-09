@@ -342,11 +342,13 @@ def home(request: Request, msg: str | None = None):
             ][:8]
     except Exception:
         pass
+    from app.web.board_view import stale_tasks
     from app.web.runs_view import load_todays_briefing
 
     return render_page(
         request, "home.html", "home", db_status=check_db(), stats=stats,
-        priority=priority, waiting=waiting, briefing=load_todays_briefing(), msg=msg,
+        priority=priority, waiting=waiting, briefing=load_todays_briefing(),
+        stale=stale_tasks(), msg=msg,
     )
 
 

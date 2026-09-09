@@ -184,3 +184,44 @@ def test_checklist_state_reflects_board(monkeypatch):
     assert shaped[1]["done"] is True
     assert shaped[2]["task_ids"] == [] and shaped[2]["done"] is False  # unknown id -> inert
     s.close()
+
+
+def test_stale_tasks_lists_month_old_open_items(monkeypatch):
+    from contextlib import contextmanager
+    from datetime import timedelta, timezone as dt_tz
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    import app.web.board_view as bv
+    from app.models import Base, Task, TaskCategory, TaskStatus
+
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(engine)
+    maker = sessionmaker(bind=engine, expire_on_commit=False)
+
+    @contextmanager
+    def factory():
+        s = maker()
+        try:
+            yield s
+            s.commit()
+        finally:
+            s.close()
+
+    monkeypatch.setattr(bv, "db_session", factory)
+    now = datetime.now(dt_tz.utc)
+    with factory() as s:
+        s.add(Task(category=TaskCategory.GOVERNANCE, title="ancient", status=TaskStatus.TODO,
+                   created_at=now - timedelta(days=62)))
+        s.add(Task(category=TaskCategory.PAYMENTS, title="old waiting", status=TaskStatus.WAITING,
+                   created_at=now - timedelta(days=35)))
+        s.add(Task(category=TaskCategory.POP_UPS, title="fresh", status=TaskStatus.TODO,
+                   created_at=now - timedelta(days=3)))
+        s.add(Task(category=TaskCategory.GOVERNANCE, title="old but done", status=TaskStatus.DONE,
+                   created_at=now - timedelta(days=90)))
+
+    stale = bv.stale_tasks()
+    assert [t["title"] for t in stale] == ["ancient", "old waiting"]  # oldest first
+    assert stale[0]["age"] >= 61
+    assert stale[0]["category"] == "Governance"

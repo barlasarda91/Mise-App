@@ -155,23 +155,30 @@ def extract_checklist(report: str) -> tuple[list[dict], str]:
 
 def _with_task_state(session, items: list[dict]) -> list[dict]:
     """Attach live board state to checklist items: done when every referenced
-    task is done. Items referencing no known task render non-interactive."""
+    task is done; multi-task items carry per-task rows so they can expand and
+    be cleared one by one. Items referencing no known task render inert."""
     from app.models import Task, TaskStatus
 
     all_ids = {tid for item in items for tid in item["task_ids"]}
-    known: dict[int, bool] = {}
+    known: dict[int, tuple[str, bool]] = {}
     if all_ids:
         for task in session.scalars(select(Task).where(Task.id.in_(all_ids))):
-            known[task.id] = task.status == TaskStatus.DONE
+            known[task.id] = (task.title, task.status == TaskStatus.DONE)
     out = []
     for item in items:
-        ids = [tid for tid in item["task_ids"] if tid in known]
+        tasks = [
+            {"id": tid, "title": known[tid][0], "done": known[tid][1]}
+            for tid in item["task_ids"]
+            if tid in known
+        ]
         out.append(
             {
                 "text": item["text"],
                 "html": render_markdown(item["text"]),
-                "task_ids": ids,
-                "done": bool(ids) and all(known[tid] for tid in ids),
+                "task_ids": [t["id"] for t in tasks],
+                "tasks": tasks,
+                "done_count": sum(1 for t in tasks if t["done"]),
+                "done": bool(tasks) and all(t["done"] for t in tasks),
             }
         )
     return out
@@ -227,7 +234,21 @@ def load_todays_briefing(routine_key: str = "daily_agenda") -> dict | None:
             briefing = shape(todays[0], with_checklist=True)
             if briefing is None:
                 return None
-            latest = shape(todays[-1]) if todays[-1].id != todays[0].id else None
+            latest = (
+                shape(todays[-1], with_checklist=True)
+                if todays[-1].id != todays[0].id
+                else None
+            )
+            if latest:
+                # Items a later run surfaced join the live checklist (deduped
+                # by task id) instead of sitting as dead text in "since then".
+                seen = {tid for item in briefing["checklist"] for tid in item["task_ids"]}
+                for item in latest.pop("checklist", []):
+                    ids = set(item["task_ids"])
+                    if ids and ids <= seen:
+                        continue
+                    briefing["checklist"].append(item)
+                    seen |= ids
             briefing["latest"] = latest
             return briefing
     except Exception:

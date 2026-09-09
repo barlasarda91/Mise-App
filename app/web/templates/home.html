@@ -20,6 +20,30 @@
     <div style="margin-bottom:14px;border-bottom:1px solid var(--line);padding-bottom:10px">
       <div class="note" style="margin:0 0 8px">✓ ACT TODAY — checking an item completes its board task</div>
       {% for item in briefing.checklist %}
+      {% if item.tasks | length > 1 %}
+      <details class="check-item" style="padding:4px 0">
+        <summary style="display:flex;gap:9px;align-items:baseline;cursor:pointer">
+          <form method="post" action="/briefing/check" style="display:contents">
+            <input type="hidden" name="task_ids" value="{{ item.task_ids | join(',') }}">
+            <input type="hidden" name="done" value="{{ '0' if item.done else '1' }}">
+            <input type="checkbox" onclick="event.stopPropagation()" onchange="this.form.submit()" {% if item.done %}checked{% endif %} style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer" title="Check all {{ item.tasks | length }}">
+          </form>
+          <span class="md" style="font-size:14px;{% if item.done %}text-decoration:line-through;color:var(--ink-soft){% endif %}">{{ item.html | safe }}</span>
+          <span class="spacer"></span>
+          <span class="pill ghost" style="white-space:nowrap">{{ item.done_count }}/{{ item.tasks | length }} ▾</span>
+        </summary>
+        <div style="margin:6px 0 8px 24px;border-left:1px solid var(--line);padding-left:12px">
+          {% for t in item.tasks %}
+          <form method="post" action="/briefing/check" class="check-item" style="display:flex;gap:9px;align-items:baseline;padding:3px 0">
+            <input type="hidden" name="task_ids" value="{{ t.id }}">
+            <input type="hidden" name="done" value="{{ '0' if t.done else '1' }}">
+            <input type="checkbox" onchange="this.form.submit()" {% if t.done %}checked{% endif %} style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer">
+            <a href="/board/task/{{ t.id }}" style="font-size:13.5px;text-decoration:none;{% if t.done %}text-decoration:line-through;color:var(--ink-soft){% endif %}">{{ t.title }}</a>
+          </form>
+          {% endfor %}
+        </div>
+      </details>
+      {% else %}
       <form method="post" action="/briefing/check" class="check-item" style="display:flex;gap:9px;align-items:baseline;padding:4px 0">
         <input type="hidden" name="task_ids" value="{{ item.task_ids | join(',') }}">
         <input type="hidden" name="done" value="{{ '0' if item.done else '1' }}">
@@ -30,6 +54,7 @@
         {% endif %}
         <span class="md" style="font-size:14px;{% if item.done %}text-decoration:line-through;color:var(--ink-soft){% endif %}">{{ item.html | safe }}</span>
       </form>
+      {% endif %}
       {% endfor %}
     </div>
     {% endif %}
@@ -61,7 +86,8 @@
     </div>
   </div>
 
-  <div class="box" style="align-self:start">
+  <div style="align-self:start">
+  <div class="box">
     <div class="box-hd"><span class="lbl">Waiting On</span><span class="ix">{{ waiting | length }} BLOCKED</span></div>
     <div>
       {% for w in waiting %}
@@ -75,6 +101,29 @@
       <div class="box-bd"><span class="note">Nothing blocked. Tasks in "waiting" land here with who they wait on.</span></div>
       {% endfor %}
     </div>
+  </div>
+
+    {% if stale %}
+    <div class="box">
+      <div class="box-hd"><span class="lbl">Long unresolved</span><span class="ix" style="color:var(--ember)">OPEN 30D+</span></div>
+      <div>
+        {% for t in stale %}
+        <div class="row">
+          <span class="pill ember" style="white-space:nowrap">{{ t.age }}d</span>
+          <a class="name" href="/board/task/{{ t.id }}" style="font-size:13.5px">{{ t.title }}</a>
+          <span class="meta">{{ t.category }} · {{ t.status }}</span>
+          <span class="spacer"></span>
+          <form method="post" action="/tasks/{{ t.id }}/status">
+            <input type="hidden" name="status" value="done">
+            <input type="hidden" name="next" value="/">
+            <button class="linkish" type="submit" title="Mark done">✓</button>
+          </form>
+        </div>
+        {% endfor %}
+        <div class="box-bd"><span class="note">Oldest open tasks, any lane — resolve, or open one to re-scope or park it.</span></div>
+      </div>
+    </div>
+    {% endif %}
   </div>
 </div>
 
