@@ -2,6 +2,7 @@
 {% block title %}Today{% endblock %}
 {% block heading %}Good morning, Arda.{% endblock %}
 {% block content %}
+{% if msg %}<div class="note" style="margin:0 0 14px">▸ {{ msg }}</div>{% endif %}
 <div class="grid4" style="margin-bottom:18px">
   <a class="stat" href="/pipeline"><div class="k">Open leads</div><div class="v">{{ stats.open }}</div></a>
   <a class="stat{% if stats.overdue and stats.overdue != "—" %} alert{% endif %}" href="/pipeline"><div class="k">Overdue</div><div class="v">{{ stats.overdue }}</div></a>
@@ -15,7 +16,24 @@
   </div>
   <div class="box-bd">
     {% if briefing %}
-    <div class="md" style="font-size:14px">{{ briefing.html | safe }}</div>
+    {% if briefing.checklist %}
+    <div style="margin-bottom:14px;border-bottom:1px solid var(--line);padding-bottom:10px">
+      <div class="note" style="margin:0 0 8px">✓ ACT TODAY — checking an item completes its board task</div>
+      {% for item in briefing.checklist %}
+      <form method="post" action="/briefing/check" class="check-item" style="display:flex;gap:9px;align-items:baseline;padding:4px 0">
+        <input type="hidden" name="task_ids" value="{{ item.task_ids | join(',') }}">
+        <input type="hidden" name="done" value="{{ '0' if item.done else '1' }}">
+        {% if item.task_ids %}
+        <input type="checkbox" onchange="this.form.submit()" {% if item.done %}checked{% endif %} style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer">
+        {% else %}
+        <span class="code" title="No linked board task — checkbox unavailable" style="min-width:13px;text-align:center">·</span>
+        {% endif %}
+        <span class="md" style="font-size:14px;{% if item.done %}text-decoration:line-through;color:var(--ink-soft){% endif %}">{{ item.html | safe }}</span>
+      </form>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if briefing.html %}<div class="md" style="font-size:14px">{{ briefing.html | safe }}</div>{% endif %}
     {% if briefing.latest %}
     <div class="note" style="margin:14px 0 8px;border-top:1px solid var(--line);padding-top:12px">Since then · <a href="/runs?run={{ briefing.latest.run_id }}">{{ briefing.latest.code }} · {{ briefing.latest.time }}</a></div>
     <div class="md" style="font-size:13.5px">{{ briefing.latest.html | safe }}</div>

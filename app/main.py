@@ -277,7 +277,7 @@ def health():
 
 
 @app.get("/", response_class=HTMLResponse)
-def home(request: Request):
+def home(request: Request, msg: str | None = None):
     stats = {"open": "—", "overdue": "—", "due_today": "—", "drafts": "—"}
     priority: list[dict] = []
     waiting: list[dict] = []
@@ -346,8 +346,34 @@ def home(request: Request):
 
     return render_page(
         request, "home.html", "home", db_status=check_db(), stats=stats,
-        priority=priority, waiting=waiting, briefing=load_todays_briefing(),
+        priority=priority, waiting=waiting, briefing=load_todays_briefing(), msg=msg,
     )
+
+
+@app.post("/briefing/check")
+def briefing_check(task_ids: str = Form(""), done: str = Form("1")):
+    """Tick/untick an act-today checklist item: completes (or reopens) the
+    board tasks it references — the board is the checklist's memory."""
+    from app.web.board_view import set_task_status
+
+    ids = [int(t) for t in task_ids.split(",") if t.strip().isdigit()]
+    status = "done" if done == "1" else "todo"
+    changed = 0
+    last_msg = ""
+    for task_id in ids[:50]:
+        try:
+            last_msg = set_task_status(task_id, status)
+            if "→" in last_msg:
+                changed += 1
+        except Exception as exc:
+            last_msg = f"Error: {exc}"
+    if not ids:
+        msg = "No linked task on that item."
+    elif len(ids) == 1:
+        msg = last_msg
+    else:
+        msg = f"{changed} tasks → {status}."
+    return RedirectResponse(f"/?msg={msg}", status_code=303)
 
 
 @app.get("/inbox", response_class=HTMLResponse)

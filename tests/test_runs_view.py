@@ -131,3 +131,56 @@ def test_load_todays_briefing_picks_first_run_plus_latest(monkeypatch):
     assert "Morning briefing" in briefing["html"]
     assert briefing["latest"]["run_id"] == latest_id
     assert "No changes" in briefing["latest"]["html"]
+
+
+def test_extract_checklist_lifts_items_and_heading():
+    from app.web.runs_view import extract_checklist
+
+    report = (
+        "## Act today\n"
+        "- [ ] Confirm Falcon start time before 10:00 (#103)\n"
+        "- [x] Clear the Royal Coffee card (#73)\n"
+        "- [ ] 8 lead follow-ups at 3+ days idle (#91–#98)\n"
+        "- [ ] No linked task on this one\n"
+        "\n"
+        "## Waiting on\n"
+        "- Mariceil Safir — new card requested 9/3\n"
+    )
+    items, remaining = extract_checklist(report)
+    assert [i["task_ids"] for i in items] == [
+        [103], [73], [91, 92, 93, 94, 95, 96, 97, 98], [],
+    ]
+    assert "Act today" not in remaining
+    assert "- [ ]" not in remaining
+    assert remaining.startswith("## Waiting on")
+    assert "Mariceil Safir" in remaining
+
+
+def test_checklist_state_reflects_board(monkeypatch):
+    from contextlib import contextmanager
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from app.models import Base, Task, TaskCategory, TaskStatus
+    from app.web.runs_view import _with_task_state
+
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(engine)
+    maker = sessionmaker(bind=engine, expire_on_commit=False)
+    s = maker()
+    done = Task(category=TaskCategory.PAYMENTS, title="paid", status=TaskStatus.DONE)
+    open_ = Task(category=TaskCategory.GOVERNANCE, title="open", status=TaskStatus.TODO)
+    s.add_all([done, open_])
+    s.commit()
+
+    items = [
+        {"text": f"both (#{done.id}–#{open_.id})", "task_ids": [done.id, open_.id]},
+        {"text": f"just done (#{done.id})", "task_ids": [done.id]},
+        {"text": "ghost (#999)", "task_ids": [999]},
+    ]
+    shaped = _with_task_state(s, items)
+    assert shaped[0]["done"] is False  # one of two still open
+    assert shaped[1]["done"] is True
+    assert shaped[2]["task_ids"] == [] and shaped[2]["done"] is False  # unknown id -> inert
+    s.close()

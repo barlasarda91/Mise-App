@@ -146,6 +146,7 @@ a.cn:hover{color:var(--ember)}
 .md th{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);text-align:left;padding:6px 10px;border-bottom:1px solid var(--ink)}
 .md td{padding:8px 10px;border-bottom:1px solid var(--line)}
 .md code{font-family:var(--font-mono);font-size:12px;background:var(--panel-2);padding:1px 4px}
+.check-item .md p{margin:0}
 
 /* runs: history list + transcript */
 .runwrap{display:grid;grid-template-columns:250px 1fr;gap:18px}

@@ -105,10 +105,83 @@ def final_report(messages) -> str:
     return ""
 
 
+_CHECKLIST_LINE = re.compile(r"^\s*[-*]\s*\[( |x|X)\]\s*(.+)$")
+_TASK_REF = re.compile(r"#(\d+)(?:\s*[–—-]\s*#?(\d+))?")
+_MAX_RANGE = 30
+
+
+def _ref_ids(text: str) -> list[int]:
+    ids: list[int] = []
+    for m in _TASK_REF.finditer(text):
+        start = int(m.group(1))
+        end = int(m.group(2)) if m.group(2) else start
+        if start <= end and end - start < _MAX_RANGE:
+            ids.extend(range(start, end + 1))
+        else:
+            ids.append(start)
+    return list(dict.fromkeys(ids))
+
+
+def extract_checklist(report: str) -> tuple[list[dict], str]:
+    """Lift `- [ ] …` lines out of a briefing so they render as a live
+    checklist backed by the board tasks they reference (#id / #a–#b ranges).
+    Returns (items, report_without_those_lines). A header line directly above
+    a run of checklist lines (e.g. "Act today") is lifted with them."""
+    items: list[dict] = []
+    kept: list[str] = []
+    lines = report.splitlines()
+    checklist_ix = {i for i, line in enumerate(lines) if _CHECKLIST_LINE.match(line)}
+
+    def _next_nonblank(i: int) -> int:
+        j = i + 1
+        while j < len(lines) and not lines[j].strip():
+            j += 1
+        return j
+
+    for i, line in enumerate(lines):
+        if i in checklist_ix:
+            text = _CHECKLIST_LINE.match(line).group(2).strip()
+            items.append({"text": text, "task_ids": _ref_ids(text)})
+            continue
+        stripped = line.strip()
+        looks_like_header = stripped.startswith("#") or (
+            stripped.startswith("**") and stripped.rstrip(":").endswith("**")
+        ) or "act today" in stripped.lower()
+        if _next_nonblank(i) in checklist_ix and (not stripped or looks_like_header):
+            continue  # blank spacing or the checklist's own heading — lifted with it
+        kept.append(line)
+    return items, "\n".join(kept).strip()
+
+
+def _with_task_state(session, items: list[dict]) -> list[dict]:
+    """Attach live board state to checklist items: done when every referenced
+    task is done. Items referencing no known task render non-interactive."""
+    from app.models import Task, TaskStatus
+
+    all_ids = {tid for item in items for tid in item["task_ids"]}
+    known: dict[int, bool] = {}
+    if all_ids:
+        for task in session.scalars(select(Task).where(Task.id.in_(all_ids))):
+            known[task.id] = task.status == TaskStatus.DONE
+    out = []
+    for item in items:
+        ids = [tid for tid in item["task_ids"] if tid in known]
+        out.append(
+            {
+                "text": item["text"],
+                "html": render_markdown(item["text"]),
+                "task_ids": ids,
+                "done": bool(ids) and all(known[tid] for tid in ids),
+            }
+        )
+    return out
+
+
 def load_todays_briefing(routine_key: str = "daily_agenda") -> dict | None:
     """Today's written agenda for the dashboard: the day's first completed
-    agenda run (the morning briefing), plus the newest later run's report as
-    a 'since then' update when there is one."""
+    agenda run (the morning briefing) with its "act today" checklist lifted
+    out as live checkboxes backed by board tasks, plus the newest later run's
+    report as a 'since then' update when there is one."""
     from datetime import time as dt_time, timezone as dt_timezone
 
     from app.models import Routine, RunStatus
@@ -131,21 +204,27 @@ def load_todays_briefing(routine_key: str = "daily_agenda") -> dict | None:
             if not todays:
                 return None
 
-            def shape(run):
+            def shape(run, with_checklist=False):
                 messages = s.scalars(
                     select(RunMessage).where(RunMessage.run_id == run.id).order_by(RunMessage.id)
                 ).all()
                 report = final_report(messages)
                 if not report:
                     return None
-                return {
+                shaped = {
                     "run_id": run.id,
                     "code": run_code(routine_key, run.id),
                     "time": _fmt_time(run.started_at),
-                    "html": render_markdown(report),
                 }
+                if with_checklist:
+                    items, remaining = extract_checklist(report)
+                    shaped["checklist"] = _with_task_state(s, items)
+                    shaped["html"] = render_markdown(remaining) if remaining else ""
+                else:
+                    shaped["html"] = render_markdown(report)
+                return shaped
 
-            briefing = shape(todays[0])
+            briefing = shape(todays[0], with_checklist=True)
             if briefing is None:
                 return None
             latest = shape(todays[-1]) if todays[-1].id != todays[0].id else None

@@ -38,6 +38,16 @@ Consolidate from three sources: open board tasks (in your context; `list_tasks` 
 ### 4 · Waiting on
 Everything blocked pending a third party — payment links, confirmations, callbacks, board tasks in `waiting` — clearly separated from act-now items, with who/what and how long it's been.
 
+## Report format — the checklist contract
+
+**Start the report with an "Act today" checklist.** The dashboard lifts it out and renders each line as a live checkbox wired to its board task — checking it off completes the task. That only works if the format is exact:
+
+- Section heading `## Act today`, then one line per item: `- [ ] <short action> (#<task_id>)`.
+- **Every item MUST end with its board task reference** `(#id)` — you create or update these tasks anyway, so use the id the tool returned (or the id from your runtime context for carry-over items). An item without an id renders as dead text.
+- Grouped items may reference a range: `8 lead follow-ups at 3+ days idle (#91–#98)`.
+- Include overdue carry-over from previous days — an unchecked item stays on the list until done.
+- Keep it to what genuinely needs Arda **today**; everything else lives in the body sections below.
+
 ## Closing out
 - After the email scan completes successfully, `mark_gather_complete` for `gmail_arda`. Never mark a source whose scan failed.
 - Skip empty sections entirely rather than writing "nothing to report". If there are no high-priority items, surface secondary ones instead.
