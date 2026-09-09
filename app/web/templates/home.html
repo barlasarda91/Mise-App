@@ -132,22 +132,5 @@
   &nbsp;·&nbsp; TZ: AMERICA/LOS_ANGELES &nbsp;·&nbsp; <a href="/pipeline">Pipeline</a> · <a href="/board">Board</a> · <a href="/runs">Runs</a>
 </div>
 
-<script>
-  // Ticking a sub-item reloads the page; remember which checklist groups
-  // were expanded so they come back open.
-  (function () {
-    const KEY = 'briefing-open-groups';
-    let open = [];
-    try { open = JSON.parse(sessionStorage.getItem(KEY)) || []; } catch (e) {}
-    document.querySelectorAll('details.check-item[data-key]').forEach(function (d) {
-      if (open.indexOf(d.dataset.key) !== -1) d.open = true;
-      d.addEventListener('toggle', function () {
-        const ix = open.indexOf(d.dataset.key);
-        if (d.open && ix === -1) open.push(d.dataset.key);
-        if (!d.open && ix !== -1) open.splice(ix, 1);
-        try { sessionStorage.setItem(KEY, JSON.stringify(open)); } catch (e) {}
-      });
-    });
-  })();
-</script>
+{# open-group and typed-field persistence handled globally by /static/app.js #}
 {% endblock %}

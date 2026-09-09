@@ -402,7 +402,8 @@ def inbox_mute(email: str = Form(...), back: str = Form("/inbox")):
     except Exception as exc:
         message = f"Error: {exc}"
     target = back if back.startswith("/") and not back.startswith("//") else "/inbox"
-    return RedirectResponse(f"{target}?msg={message}", status_code=303)
+    sep = "&" if "?" in target else "?"
+    return RedirectResponse(f"{target}{sep}msg={message}", status_code=303)
 
 
 @app.post("/inbox/unmute")
@@ -414,7 +415,8 @@ def inbox_unmute(email: str = Form(...), back: str = Form("/settings")):
     except Exception as exc:
         message = f"Error: {exc}"
     target = back if back.startswith("/") and not back.startswith("//") else "/settings"
-    return RedirectResponse(f"{target}?msg={message}", status_code=303)
+    sep = "&" if "?" in target else "?"
+    return RedirectResponse(f"{target}{sep}msg={message}", status_code=303)
 
 
 @app.post("/inbox/draft")

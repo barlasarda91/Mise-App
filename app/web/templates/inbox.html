@@ -24,6 +24,7 @@
           <span class="pill ghost">{{ m.mailbox }}@</span>
           <form method="post" action="/inbox/mute">
             <input type="hidden" name="email" value="{{ m.from_addr }}">
+            {% if opened %}<input type="hidden" name="back" value="/inbox?open={{ opened.mailbox }}:{{ opened.id }}">{% endif %}
             <button class="linkish" type="submit" title="Hide this sender from Mise">Mute</button>
           </form>
         </div>
@@ -69,6 +70,7 @@
       <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
         <form method="post" action="/inbox/mute">
           <input type="hidden" name="email" value="{{ opened.from_addr }}">
+          <input type="hidden" name="back" value="/inbox?open={{ opened.mailbox }}:{{ opened.id }}">
           <button class="linkish" type="submit">Mark sender unimportant</button>
         </form>
         <a class="linkish" href="https://mail.google.com/mail/u/0/#all/{{ opened.id }}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center">Open in Gmail ↗</a>
