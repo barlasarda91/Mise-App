@@ -181,10 +181,13 @@ def load_lead(lead_id: int) -> dict | None:
                 ],
                 "activities": [
                     {
+                        "id": a.id,
                         "type": a.type.value,
                         "occurred_on": a.occurred_on,
                         "detail": a.detail,
                         "source": a.source.value,
+                        "editable": a.source == ActivitySource.MANUAL,
+                        "is_stage_change": a.type == LeadActivityType.STAGE_CHANGE,
                     }
                     for a in activities
                 ],
@@ -334,6 +337,62 @@ def log_activity_manual(lead_id: int, type_: str, occurred_on: str, detail: str)
         name = lead.business_name
     suffix = f" Auto-completed: {', '.join(done)}." if done else ""
     return f"Logged {type_} on {when} for {name}.{suffix}"
+
+
+def _recompute_timer(session, lead: Lead) -> None:
+    """Re-derive last_confirmed_action from the activity log — needed after an
+    entry is edited or deleted, since the stored timer was advanced on entry."""
+    latest = None
+    for activity in session.scalars(
+        select(LeadActivity).where(LeadActivity.lead_id == lead.id)
+    ):
+        if activity.type in OUTBOUND_TYPES and (latest is None or activity.occurred_on > latest):
+            latest = activity.occurred_on
+    lead.last_confirmed_action = latest
+
+
+def update_activity_manual(activity_id: int, occurred_on: str, type_: str, detail: str) -> tuple[int | None, str]:
+    """Edit a manually logged activity. Returns (lead_id, message)."""
+    with db_session() as s:
+        activity = s.get(LeadActivity, activity_id)
+        if activity is None:
+            return None, "Entry not found."
+        if activity.source != ActivitySource.MANUAL:
+            return activity.lead_id, "Only manual entries can be edited — this one mirrors Gmail."
+        if occurred_on:
+            activity.occurred_on = date.fromisoformat(occurred_on)
+        # stage-change rows keep their type; others may switch within the log types
+        if type_ and activity.type != LeadActivityType.STAGE_CHANGE and type_ != LeadActivityType.STAGE_CHANGE.value:
+            activity.type = LeadActivityType(type_)
+        activity.detail = detail.strip() or None
+        lead = s.get(Lead, activity.lead_id)
+        _recompute_timer(s, lead)
+        from app.routines.task_sync import sync_lead_tasks
+
+        done = sync_lead_tasks(s, lead, _today())
+        lead_id, last = activity.lead_id, lead.last_confirmed_action
+    suffix = f" Auto-completed: {', '.join(done)}." if done else ""
+    return lead_id, f"Entry updated — timer now reads from {last or 'no confirmed action'}.{suffix}"
+
+
+def delete_activity_manual(activity_id: int) -> tuple[int | None, str]:
+    """Delete a manually logged activity. Returns (lead_id, message)."""
+    with db_session() as s:
+        activity = s.get(LeadActivity, activity_id)
+        if activity is None:
+            return None, "Entry not found."
+        if activity.source != ActivitySource.MANUAL:
+            return activity.lead_id, "Only manual entries can be deleted — this one mirrors Gmail."
+        lead = s.get(Lead, activity.lead_id)
+        lead_id = activity.lead_id
+        s.delete(activity)
+        s.flush()
+        _recompute_timer(s, lead)
+        from app.routines.task_sync import sync_lead_tasks
+
+        sync_lead_tasks(s, lead, _today())
+        last = lead.last_confirmed_action
+    return lead_id, f"Entry deleted — timer now reads from {last or 'no confirmed action'}."
 
 
 def change_stage_manual(lead_id: int, stage: str, loss_reason: str) -> str:

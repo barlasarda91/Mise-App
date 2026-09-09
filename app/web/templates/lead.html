@@ -91,7 +91,36 @@
       <div class="box-hd"><span class="lbl">Activity</span><span class="ix">{{ lead.activities | length }}</span></div>
       <div>
         {% for a in lead.activities %}
+        {% if a.editable %}
+        <details data-key="act-{{ a.id }}">
+          <summary style="list-style:none;cursor:pointer">
+            <div class="row"><span class="code">{{ a.occurred_on }}</span><span class="name" style="font-size:13.5px">{{ a.type }}</span><span class="meta">{{ a.detail or "" }}</span><span class="spacer"></span><span class="pill ghost">edit ▾</span></div>
+          </summary>
+          <div class="box-bd" style="border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+            <form method="post" action="/activities/{{ a.id }}/edit" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+              <label style="display:flex;flex-direction:column;gap:3px;font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft)">Date<input type="date" name="occurred_on" value="{{ a.occurred_on }}"></label>
+              {% if a.is_stage_change %}
+              <input type="hidden" name="type" value="stage_change">
+              {% else %}
+              <label style="display:flex;flex-direction:column;gap:3px;font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft)">Type
+                <select name="type">
+                  {% for t in ["call","text","visit","note","email_sent"] %}
+                  <option value="{{ t }}" {% if t == a.type %}selected{% endif %}>{{ t }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              {% endif %}
+              <label style="display:flex;flex-direction:column;gap:3px;font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);flex:1;min-width:180px">Detail<input name="detail" value="{{ a.detail or '' }}"></label>
+              <button class="linkish solid" type="submit">Save</button>
+            </form>
+            <form method="post" action="/activities/{{ a.id }}/delete" onsubmit="return confirm('Delete this log entry? The idle timer recalculates from what remains.')">
+              <button class="linkish" type="submit" style="color:var(--ember)">Delete</button>
+            </form>
+          </div>
+        </details>
+        {% else %}
         <div class="row"><span class="code">{{ a.occurred_on }}</span><span class="name" style="font-size:13.5px">{{ a.type }}</span><span class="meta">{{ a.detail or "" }}</span><span class="spacer"></span><span class="pill ghost">{{ a.source }}</span></div>
+        {% endif %}
         {% else %}
         <div class="box-bd"><span class="note">No activity yet.</span></div>
         {% endfor %}

@@ -311,6 +311,60 @@ def test_routines_cannot_resurrect_discarded_lead(session_factory):
         assert s.query(Lead).count() == 1
 
 
+# ---------- activity log editing ----------
+
+
+def test_edit_and_delete_activity_recompute_timer(session_factory, monkeypatch):
+    import app.web.pipeline_view as pv
+    from app.models import ActivitySource, LeadActivity, LeadActivityType
+
+    monkeypatch.setattr(pv, "db_session", session_factory)
+    with session_factory() as s:
+        lead = Lead(business_name="Sick Cafe", stage=LeadStage.SAMPLED,
+                    last_confirmed_action=date(2026, 9, 9))
+        s.add(lead)
+        s.flush()
+        older = LeadActivity(lead_id=lead.id, type=LeadActivityType.CALL,
+                             occurred_on=date(2026, 9, 3), detail="asked about samples",
+                             source=ActivitySource.MANUAL)
+        newest = LeadActivity(lead_id=lead.id, type=LeadActivityType.CALL,
+                              occurred_on=date(2026, 9, 9), detail="called, he is sick",
+                              source=ActivitySource.MANUAL)
+        gmail = LeadActivity(lead_id=lead.id, type=LeadActivityType.EMAIL_SENT,
+                             occurred_on=date(2026, 9, 1), detail="pricelist",
+                             source=ActivitySource.GMAIL, gmail_msg_id="m-x")
+        s.add_all([older, newest, gmail])
+        s.flush()
+        lead_id, older_id, newest_id, gmail_id = lead.id, older.id, newest.id, gmail.id
+
+    # editing the newest call's date backward pulls the timer back with it
+    _, msg = pv.update_activity_manual(newest_id, "2026-09-05", "call", "called, he is sick")
+    assert "2026-09-05" in msg
+    with session_factory() as s:
+        assert s.get(Lead, lead_id).last_confirmed_action == date(2026, 9, 5)
+
+    # a note doesn't count as outbound: retyping the entry drops it from the timer
+    pv.update_activity_manual(newest_id, "2026-09-05", "note", "actually just a note")
+    with session_factory() as s:
+        assert s.get(Lead, lead_id).last_confirmed_action == date(2026, 9, 3)
+
+    # deleting the older call falls back to the confirmed Gmail send
+    _, msg = pv.delete_activity_manual(older_id)
+    assert "2026-09-01" in msg
+    with session_factory() as s:
+        assert s.get(Lead, lead_id).last_confirmed_action == date(2026, 9, 1)
+
+    # gmail-sourced entries are read-only
+    _, msg = pv.update_activity_manual(gmail_id, "2026-09-02", "call", "x")
+    assert "Only manual entries" in msg
+    _, msg = pv.delete_activity_manual(gmail_id)
+    assert "Only manual entries" in msg
+    with session_factory() as s:
+        from sqlalchemy import select as sa_select
+
+        assert s.scalar(sa_select(LeadActivity).where(LeadActivity.id == gmail_id)) is not None
+
+
 # ---------- automatic task -> lead linking ----------
 
 

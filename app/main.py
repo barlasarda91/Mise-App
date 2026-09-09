@@ -537,6 +537,30 @@ def lead_change_stage(lead_id: int, stage: str = Form(...), loss_reason: str = F
     return RedirectResponse(f"/pipeline/lead/{lead_id}?msg={msg}", status_code=303)
 
 
+@app.post("/activities/{activity_id}/edit")
+def activity_edit(activity_id: int, occurred_on: str = Form(""), type: str = Form(""), detail: str = Form("")):
+    from app.web.pipeline_view import update_activity_manual
+
+    try:
+        lead_id, msg = update_activity_manual(activity_id, occurred_on, type, detail)
+    except Exception as exc:
+        lead_id, msg = None, f"Error: {exc}"
+    target = f"/pipeline/lead/{lead_id}" if lead_id else "/pipeline"
+    return RedirectResponse(f"{target}?msg={msg}", status_code=303)
+
+
+@app.post("/activities/{activity_id}/delete")
+def activity_delete(activity_id: int):
+    from app.web.pipeline_view import delete_activity_manual
+
+    try:
+        lead_id, msg = delete_activity_manual(activity_id)
+    except Exception as exc:
+        lead_id, msg = None, f"Error: {exc}"
+    target = f"/pipeline/lead/{lead_id}" if lead_id else "/pipeline"
+    return RedirectResponse(f"{target}?msg={msg}", status_code=303)
+
+
 @app.post("/leads/{lead_id}/discard")
 def lead_discard(lead_id: int):
     from app.web.pipeline_view import discard_lead
