@@ -21,7 +21,7 @@
       <div class="note" style="margin:0 0 8px">✓ ACT TODAY — checking an item completes its board task</div>
       {% for item in briefing.checklist %}
       {% if item.tasks | length > 1 %}
-      <details class="check-item" style="padding:4px 0">
+      <details class="check-item" data-key="{{ item.task_ids | join('-') }}" style="padding:4px 0">
         <summary style="display:flex;gap:9px;align-items:baseline;cursor:pointer">
           <form method="post" action="/briefing/check" style="display:contents">
             <input type="hidden" name="task_ids" value="{{ item.task_ids | join(',') }}">
@@ -131,4 +131,23 @@
   DB: {% if db_status == "ok" %}<span class="pill green">connected</span>{% elif db_status == "absent" %}<span class="pill ghost">not configured</span>{% else %}<span class="pill ember">{{ db_status }}</span>{% endif %}
   &nbsp;·&nbsp; TZ: AMERICA/LOS_ANGELES &nbsp;·&nbsp; <a href="/pipeline">Pipeline</a> · <a href="/board">Board</a> · <a href="/runs">Runs</a>
 </div>
+
+<script>
+  // Ticking a sub-item reloads the page; remember which checklist groups
+  // were expanded so they come back open.
+  (function () {
+    const KEY = 'briefing-open-groups';
+    let open = [];
+    try { open = JSON.parse(sessionStorage.getItem(KEY)) || []; } catch (e) {}
+    document.querySelectorAll('details.check-item[data-key]').forEach(function (d) {
+      if (open.indexOf(d.dataset.key) !== -1) d.open = true;
+      d.addEventListener('toggle', function () {
+        const ix = open.indexOf(d.dataset.key);
+        if (d.open && ix === -1) open.push(d.dataset.key);
+        if (!d.open && ix !== -1) open.splice(ix, 1);
+        try { sessionStorage.setItem(KEY, JSON.stringify(open)); } catch (e) {}
+      });
+    });
+  })();
+</script>
 {% endblock %}
