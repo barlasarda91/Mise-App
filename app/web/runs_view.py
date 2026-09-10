@@ -2,6 +2,7 @@
 
 import html
 import json
+import logging
 import re
 from datetime import datetime
 
@@ -15,7 +16,13 @@ from app.db import db_session
 from app.models import MessageRole, Run, RunMessage
 from app.settings import get_settings
 
+log = logging.getLogger(__name__)
+
 TOOL_RESULT_PREVIEW_CHARS = 3000
+
+# #refs above this are invoice/order/tracking numbers, never task ids — and a
+# 20-digit "id" overflows Postgres integers, so clamp before any query.
+MAX_TASK_REF = 10_000_000
 
 # Mockup vernacular: R-041 for the tracker, A-118 for the agenda.
 CODE_PREFIXES = {"lead_tracker": "R", "daily_agenda": "A"}
@@ -115,7 +122,9 @@ def _ref_ids(text: str) -> list[int]:
     for m in _TASK_REF.finditer(text):
         start = int(m.group(1))
         end = int(m.group(2)) if m.group(2) else start
-        if start <= end and end - start < _MAX_RANGE:
+        if start > MAX_TASK_REF:
+            continue
+        if start <= end <= MAX_TASK_REF and end - start < _MAX_RANGE:
             ids.extend(range(start, end + 1))
         else:
             ids.append(start)
@@ -161,7 +170,7 @@ def _link_known_task_refs(html: str, session) -> str:
     only ids that actually exist as tasks, so invoice numbers stay plain."""
     from app.models import Task
 
-    ids = {int(m) for m in _TASK_ID_IN_HTML.findall(html)}
+    ids = {int(m) for m in _TASK_ID_IN_HTML.findall(html) if int(m) <= MAX_TASK_REF}
     if not ids:
         return html
     existing = set(session.scalars(select(Task.id).where(Task.id.in_(ids))))
@@ -243,14 +252,24 @@ def load_todays_briefing(routine_key: str = "daily_agenda") -> dict | None:
                     "code": run_code(routine_key, run.id),
                     "time": _fmt_time(run.started_at),
                 }
+                # each stage degrades on its own: a checklist or linking
+                # failure never blanks the briefing box
+                remaining = report
+                shaped["checklist"] = []
                 if with_checklist:
-                    items, remaining = extract_checklist(report)
-                    shaped["checklist"] = _with_task_state(s, items)
-                    shaped["html"] = (
-                        _link_known_task_refs(render_markdown(remaining), s) if remaining else ""
-                    )
-                else:
-                    shaped["html"] = _link_known_task_refs(render_markdown(report), s)
+                    try:
+                        items, remaining = extract_checklist(report)
+                        shaped["checklist"] = _with_task_state(s, items)
+                    except Exception:
+                        log.exception("briefing checklist failed — rendering plain report")
+                        remaining = report
+                        shaped["checklist"] = []
+                html_out = render_markdown(remaining) if remaining else ""
+                try:
+                    html_out = _link_known_task_refs(html_out, s) if html_out else ""
+                except Exception:
+                    log.exception("briefing task-ref linking failed — leaving refs plain")
+                shaped["html"] = html_out
                 return shaped
 
             briefing = shape(todays[0], with_checklist=True)
@@ -274,6 +293,7 @@ def load_todays_briefing(routine_key: str = "daily_agenda") -> dict | None:
             briefing["latest"] = latest
             return briefing
     except Exception:
+        log.exception("briefing loader failed")
         return None
 
 

@@ -249,3 +249,37 @@ def test_briefing_links_real_task_refs_only(monkeypatch):
     assert f'<a href="/board/task/{task.id}">#{task.id}</a>' in linked
     assert "#1043" in linked and "/board/task/1043" not in linked  # invoice ref stays plain
     s.close()
+
+
+def test_huge_numeric_refs_never_reach_the_db():
+    from app.web.runs_view import extract_checklist
+
+    report = (
+        "## Act today\n"
+        "- [ ] Chase USPS #92055901234567890123 delivery (#7)\n"
+    )
+    (item,), _ = extract_checklist(report)
+    assert item["task_ids"] == [7]  # the tracking number is not a task id
+
+
+def test_link_refs_ignores_huge_numbers(monkeypatch):
+    from contextlib import contextmanager
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from app.models import Base, Task, TaskCategory, TaskStatus
+    from app.web.runs_view import _link_known_task_refs
+
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(engine)
+    maker = sessionmaker(bind=engine, expire_on_commit=False)
+    s = maker()
+    s.add(Task(category=TaskCategory.PAYMENTS, title="t", status=TaskStatus.TODO))
+    s.commit()
+
+    html = "<p>Tracking #92055901234567890123 and task (#1)</p>"
+    linked = _link_known_task_refs(html, s)
+    assert "/board/task/1" in linked
+    assert "#92055901234567890123" in linked and "92055901234567890123</a>" not in linked
+    s.close()
