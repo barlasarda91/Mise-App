@@ -25,7 +25,7 @@
       <div class="box-hd"><span class="lbl">New draft</span><span class="ix">CLAUDE · VOICE A/B</span></div>
       <div class="box-bd">
         <form method="post" action="/drafts/generate" class="stack">
-          <label>Instruction<input name="instruction" placeholder="follow up on samples, propose 5 lb/wk terms" required></label>
+          <label>Instruction<textarea name="instruction" rows="3" class="submit-on-shift-enter" placeholder="follow up on samples, propose 5 lb/wk terms — Enter for a new line, Shift+Enter generates" required></textarea></label>
           <label>From mailbox
             <select name="mailbox"><option value="arda">arda@ (personal voice)</option><option value="hello">hello@ (brand voice)</option></select>
           </label>

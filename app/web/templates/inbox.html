@@ -58,7 +58,7 @@
           <form method="post" action="/inbox/draft" class="stack">
             <input type="hidden" name="thread_id" value="{{ opened.thread_id }}">
             <input type="hidden" name="to" value="{{ opened.from_addr }}">
-            <label>Instruction<input name="instruction" placeholder="reply: thank them, answer the pricing question" required></label>
+            <label>Instruction<textarea name="instruction" rows="3" class="submit-on-shift-enter" placeholder="reply: thank them, answer the pricing question — Enter for a new line, Shift+Enter generates" required></textarea></label>
             <label>From mailbox
               <select name="mailbox">
                 <option value="arda" {% if opened.mailbox == "arda" %}selected{% endif %}>arda@ (personal voice)</option>

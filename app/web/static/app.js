@@ -42,6 +42,18 @@
     });
   });
 
+  // ---- instruction boxes: Enter = newline, Shift+Enter = submit ----
+  document.querySelectorAll('textarea.submit-on-shift-enter').forEach(function (el) {
+    el.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter' && ev.shiftKey) {
+        ev.preventDefault();
+        if (!el.form) return;
+        if (el.form.requestSubmit) el.form.requestSubmit();
+        else el.form.submit();
+      }
+    });
+  });
+
   // ---- 2. typed fields survive another form's submit ----
   const FKEY = 'mise-typed-fields';
   const SELECTOR = 'input[type=text], input[type=email], input[type=date], input:not([type]), textarea, select';

@@ -138,7 +138,7 @@
         <form method="post" action="/leads/{{ lead.id }}/draft" class="stack">
           <input type="hidden" name="thread_id" value="{{ email_ctx.thread_id if email_ctx and email_ctx.thread_id else '' }}">
           <label>To<input name="to" value="{{ lead.contact_email or '' }}" placeholder="recipient — no email on file for this lead yet"></label>
-          <label>Instruction<input name="instruction" placeholder="reply: qualify their volume, propose a tasting" required></label>
+          <label>Instruction<textarea name="instruction" rows="3" class="submit-on-shift-enter" placeholder="reply: qualify their volume, propose a tasting — Enter for a new line, Shift+Enter generates" required></textarea></label>
           <label>From mailbox
             <select name="mailbox">
               <option value="arda" {% if lead.source != "inbound_email" %}selected{% endif %}>arda@ (personal voice)</option>
