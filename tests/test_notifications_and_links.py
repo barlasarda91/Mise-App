@@ -485,3 +485,75 @@ def test_link_and_unlink_task_lead(session_factory, monkeypatch):
     assert "unlinked" in bv.unlink_task_lead(task_id)
     with session_factory() as s:
         assert (s.get(Task, task_id).source_ref or {}).get("lead_id") is None
+
+
+# ---------- disregard rules ----------
+
+
+def test_disregard_deletes_task_and_blocks_recreation(session_factory, monkeypatch):
+    import app.web.board_view as bv
+    from app.engine.toolkit import clear_run_context, set_run_context
+    from app.models import DisregardRule, ExternalMutation, MutationKind
+    from app.routines.tools import _create_task_impl
+
+    monkeypatch.setattr(bv, "db_session", session_factory)
+    set_run_context(run_id=None, routine_id=None, started_at=None)
+    try:
+        with session_factory() as s:
+            result = _create_task_impl(
+                s, "governance", "Chase signing docs", "task:m-riot",
+                None, None, None, {"gmail_msg_id": "m-riot", "contact_email": "steph@213filming.com"},
+            )
+            s.commit()
+            task_id = result["task_id"]
+
+        msg = bv.disregard_task(task_id)
+        assert "Disregarded and deleted" in msg and "steph@213filming.com" in msg
+
+        with session_factory() as s:
+            assert s.get(Task, task_id) is None
+            rule = s.query(DisregardRule).one()
+            assert rule.contact_email == "steph@213filming.com"
+            assert rule.dedup_key == "task:m-riot"
+            assert s.query(ExternalMutation).filter_by(kind=MutationKind.TASK).count() == 1
+
+            # the routine cannot re-create it — by dedup key
+            again = _create_task_impl(
+                s, "governance", "Chase signing docs", "task:m-riot",
+                None, None, None, {"contact_email": "steph@213filming.com"},
+            )
+            assert again["outcome"] == "disregarded"
+            # ...or by the sender under a different message id
+            other = _create_task_impl(
+                s, "governance", "New ask from Steph", "task:m-riot-2",
+                None, None, None, {"contact_email": "Steph@213Filming.com"},
+            )
+            assert other["outcome"] == "disregarded"
+            assert s.query(Task).count() == 0
+
+        # removing the rule lifts the veto
+        rules = bv.disregard_rules()
+        assert rules[0]["contact_email"] == "steph@213filming.com"
+        assert "Removed" in bv.remove_disregard_rule(rules[0]["id"])
+        with session_factory() as s:
+            revived = _create_task_impl(
+                s, "governance", "New ask from Steph", "task:m-riot-2",
+                None, None, None, {"contact_email": "steph@213filming.com"},
+            )
+            assert revived["outcome"] == "created"
+    finally:
+        clear_run_context()
+
+
+def test_disregard_list_reaches_runtime_context(session_factory):
+    from app.engine.context import build_runtime_context
+    from app.models import DisregardRule, Routine
+
+    with session_factory() as s:
+        s.add(DisregardRule(contact_email="steph@213filming.com", title="Chase signing docs"))
+        routine = Routine(key="daily_agenda", name="Daily Agenda", system_prompt="p")
+        s.add(routine)
+        s.flush()
+        context = build_runtime_context(s, routine)
+    assert "Disregarded by Arda" in context
+    assert "steph@213filming.com" in context

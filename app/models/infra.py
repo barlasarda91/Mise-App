@@ -43,6 +43,23 @@ class ExternalMutation(Base):
     )
 
 
+class DisregardRule(Base):
+    """Operator veto on a briefing/board item: the task is deleted and the
+    routines must not re-create or surface it — matched by the task's dedup
+    key and/or the counterparty's email — until the rule is removed in
+    Settings."""
+
+    __tablename__ = "disregard_rules"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    contact_email: Mapped[str | None] = mapped_column(String(320), index=True)
+    dedup_key: Mapped[str | None] = mapped_column(String(300))
+    title: Mapped[str | None] = mapped_column(String(300))  # what was disregarded, for the Settings list
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 class MutedSender(Base):
     """Senders marked unimportant — hidden from the Inbox tab and its count."""
 

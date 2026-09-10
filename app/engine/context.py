@@ -66,6 +66,16 @@ def build_runtime_context(session, routine: Routine) -> str:
             f"last action {lead.last_confirmed_action or '—'} · {idle_txt}{pending}"
         )
 
+    from app.models import DisregardRule
+
+    rules = session.scalars(select(DisregardRule).order_by(DisregardRule.id.desc()).limit(20)).all()
+    if rules:
+        lines.append("\n## Disregarded by Arda — never surface, never create tasks for these")
+        for rule in rules:
+            parts = [p for p in (rule.title, rule.contact_email) if p]
+            lines.append(f"- {' · '.join(parts)}")
+        lines.append("Mail from these senders / about these items is noise: skip it silently.")
+
     tasks = session.scalars(
         select(Task).where(Task.status != TaskStatus.DONE).order_by(Task.due_date.is_(None), Task.due_date)
     ).all()

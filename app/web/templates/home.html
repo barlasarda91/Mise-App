@@ -34,26 +34,39 @@
         </summary>
         <div style="margin:6px 0 8px 24px;border-left:1px solid var(--line);padding-left:12px">
           {% for t in item.tasks %}
-          <form method="post" action="/briefing/check" class="check-item" style="display:flex;gap:9px;align-items:baseline;padding:3px 0">
-            <input type="hidden" name="task_ids" value="{{ t.id }}">
-            <input type="hidden" name="done" value="{{ '0' if t.done else '1' }}">
-            <input type="checkbox" onchange="this.form.submit()" {% if t.done %}checked{% endif %} style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer">
-            <a href="/board/task/{{ t.id }}" style="font-size:13.5px;text-decoration:none;{% if t.done %}text-decoration:line-through;color:var(--ink-soft){% endif %}">{{ t.title }}</a>
-          </form>
+          <div style="display:flex;gap:9px;align-items:baseline;padding:3px 0">
+            <form method="post" action="/briefing/check" class="check-item" style="display:contents">
+              <input type="hidden" name="task_ids" value="{{ t.id }}">
+              <input type="hidden" name="done" value="{{ '0' if t.done else '1' }}">
+              <input type="checkbox" onchange="this.form.submit()" {% if t.done %}checked{% endif %} style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer">
+              <a href="/board/task/{{ t.id }}" style="font-size:13.5px;text-decoration:none;{% if t.done %}text-decoration:line-through;color:var(--ink-soft){% endif %}">{{ t.title }}</a>
+            </form>
+            <form method="post" action="/tasks/{{ t.id }}/disregard" onsubmit="return confirm('Disregard {{ t.title | e }}? Deletes the task and ignores its sender until you remove the rule in Settings.')">
+              <button class="linkish" type="submit" title="Disregard: delete + ignore sender" style="color:var(--ink-soft);padding:0 4px">✕</button>
+            </form>
+          </div>
           {% endfor %}
         </div>
       </details>
       {% else %}
-      <form method="post" action="/briefing/check" class="check-item" style="display:flex;gap:9px;align-items:baseline;padding:4px 0">
-        <input type="hidden" name="task_ids" value="{{ item.task_ids | join(',') }}">
-        <input type="hidden" name="done" value="{{ '0' if item.done else '1' }}">
-        {% if item.task_ids %}
-        <input type="checkbox" onchange="this.form.submit()" {% if item.done %}checked{% endif %} style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer">
-        {% else %}
-        <span class="code" title="No linked board task — checkbox unavailable" style="min-width:13px;text-align:center">·</span>
-        {% endif %}
+      <div class="check-item" style="display:flex;gap:9px;align-items:baseline;padding:4px 0">
+        <form method="post" action="/briefing/check" style="display:contents">
+          <input type="hidden" name="task_ids" value="{{ item.task_ids | join(',') }}">
+          <input type="hidden" name="done" value="{{ '0' if item.done else '1' }}">
+          {% if item.task_ids %}
+          <input type="checkbox" onchange="this.form.submit()" {% if item.done %}checked{% endif %} style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer">
+          {% else %}
+          <span class="code" title="No linked board task — checkbox unavailable" style="min-width:13px;text-align:center">·</span>
+          {% endif %}
+        </form>
         <span class="md" style="font-size:14px;{% if item.done %}text-decoration:line-through;color:var(--ink-soft){% endif %}">{{ item.html | safe }}</span>
-      </form>
+        <span class="spacer"></span>
+        {% if item.task_ids | length == 1 %}
+        <form method="post" action="/tasks/{{ item.task_ids[0] }}/disregard" onsubmit="return confirm('Disregard this item? Deletes the task and ignores its sender until you remove the rule in Settings.')">
+          <button class="linkish" type="submit" title="Disregard: delete + ignore sender" style="color:var(--ink-soft);padding:0 4px">✕</button>
+        </form>
+        {% endif %}
+      </div>
       {% endif %}
       {% endfor %}
     </div>

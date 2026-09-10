@@ -34,7 +34,9 @@ ROUTINE_DEFAULTS = [
         "key": "daily_agenda",
         "name": "Daily Agenda",
         "schedule_cron": "0 7-17 * * 1-5",  # hourly 07:00–17:00 LA, weekdays only
-        "connectors": ["gmail_arda", "calendar", "quickbooks"],
+        # gmail_hello added 2026-09-10: non-wholesale business mail (filming,
+        # collabs, press) lands there and no routine was watching it.
+        "connectors": ["gmail_arda", "gmail_hello", "calendar", "quickbooks"],
     },
 ]
 
@@ -70,7 +72,9 @@ def seed_routines(session_factory=db_session) -> int:
             else:
                 if routine.system_prompt != prompt:
                     routine.system_prompt = prompt
-                # Schedules are versioned here too (no in-app editor yet).
+                # Schedules and connectors are versioned here too (no in-app editor yet).
                 if routine.schedule_cron != spec["schedule_cron"]:
                     routine.schedule_cron = spec["schedule_cron"]
+                if (routine.connectors or []) != spec["connectors"]:
+                    routine.connectors = list(spec["connectors"])
     return created

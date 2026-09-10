@@ -85,6 +85,22 @@
 </div>
 
 <div class="box">
+  <div class="box-hd"><span class="lbl">Disregarded</span><span class="ix">{{ disregarded | length }} · HIDDEN FROM BRIEFING &amp; BOARD</span></div>
+  <div>
+    {% for r in disregarded %}
+    <div class="kv">
+      <div class="lft"><span class="kt">{{ r.title or "(untitled)" }}</span>{% if r.contact_email %}<span class="ks" style="margin-left:8px">{{ r.contact_email }}</span>{% endif %}</div>
+      <form method="post" action="/settings/disregard/{{ r.id }}/remove">
+        <button class="linkish" type="submit">Remove</button>
+      </form>
+    </div>
+    {% else %}
+    <div class="kv"><div class="lft"><span class="ks">Nothing disregarded — use ✕ on a briefing item or "Disregard" on a task card. Removing a rule lets that item and its sender surface again.</span></div></div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="box">
   <div class="box-hd"><span class="lbl">Server</span><span class="ix">NETWORK</span></div>
   <div>
     <div class="kv">

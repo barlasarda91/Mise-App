@@ -115,6 +115,11 @@
           <label>Waiting on (when parking)<input name="waiting_on" value="{{ task.waiting_on or '' }}"></label>
           <button class="linkish solid" type="submit">Move</button>
         </form>
+        <form method="post" action="/tasks/{{ task.id }}/disregard" style="margin-top:12px" onsubmit="return confirm('Disregard {{ task.title | e }}? Deletes it from the board and ignores its sender until you remove the rule in Settings.')">
+          <input type="hidden" name="next" value="/board?tab={{ task.category }}">
+          <button class="linkish" type="submit" style="color:var(--ember)">Disregard</button>
+        </form>
+        <div class="note">Disregard deletes the task and tells the routines to ignore it (and its sender) — manage the list in Settings.</div>
       </div>
     </div>
 

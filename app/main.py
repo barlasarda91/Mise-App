@@ -684,6 +684,30 @@ def task_detail(request: Request, task_id: int, msg: str | None = None):
     )
 
 
+@app.post("/tasks/{task_id}/disregard")
+def task_disregard(task_id: int, next: str = Form("/")):
+    from app.web.board_view import disregard_task
+
+    try:
+        msg = disregard_task(task_id)
+    except Exception as exc:
+        msg = f"Error: {exc}"
+    target = next if next.startswith("/") and not next.startswith("//") else "/"
+    sep = "&" if "?" in target else "?"
+    return RedirectResponse(f"{target}{sep}msg={msg}", status_code=303)
+
+
+@app.post("/settings/disregard/{rule_id}/remove")
+def disregard_remove(rule_id: int):
+    from app.web.board_view import remove_disregard_rule
+
+    try:
+        msg = remove_disregard_rule(rule_id)
+    except Exception as exc:
+        msg = f"Error: {exc}"
+    return RedirectResponse(f"/settings?msg={msg}", status_code=303)
+
+
 @app.post("/tasks/{task_id}/link-lead")
 def task_link_lead(task_id: int, lead_id: str = Form("")):
     from app.web.board_view import link_task_to_lead, unlink_task_lead
@@ -938,6 +962,7 @@ def settings_page(request: Request, msg: str | None = None):
     }
     from app.tools.quickbooks import configured as qbo_configured
     from app.tools.quickbooks import qbo_status
+    from app.web.board_view import disregard_rules
     from app.web.inbox_view import muted_list
 
     outbound_ip = "unavailable"
@@ -960,6 +985,7 @@ def settings_page(request: Request, msg: str | None = None):
         qbo_redirect_uri=_qbo_redirect_uri(request),
         outbound_ip=outbound_ip,
         muted=muted_list(),
+        disregarded=disregard_rules(),
         msg=msg,
     )
 

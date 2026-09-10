@@ -355,7 +355,28 @@ register(
 # ---------- tasks (deduped via the external_mutations ledger) ----------
 
 
+def _disregard_rule_for(session, dedup_key, source_ref):
+    """Arda's veto list: matching dedup key or counterparty email blocks the
+    task from being (re)created."""
+    from app.models import DisregardRule
+
+    contact = ((source_ref or {}).get("contact_email") or "").lower()
+    for rule in session.scalars(select(DisregardRule)):
+        if rule.dedup_key and rule.dedup_key == dedup_key:
+            return rule
+        if rule.contact_email and contact and rule.contact_email == contact:
+            return rule
+    return None
+
+
 def _create_task_impl(session, category, title, dedup_key, description, due_date, assignee, source_ref):
+    rule = _disregard_rule_for(session, dedup_key, source_ref)
+    if rule is not None:
+        return {
+            "outcome": "disregarded",
+            "note": f"Arda has disregarded this ({rule.title or rule.contact_email or rule.dedup_key}) — "
+            "do not re-create it, do not surface it in the briefing.",
+        }
     ledger = session.scalar(select(ExternalMutation).where(ExternalMutation.dedup_key == dedup_key))
     due = date.fromisoformat(due_date) if due_date else None
     if ledger and ledger.external_id:

@@ -38,4 +38,6 @@ For each overdue lead, ensure a follow-up task exists: `create_task` with catego
 
 **You run hourly (7:30–16:30 LA, weekdays), and EVERY run is a delta run** — the sent-email audit and inbox scan only cover mail since the last gather, which is usually little or nothing (the first run after overnight or a weekend just covers a longer gap — same discipline). Keep the audit cheap: instead of one search per lead, do **one combined sent-mail search per mailbox** (`in:sent` since the last gather) and match the results against your open leads; per-lead searches are only worth it on a cold start. When a run finds no new outbound mail, no new inquiries (form-notification safety net included), and no overdue change, keep the whole report to a line or two ("No changes since HH:MM — pipeline unchanged.") — don't re-run the full pipeline table, and don't draft. Save drafts for genuinely new situations, still at most a couple per day.
 
+**Disregarded items** (listed in your runtime context) are Arda's explicit veto: never surface them, never create leads or tasks for those senders — `create_task` will refuse them anyway.
+
 Skip empty sections rather than writing "nothing to report". Keep the tone plain and scannable — this report is read on a dashboard in thirty seconds. Never invent leads, emails, or dates: everything you report must come from a tool result.

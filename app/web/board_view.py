@@ -351,6 +351,67 @@ def unlink_task_lead(task_id: int) -> str:
     return "Lead unlinked."
 
 
+def disregard_task(task_id: int) -> str:
+    """Operator veto: delete the task from the board and store a rule so the
+    routines neither re-create it nor surface its sender until the rule is
+    removed in Settings."""
+    from app.models import DisregardRule, EmailDraft, ExternalMutation, MutationKind
+
+    with db_session() as s:
+        task = s.get(Task, task_id)
+        if task is None:
+            return "Task not found."
+        ref = task.source_ref or {}
+        contact = (ref.get("contact_email") or "").lower() or None
+        ledger = s.scalar(
+            select(ExternalMutation).where(
+                ExternalMutation.kind == MutationKind.TASK,
+                ExternalMutation.external_id == str(task_id),
+            )
+        )
+        s.add(
+            DisregardRule(
+                contact_email=contact,
+                dedup_key=ledger.dedup_key if ledger else None,
+                title=task.title[:300],
+            )
+        )
+        for draft in s.scalars(select(EmailDraft).where(EmailDraft.related_task_id == task_id)):
+            draft.related_task_id = None
+        for activity in s.scalars(select(TaskActivity).where(TaskActivity.task_id == task_id)):
+            s.delete(activity)
+        title = task.title
+        s.delete(task)
+    who = f" Mail from {contact} is ignored" if contact else " Its source is ignored"
+    return f"Disregarded and deleted: {title}.{who} until you remove the rule in Settings."
+
+
+def disregard_rules() -> list[dict]:
+    from app.models import DisregardRule
+
+    try:
+        with db_session() as s:
+            rules = s.scalars(select(DisregardRule).order_by(DisregardRule.id.desc())).all()
+            return [
+                {"id": r.id, "title": r.title, "contact_email": r.contact_email}
+                for r in rules
+            ]
+    except Exception:
+        return []
+
+
+def remove_disregard_rule(rule_id: int) -> str:
+    from app.models import DisregardRule
+
+    with db_session() as s:
+        rule = s.get(DisregardRule, rule_id)
+        if rule is None:
+            return "Rule not found."
+        label = rule.title or rule.contact_email or "rule"
+        s.delete(rule)
+    return f"Removed — {label} can surface again from the next run."
+
+
 def set_task_status(task_id: int, status: str, waiting_on: str = "") -> str:
     new_status = TaskStatus(status)
     with db_session() as s:
