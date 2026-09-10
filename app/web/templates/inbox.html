@@ -10,7 +10,8 @@
 {% endif %}
 
 <div class="runwrap{% if opened %} withthread{% endif %}" style="grid-template-columns:{% if opened %}minmax(0,1fr) minmax(0,1.2fr){% else %}1fr{% endif %}">
-  <div class="box" style="align-self:start;min-width:0">
+  <div style="align-self:start;min-width:0">
+  <div class="box" style="min-width:0">
     <div class="box-hd"><span class="lbl">Unread</span><span class="ix">{{ inbox.messages | length }} · BOTH MAILBOXES</span></div>
     <div>
       {% for m in inbox.messages %}
@@ -33,6 +34,32 @@
       <div class="box-bd"><span class="note">Inbox zero{% if not inbox.error %} — nothing unread (muted senders excluded){% endif %}.</span></div>
       {% endfor %}
     </div>
+  </div>
+
+    {% if awaiting %}
+    <div class="box" style="margin-top:14px">
+      <div class="box-hd"><span class="lbl">Awaiting your reply</span><span class="ix" style="color:var(--ember)">{{ awaiting | length }} · READ OR UNREAD · 90D INDEX</span></div>
+      <div>
+        {% for t in awaiting %}
+        <div class="row">
+          <span class="pill {% if t.age_days > 7 %}ember{% else %}ghost{% endif %}" style="white-space:nowrap">{{ t.age_days }}d</span>
+          <a class="name" href="/inbox?open={{ t.mailbox }}:{{ t.gmail_msg_id }}" style="font-size:13.5px;min-width:0">{{ t.from_name }} — {{ t.subject }}</a>
+          <span class="meta">{{ t.mailbox }}@</span>
+          <span class="spacer"></span>
+          <form method="post" action="/inbox/awaiting/task">
+            <input type="hidden" name="mailbox" value="{{ t.mailbox }}">
+            <input type="hidden" name="msg_id" value="{{ t.gmail_msg_id }}">
+            <input type="hidden" name="from_name" value="{{ t.from_name }}">
+            <input type="hidden" name="from_addr" value="{{ t.from_addr }}">
+            <input type="hidden" name="subject" value="{{ t.subject }}">
+            <button class="linkish" type="submit" title="Put this on the board">→ task</button>
+          </form>
+        </div>
+        {% endfor %}
+        <div class="box-bd"><span class="note">Threads where the other side spoke last and no Boxx reply followed — computed from the local mail index, bulk mail filtered. The Daily Agenda triages the oldest 15 of these automatically; → task puts one on the board yourself.</span></div>
+      </div>
+    </div>
+    {% endif %}
   </div>
 
   {% if opened %}

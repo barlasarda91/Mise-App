@@ -94,3 +94,31 @@ def test_unread_count_caches(session_factory, monkeypatch):
 def test_unread_count_none_when_unconfigured(monkeypatch):
     monkeypatch.setattr(iv, "sa_configured", lambda: False)
     assert iv.unread_count() is None
+
+
+def test_make_task_from_thread_dedupes_and_links(session_factory, monkeypatch):
+    import app.web.inbox_view as iv
+    from app.models import Lead, LeadStage, Task
+
+    monkeypatch.setattr(iv, "db_session", session_factory)
+    with session_factory() as s:
+        s.add(Lead(business_name="FE Design", stage=LeadStage.CONTACTED,
+                   contact_email="eddie@fedesignandconsulting.com"))
+
+    msg = iv.make_task_from_thread(
+        "arda", "m-sow", "Eddie Navarrette", "eddie@fedesignandconsulting.com",
+        "Boxx Coffee Roasters — SOW",
+    )
+    assert "Task created" in msg and "Auto-linked to FE Design" in msg
+
+    again = iv.make_task_from_thread(
+        "arda", "m-sow", "Eddie Navarrette", "eddie@fedesignandconsulting.com",
+        "Boxx Coffee Roasters — SOW",
+    )
+    assert "Already on the board" in again
+
+    with session_factory() as s:
+        task = s.query(Task).one()
+        assert task.source_ref["gmail_msg_id"] == "m-sow"
+        assert task.source_ref["contact_email"] == "eddie@fedesignandconsulting.com"
+        assert task.source_ref["lead_id"] is not None

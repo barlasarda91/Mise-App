@@ -430,10 +430,29 @@ def inbox(request: Request, open: str | None = None, msg: str | None = None):
     if open and ":" in open:
         mailbox, _, msg_id = open.partition(":")
         opened = load_open_message(mailbox, msg_id)
+    from app.web.inbox_view import awaiting_list
+
     return render_page(
         request, "inbox.html", "inbox",
-        inbox=data, opened=opened, msg=msg,
+        inbox=data, opened=opened, awaiting=awaiting_list(), msg=msg,
     )
+
+
+@app.post("/inbox/awaiting/task")
+def inbox_awaiting_task(
+    mailbox: str = Form(""),
+    msg_id: str = Form(...),
+    from_name: str = Form(""),
+    from_addr: str = Form(""),
+    subject: str = Form(""),
+):
+    from app.web.inbox_view import make_task_from_thread
+
+    try:
+        message = make_task_from_thread(mailbox, msg_id, from_name, from_addr, subject)
+    except Exception as exc:
+        message = f"Error: {exc}"
+    return RedirectResponse(f"/inbox?msg={message}", status_code=303)
 
 
 @app.post("/inbox/mute")

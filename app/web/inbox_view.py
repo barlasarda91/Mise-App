@@ -119,6 +119,74 @@ def load_inbox() -> dict:
     return {"error": "; ".join(errors) if errors else None, "messages": merged}
 
 
+def awaiting_list(limit: int = 40) -> list[dict]:
+    """The mail index's awaiting-reply threads, for the Inbox tab panel —
+    the same list the agenda triages, made visible and one-click actionable."""
+    try:
+        from app.tools.mail_index import awaiting_reply
+
+        with db_session() as s:
+            return awaiting_reply(s, limit=limit)
+    except Exception:
+        return []
+
+
+def make_task_from_thread(mailbox: str, msg_id: str, from_name: str, from_addr: str, subject: str) -> str:
+    """One-click 'turn this hanging thread into a board task' — deduped per
+    message, linked to a lead when the sender matches one."""
+    from app.models import ExternalMutation, MutationKind, Task, TaskActivity, TaskCategory, TaskSource
+
+    dedup_key = f"task:{msg_id}"
+    title = f"Reply to {from_name or from_addr} — {subject or '(no subject)'}"[:300]
+    with db_session() as s:
+        ledger = s.scalar(
+            select(ExternalMutation).where(ExternalMutation.dedup_key == dedup_key)
+        )
+        if ledger and ledger.external_id:
+            existing = s.get(Task, int(ledger.external_id))
+            if existing is not None:
+                return f"Already on the board: {existing.title}."
+        task = Task(
+            category=TaskCategory.GOVERNANCE,
+            title=title,
+            source=TaskSource.EMAIL,
+            source_ref={"gmail_msg_id": msg_id, "contact_email": (from_addr or "").lower() or None},
+        )
+        s.add(task)
+        s.flush()
+        s.add(TaskActivity(task_id=task.id, type="created", detail="from awaiting-reply list", actor="Arda"))
+        if ledger is None:
+            s.add(ExternalMutation(kind=MutationKind.TASK, dedup_key=dedup_key, external_id=str(task.id)))
+        else:
+            ledger.external_id = str(task.id)
+        # The sender's address is a stronger link signal than a name match.
+        from sqlalchemy import func as sa_func
+
+        from app.models import Lead, OPEN_LEAD_STAGES
+        from app.routines.task_sync import auto_link_lead
+
+        matched = None
+        if from_addr:
+            matched = s.scalar(
+                select(Lead).where(
+                    Lead.stage.in_(OPEN_LEAD_STAGES),
+                    Lead.discarded_at.is_(None),
+                    sa_func.lower(Lead.contact_email) == from_addr.lower(),
+                )
+            )
+        if matched is not None:
+            ref = dict(task.source_ref or {})
+            ref["lead_id"] = matched.id
+            task.source_ref = ref
+            s.add(TaskActivity(task_id=task.id, type="linked",
+                               detail=f"auto: linked to lead {matched.business_name} (email match)", actor="Mise"))
+        else:
+            matched = auto_link_lead(s, task)
+        note = f" Auto-linked to {matched.business_name}." if matched else ""
+        task_id = task.id
+    return f"Task created (#{task_id}): {title}.{note}"
+
+
 def load_open_message(mailbox: str, msg_id: str) -> dict | None:
     try:
         from app.tools import gmail
