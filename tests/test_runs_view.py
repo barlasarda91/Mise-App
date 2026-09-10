@@ -225,3 +225,27 @@ def test_stale_tasks_lists_month_old_open_items(monkeypatch):
     assert [t["title"] for t in stale] == ["ancient", "old waiting"]  # oldest first
     assert stale[0]["age"] >= 61
     assert stale[0]["category"] == "Governance"
+
+
+def test_briefing_links_real_task_refs_only(monkeypatch):
+    from contextlib import contextmanager
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from app.models import Base, Task, TaskCategory, TaskStatus
+    from app.web.runs_view import _link_known_task_refs
+
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(engine)
+    maker = sessionmaker(bind=engine, expire_on_commit=False)
+    s = maker()
+    task = Task(category=TaskCategory.PAYMENTS, title="pay falcon", status=TaskStatus.TODO)
+    s.add(task)
+    s.commit()
+
+    html = f"<p>Falcon on hold (#{task.id}). Chase invoice #1043 unpaid.</p>"
+    linked = _link_known_task_refs(html, s)
+    assert f'<a href="/board/task/{task.id}">#{task.id}</a>' in linked
+    assert "#1043" in linked and "/board/task/1043" not in linked  # invoice ref stays plain
+    s.close()

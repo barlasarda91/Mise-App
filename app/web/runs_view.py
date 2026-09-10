@@ -153,6 +153,26 @@ def extract_checklist(report: str) -> tuple[list[dict], str]:
     return items, "\n".join(kept).strip()
 
 
+_TASK_ID_IN_HTML = re.compile(r"#(\d+)")
+
+
+def _link_known_task_refs(html: str, session) -> str:
+    """Turn #id references in briefing HTML into links to their task cards —
+    only ids that actually exist as tasks, so invoice numbers stay plain."""
+    from app.models import Task
+
+    ids = {int(m) for m in _TASK_ID_IN_HTML.findall(html)}
+    if not ids:
+        return html
+    existing = set(session.scalars(select(Task.id).where(Task.id.in_(ids))))
+
+    def repl(match):
+        tid = int(match.group(1))
+        return f'<a href="/board/task/{tid}">#{tid}</a>' if tid in existing else match.group(0)
+
+    return _TASK_ID_IN_HTML.sub(repl, html)
+
+
 def _with_task_state(session, items: list[dict]) -> list[dict]:
     """Attach live board state to checklist items: done when every referenced
     task is done; multi-task items carry per-task rows so they can expand and
@@ -174,7 +194,7 @@ def _with_task_state(session, items: list[dict]) -> list[dict]:
         out.append(
             {
                 "text": item["text"],
-                "html": render_markdown(item["text"]),
+                "html": _link_known_task_refs(render_markdown(item["text"]), session),
                 "task_ids": [t["id"] for t in tasks],
                 "tasks": tasks,
                 "done_count": sum(1 for t in tasks if t["done"]),
@@ -226,9 +246,11 @@ def load_todays_briefing(routine_key: str = "daily_agenda") -> dict | None:
                 if with_checklist:
                     items, remaining = extract_checklist(report)
                     shaped["checklist"] = _with_task_state(s, items)
-                    shaped["html"] = render_markdown(remaining) if remaining else ""
+                    shaped["html"] = (
+                        _link_known_task_refs(render_markdown(remaining), s) if remaining else ""
+                    )
                 else:
-                    shaped["html"] = render_markdown(report)
+                    shaped["html"] = _link_known_task_refs(render_markdown(report), s)
                 return shaped
 
             briefing = shape(todays[0], with_checklist=True)
