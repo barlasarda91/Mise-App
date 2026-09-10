@@ -73,7 +73,9 @@ def build_runtime_context(session, routine: Routine, trigger: str | None = None)
             f"last action {lead.last_confirmed_action or '—'} · {idle_txt}{pending}"
         )
 
-    if any(c.startswith("gmail") for c in routine.connectors or []):
+    # General-mail triage is the agenda's job; the tracker gets its wholesale
+    # picture from the lead list instead.
+    if routine.key == "daily_agenda":
         try:
             from app.tools.mail_index import awaiting_reply
 
@@ -82,8 +84,8 @@ def build_runtime_context(session, routine: Routine, trigger: str | None = None)
             waiting = []
         if waiting:
             lines.append(
-                "\n## Threads awaiting a Boxx reply (from the local 90-day mail index — "
-                "read or unread, these have no reply from us)"
+                "\n## Threads awaiting a Boxx reply (local 90-day mail index — read or "
+                "unread; bulk mail filtered; only people Boxx has actually corresponded with)"
             )
             for t in waiting:
                 lines.append(
@@ -91,8 +93,9 @@ def build_runtime_context(session, routine: Routine, trigger: str | None = None)
                     f"\"{t['subject']}\" · last message {t['last_message']} ({t['age_days']}d ago)"
                 )
             lines.append(
-                "Triage these: anything needing Arda becomes a briefing item + task "
-                "(get_gmail_message for detail). This list replaces manual left-hanging searches."
+                "Every thread above must be triaged — either it reaches the briefing with a "
+                "task, or you explicitly judge it not-actionable in one line. Silently "
+                "skipping an entry is not allowed. get_gmail_message (with the msg id) for detail."
             )
 
     from app.models import DisregardRule

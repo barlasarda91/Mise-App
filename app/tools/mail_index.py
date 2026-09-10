@@ -7,6 +7,7 @@ re-run: rows upsert by (mailbox, message id).
 """
 
 import logging
+import re
 import threading
 from datetime import datetime, timedelta, timezone
 from email.utils import parseaddr, parsedate_to_datetime
@@ -36,13 +37,17 @@ def _parse_when(value: str) -> datetime | None:
 
 
 def upsert_summary(session, mailbox: str, summary: dict) -> bool:
-    """Insert one header summary; returns True when it was new."""
+    """Insert one header summary; returns True when it was new. Re-seeing an
+    indexed message refreshes its bulk flag, so re-running the sweep backfills
+    rows indexed before the flag existed."""
     existing = session.scalar(
         select(MailMessage).where(
             MailMessage.mailbox == mailbox, MailMessage.gmail_msg_id == summary["id"]
         )
     )
     if existing is not None:
+        if "bulk" in summary and existing.is_bulk != bool(summary["bulk"]):
+            existing.is_bulk = bool(summary["bulk"])
         return False
     name, addr = parseaddr(summary.get("from", ""))
     session.add(
@@ -57,6 +62,7 @@ def upsert_summary(session, mailbox: str, summary: dict) -> bool:
             snippet=(summary.get("snippet") or "")[:300] or None,
             sent_at=_parse_when(summary.get("date", "")),
             is_outbound=(addr or "").lower().endswith("@" + OWN_DOMAIN),
+            is_bulk=bool(summary.get("bulk")),
         )
     )
     return True
@@ -143,10 +149,24 @@ def index_recent(mailbox: FromMailbox, overlap_hours: int = 26) -> int:
     return added
 
 
+# Automated-sender address shapes: never "awaiting a reply" from Boxx.
+_BULK_ADDR = re.compile(
+    r"noreply|no-reply|donotreply|do-not-reply|notification|alerts?@|billing@|"
+    r"statements?@|receipts?@|payments?@|newsletter|marketing@|updates?@|"
+    r"mailer|bounce|@e\.|@em\.|@em[0-9]*\.|@mail\.|@info\.|@news\.|reply\.|"
+    r"@notify|@account\.|@accounts\."
+)
+
+
 def awaiting_reply(session, limit: int = 15, max_age_days: int = BACKFILL_DAYS) -> list[dict]:
     """Threads whose newest indexed message is inbound with no Boxx reply
-    after it — the read-or-unread 'left hanging' list. Muted and disregarded
-    senders are excluded."""
+    after it — the read-or-unread 'left hanging' list. Bulk mail is filtered
+    three ways: the List-Unsubscribe/Precedence flag, automated address
+    shapes, and the correspondent test — the thread only counts if Boxx has
+    ever written to that person (this thread or any other); newsletters never
+    receive outbound mail. Muted and disregarded senders are excluded."""
+    from email.utils import getaddresses
+
     from app.models import DisregardRule, MutedSender
 
     tz = ZoneInfo(get_settings().default_tz)
@@ -160,19 +180,29 @@ def awaiting_reply(session, limit: int = 15, max_age_days: int = BACKFILL_DAYS) 
         select(MailMessage).where(MailMessage.sent_at.isnot(None)).order_by(MailMessage.sent_at)
     ).all()
     threads: dict = {}
+    correspondents: set[str] = set()
+    threads_with_outbound: set[tuple] = set()
     for row in rows:
         sent = row.sent_at if row.sent_at.tzinfo else row.sent_at.replace(tzinfo=timezone.utc)
+        key = (row.mailbox, row.thread_id or row.gmail_msg_id)
+        if row.is_outbound:
+            threads_with_outbound.add(key)
+            for _, addr in getaddresses([row.to_addrs or ""]):
+                if addr:
+                    correspondents.add(addr.lower())
         if sent < cutoff:
             continue
-        threads[(row.mailbox, row.thread_id or row.gmail_msg_id)] = (row, sent)
+        threads[key] = (row, sent, key)
 
     now = datetime.now(timezone.utc)
     out = []
-    for row, sent in threads.values():
-        if row.is_outbound or not row.from_addr:
+    for row, sent, key in threads.values():
+        if row.is_outbound or not row.from_addr or row.is_bulk:
             continue
-        if row.from_addr in excluded or "noreply" in row.from_addr or "no-reply" in row.from_addr:
+        if row.from_addr in excluded or _BULK_ADDR.search(row.from_addr):
             continue
+        if key not in threads_with_outbound and row.from_addr not in correspondents:
+            continue  # we've never written to this sender anywhere — not a correspondence
         out.append(
             {
                 "mailbox": row.mailbox,

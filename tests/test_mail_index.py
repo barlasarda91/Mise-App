@@ -122,6 +122,7 @@ def test_context_carries_awaiting_reply(session_factory):
     from app.engine.context import build_runtime_context
 
     with session_factory() as s:
+        mi.upsert_summary(s, "arda", _summary("f0", "Arda <ardabarlas@boxxcoffee.com>", _days_ago(8), thread="film", to="steph@213filming.com"))
         mi.upsert_summary(s, "arda", _summary("f1", "Steph <steph@213filming.com>", _days_ago(6), thread="film"))
         routine = Routine(key="daily_agenda", name="Daily Agenda", system_prompt="p",
                           connectors=["gmail_arda", "calendar"])
@@ -130,3 +131,36 @@ def test_context_carries_awaiting_reply(session_factory):
         context = build_runtime_context(s, routine)
     assert "Threads awaiting a Boxx reply" in context
     assert "Filming at Boxx" in context and "steph" in context.lower() or "Steph" in context
+
+
+def test_awaiting_reply_filters_bulk_and_strangers(session_factory):
+    with session_factory() as s:
+        # newsletter with bulk header -> excluded
+        mi.upsert_summary(s, "arda", {**_summary("b1", "Scott Rao <newsletter-random@srao.com>", _days_ago(10), thread="rao"), "bulk": True})
+        # notification-shaped address -> excluded even without bulk header
+        mi.upsert_summary(s, "arda", _summary("b2", "Chase <alerts@chase.com>", _days_ago(10), thread="chase"))
+        # stranger we've never written to (cold marketing from a personal-looking addr) -> excluded
+        mi.upsert_summary(s, "arda", _summary("b3", "Randy Sales <randy@coldpitch.io>", _days_ago(10), thread="cold"))
+        # real correspondent: Boxx wrote to Steph in another thread earlier
+        mi.upsert_summary(s, "arda", _summary("o1", "Arda <ardabarlas@boxxcoffee.com>", _days_ago(30), thread="old", to="steph@213filming.com"))
+        mi.upsert_summary(s, "arda", _summary("r1", "Steph <steph@213filming.com>", _days_ago(8), thread="film"))
+        # real thread where we replied earlier IN-thread, counterparty spoke last
+        mi.upsert_summary(s, "hello", _summary("e1", "Boxx <hello@boxxcoffee.com>", _days_ago(12), thread="inv", to="andres@shippingco.com"))
+        mi.upsert_summary(s, "hello", _summary("e2", "Andres Eger <andres@shippingco.com>", _days_ago(9), thread="inv"))
+        s.commit()
+
+        waiting = mi.awaiting_reply(s)
+    got = {t["from_addr"] for t in waiting}
+    assert got == {"steph@213filming.com", "andres@shippingco.com"}
+
+
+def test_resweep_backfills_bulk_flag(session_factory):
+    with session_factory() as s:
+        # first sweep predates the flag (no "bulk" key)
+        mi.upsert_summary(s, "arda", _summary("m1", "News <hi@list.example.com>", _days_ago(5)))
+        s.commit()
+        assert s.query(MailMessage).one().is_bulk is False
+        # re-sweep sees the same message, now with header data
+        assert not mi.upsert_summary(s, "arda", {**_summary("m1", "News <hi@list.example.com>", _days_ago(5)), "bulk": True})
+        s.commit()
+        assert s.query(MailMessage).one().is_bulk is True

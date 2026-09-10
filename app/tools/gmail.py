@@ -19,7 +19,11 @@ from app.models.enums import FromMailbox
 from app.settings import get_settings
 from app.tools.google_client import gmail_service
 
-METADATA_HEADERS = ["From", "To", "Cc", "Reply-To", "Subject", "Date", "Message-ID"]
+METADATA_HEADERS = [
+    "From", "To", "Cc", "Reply-To", "Subject", "Date", "Message-ID",
+    # bulk-mail signals for the mail index (newsletters, automated notices)
+    "List-Unsubscribe", "Precedence",
+]
 
 
 def mailbox_address(mailbox: FromMailbox) -> str:
@@ -156,6 +160,11 @@ def _summarize(message: dict) -> dict:
         # Form notifications (website inquiries, e-sign requests) often carry
         # the human counterparty here rather than in From.
         "reply_to": headers.get("reply-to", ""),
+        # newsletters/automated notices announce themselves in these headers
+        "bulk": bool(
+            headers.get("list-unsubscribe")
+            or headers.get("precedence", "").lower() in ("bulk", "list", "junk")
+        ),
         "subject": headers.get("subject", ""),
         "date": headers.get("date", ""),
         "message_id_header": headers.get("message-id", ""),
