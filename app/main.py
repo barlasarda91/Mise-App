@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -272,7 +273,12 @@ def legal_privacy(request: Request):
 @app.get("/health")
 def health():
     db_status = check_db()
-    body = {"status": "ok" if db_status in ("ok", "absent") else "degraded", "db": db_status}
+    body = {
+        "status": "ok" if db_status in ("ok", "absent") else "degraded",
+        "db": db_status,
+        # Which build is live — Railway injects the deployed commit SHA.
+        "revision": (os.environ.get("RAILWAY_GIT_COMMIT_SHA") or "unknown")[:12],
+    }
     return JSONResponse(body, status_code=200 if body["status"] == "ok" else 503)
 
 
