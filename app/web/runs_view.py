@@ -255,6 +255,10 @@ def load_todays_briefing(routine_key: str = "daily_agenda") -> dict | None:
         return None
 
 
+def _fmt_cost(cost) -> str:
+    return f"${float(cost):.2f}" if cost is not None else ""
+
+
 def load_runs_index(limit: int = 40) -> list[dict]:
     try:
         with db_session() as s:
@@ -272,11 +276,49 @@ def load_runs_index(limit: int = 40) -> list[dict]:
                     "time": _fmt_time(run.started_at),
                     "status": run.status.value,
                     "trigger": run.trigger.value,
+                    "cost": _fmt_cost(run.cost_usd),
                 }
                 for run in runs
             ]
     except Exception:
         return []
+
+
+def spend_summary() -> dict:
+    """API dollars spent today and over the trailing 7 days (LA), plus how
+    many scheduled runs were skipped today by the quiet pre-flight."""
+    tz = ZoneInfo(get_settings().default_tz)
+    today = datetime.now(tz).date()
+    out = {"today": 0.0, "week": 0.0, "skipped_today": 0}
+    try:
+        from datetime import timedelta, timezone as dt_timezone
+
+        def _aware(dt):
+            return dt.replace(tzinfo=dt_timezone.utc) if dt is not None and dt.tzinfo is None else dt
+
+        with db_session() as s:
+            # newest 600 comfortably covers 7 days of hourly runs
+            runs = s.scalars(
+                select(Run).order_by(Run.started_at.desc(), Run.id.desc()).limit(600)
+            ).all()
+            for run in runs:
+                started = _aware(run.started_at)
+                if started is None:
+                    continue
+                day = started.astimezone(tz).date()
+                if day > today or day < today - timedelta(days=6):
+                    continue
+                cost = float(run.cost_usd) if run.cost_usd is not None else 0.0
+                out["week"] += cost
+                if day == today:
+                    out["today"] += cost
+                    from app.models import RunStatus
+
+                    if run.status == RunStatus.SKIPPED:
+                        out["skipped_today"] += 1
+    except Exception:
+        pass
+    return out
 
 
 def load_transcript(run_id: int) -> tuple[dict | None, list[dict]]:
@@ -288,6 +330,7 @@ def load_transcript(run_id: int) -> tuple[dict | None, list[dict]]:
             messages = s.scalars(
                 select(RunMessage).where(RunMessage.run_id == run_id).order_by(RunMessage.id)
             ).all()
+            usage = run.usage or {}
             selected = {
                 "id": run.id,
                 "code": run_code(run.routine.key, run.id),
@@ -297,6 +340,15 @@ def load_transcript(run_id: int) -> tuple[dict | None, list[dict]]:
                 "started": _fmt_time(run.started_at),
                 "completed": _fmt_time(run.completed_at),
                 "error": run.error,
+                "cost": _fmt_cost(run.cost_usd),
+                "usage_line": (
+                    f"{usage.get('iterations', 0)} calls · "
+                    f"{(usage.get('input_tokens', 0) + usage.get('cache_read_input_tokens', 0) + usage.get('cache_creation_input_tokens', 0)) / 1000:.0f}k in "
+                    f"({usage.get('cache_read_input_tokens', 0) / 1000:.0f}k cached) · "
+                    f"{usage.get('output_tokens', 0) / 1000:.1f}k out"
+                )
+                if usage
+                else None,
             }
             return selected, build_transcript(messages)
     except Exception:

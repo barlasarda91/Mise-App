@@ -16,7 +16,7 @@ Current mechanics that drive cost (verified in code, 2026-09-10):
   "no new mail" by making tool calls, which costs real tokens to learn nothing.
 - Effort is unset (= high) on every run, including one-line delta updates.
 
-## Phase 0 — instrument (do first; small build)
+## Phase 0 — instrument (SHIPPED 2026-09-10)
 
 Store `usage` per API call on the run (new columns or a JSON on `runs`):
 input / output / cache-read / cache-write tokens and computed dollars. Show
@@ -26,7 +26,7 @@ instead of estimates, and regressions become visible the day they happen.
 
 ## Phase 1 — free wins (no quality change)
 
-**1a. Skip-if-quiet pre-flight (biggest single cut).** Before starting a run,
+**1a. Skip-if-quiet pre-flight (SHIPPED 2026-09-10; biggest single cut).** Before starting a run,
 plain code (zero tokens) checks: any new mail in either mailbox since the last
 gather (`gmail.count_messages` with an after: filter)? For the tracker: any
 lead newly crossing its cadence threshold since the last run? If all quiet,

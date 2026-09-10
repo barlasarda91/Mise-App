@@ -343,12 +343,12 @@ def home(request: Request, msg: str | None = None):
     except Exception:
         pass
     from app.web.board_view import stale_tasks
-    from app.web.runs_view import load_todays_briefing
+    from app.web.runs_view import load_todays_briefing, spend_summary
 
     return render_page(
         request, "home.html", "home", db_status=check_db(), stats=stats,
         priority=priority, waiting=waiting, briefing=load_todays_briefing(),
-        stale=stale_tasks(), msg=msg,
+        stale=stale_tasks(), spend=spend_summary(), msg=msg,
     )
 
 
@@ -452,8 +452,11 @@ def runs(request: Request, run: int | None = None):
     selected, transcript = (None, [])
     if index:
         selected, transcript = load_transcript(run if run is not None else index[0]["id"])
+    from app.web.runs_view import spend_summary
+
     return render_page(
-        request, "runs.html", "runs", runs=index, selected=selected, transcript=transcript
+        request, "runs.html", "runs", runs=index, selected=selected, transcript=transcript,
+        spend=spend_summary(),
     )
 
 

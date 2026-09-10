@@ -5,9 +5,14 @@
 
 {% macro status_bits(status) -%}
   {% if status == "completed" %}<span class="dot green"></span>
+  {% elif status == "skipped" %}<span class="dot" style="background:var(--ink-soft)"></span>
   {% elif status == "running" %}<span class="dot ember"></span>
   {% else %}<span class="dot ember"></span>{% endif %}
 {%- endmacro %}
+
+{% if spend %}
+<div class="note" style="margin:0 0 14px">API SPEND · today {{ "$%.2f" | format(spend.today) }} · 7 days {{ "$%.2f" | format(spend.week) }}{% if spend.skipped_today %} · {{ spend.skipped_today }} quiet run{{ "s" if spend.skipped_today != 1 }} skipped today ($0){% endif %}</div>
+{% endif %}
 
 {% if not runs %}
 <div class="box">
@@ -22,7 +27,7 @@
       {% for r in runs %}
       <a class="item{% if selected and r.id == selected.id %} sel{% endif %}" href="/runs?run={{ r.id }}">
         <div class="h"><span class="rn">{{ r.name }}</span>{{ status_bits(r.status) }}</div>
-        <div class="tm">{{ r.code }} · {{ r.time }} · {{ r.status | upper }}</div>
+        <div class="tm">{{ r.code }} · {{ r.time }} · {{ r.status | upper }}{% if r.cost %} · {{ r.cost }}{% endif %}</div>
       </a>
       {% endfor %}
     </div>
@@ -32,9 +37,12 @@
   <div class="box" style="align-self:start;min-width:0">
     <div class="box-hd">
       <span class="lbl">{{ selected.name }} · {{ selected.code }}</span>
-      <span class="ix">{{ selected.started }} · {{ selected.status | upper }}{% if selected.trigger == "manual" %} · MANUAL{% endif %}</span>
+      <span class="ix">{{ selected.started }} · {{ selected.status | upper }}{% if selected.trigger == "manual" %} · MANUAL{% endif %}{% if selected.cost %} · {{ selected.cost }}{% endif %}</span>
     </div>
     <div class="box-bd">
+      {% if selected.usage_line %}
+      <div class="note" style="margin:0 0 12px">{{ selected.usage_line }}{% if selected.cost %} · {{ selected.cost }}{% endif %}</div>
+      {% endif %}
       {% if selected.error %}
       <div class="msg" style="border-color:var(--ember)">
         <div class="who"><span class="dot ember"></span>Failed</div>

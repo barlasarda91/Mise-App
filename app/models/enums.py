@@ -7,6 +7,9 @@ class RunStatus(str, enum.Enum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    # Pre-flight found nothing new (no mail, calendar unchanged) — the run was
+    # recorded but the model never called (cost roadmap phase 1a).
+    SKIPPED = "skipped"
 
 
 class RunTrigger(str, enum.Enum):

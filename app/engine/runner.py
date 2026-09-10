@@ -59,14 +59,41 @@ def execute_run(
         routine = s.get(Routine, routine_id)
         if routine is None:
             raise ValueError(f"routine {routine_id} not found")
-        model = resolve_model(routine.model)
-        system_prompt = routine.system_prompt
-        context_text = build_runtime_context(s, routine)
-        run = Run(routine_id=routine_id, trigger=trigger, status=RunStatus.RUNNING)
-        s.add(run)
-        s.flush()
-        run_id = run.id
-        run_started_at = run.started_at or datetime.now(timezone.utc)
+
+        # Phase 1a: quiet hours never reach the model.
+        from app.engine.preflight import skip_reason
+
+        reason = skip_reason(s, routine, trigger)
+        if reason:
+            run = Run(
+                routine_id=routine_id,
+                trigger=trigger,
+                status=RunStatus.SKIPPED,
+                completed_at=datetime.now(timezone.utc),
+            )
+            s.add(run)
+            s.flush()
+            skipped_id = run.id
+        else:
+            skipped_id = None
+            model = resolve_model(routine.model)
+            system_prompt = routine.system_prompt
+            context_text = build_runtime_context(s, routine)
+            run = Run(routine_id=routine_id, trigger=trigger, status=RunStatus.RUNNING)
+            s.add(run)
+            s.flush()
+            run_id = run.id
+            run_started_at = run.started_at or datetime.now(timezone.utc)
+
+    if skipped_id is not None:
+        _persist_message(
+            session_factory,
+            skipped_id,
+            MessageRole.ASSISTANT,
+            [{"type": "text", "text": f"Skipped — {reason}. The model was not called ($0)."}],
+        )
+        log.info("run %s skipped: %s", skipped_id, reason)
+        return skipped_id
 
     set_run_context(run_id=run_id, routine_id=routine_id, started_at=run_started_at)
 
@@ -88,9 +115,33 @@ def execute_run(
         fallbacks="default",
     )
 
+    # Phase 0: accumulate token usage and dollars across the run's API calls.
+    totals = {
+        "iterations": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 0,
+    }
+    cost = 0.0
+
     try:
         for _ in range(MAX_ITERATIONS):
             response = client.beta.messages.create(**request_base, messages=messages)
+
+            usage = getattr(response, "usage", None)
+            if usage is not None:
+                from app.engine.pricing import usage_cost
+
+                totals["iterations"] += 1
+                for key in (
+                    "input_tokens",
+                    "output_tokens",
+                    "cache_read_input_tokens",
+                    "cache_creation_input_tokens",
+                ):
+                    totals[key] += getattr(usage, key, 0) or 0
+                cost += usage_cost(getattr(response, "model", None) or model, usage)
 
             tool_uses = [b for b in response.content if getattr(b, "type", None) == "tool_use"]
             _persist_message(
@@ -136,6 +187,14 @@ def execute_run(
         _set_run_status(session_factory, run_id, RunStatus.FAILED, f"{type(exc).__name__}: {exc}")
     finally:
         clear_run_context()
+        if totals["iterations"]:
+            try:
+                with session_factory() as s:
+                    run = s.get(Run, run_id)
+                    run.usage = totals
+                    run.cost_usd = round(cost, 4)
+            except Exception:
+                log.exception("run %s: failed to persist usage", run_id)
     return run_id
 
 

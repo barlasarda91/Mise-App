@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Text, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, Index, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, PortableJSON, TimestampMixin, db_enum
@@ -40,6 +40,10 @@ class Run(Base):
     # What last_run_at was when this run started (window start for its delta queries).
     last_run_at_snapshot: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     error: Mapped[str | None] = mapped_column(Text)
+    # Cost instrumentation (roadmap phase 0): accumulated token usage across
+    # the run's API calls and the computed dollar cost.
+    usage: Mapped[dict | None] = mapped_column(PortableJSON)
+    cost_usd: Mapped[float | None] = mapped_column(Numeric(10, 4))
 
     routine: Mapped[Routine] = relationship(back_populates="runs")
     messages: Mapped[list["RunMessage"]] = relationship(
