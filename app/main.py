@@ -460,6 +460,39 @@ def runs(request: Request, run: int | None = None):
     )
 
 
+@app.get("/costs", response_class=HTMLResponse)
+def costs_page(request: Request):
+    from app.web.runs_view import daily_costs
+
+    return render_page(request, "costs.html", "runs", costs=daily_costs())
+
+
+@app.get("/costs.json")
+def costs_json():
+    from app.web.runs_view import daily_costs
+
+    data = daily_costs()
+    return JSONResponse(
+        {
+            "window_days": data["window_days"],
+            "total_usd": round(data["total"], 4),
+            "by_routine_usd": {name: round(cost, 4) for name, cost in data["routines"]},
+            "days": [
+                {
+                    "date": d["date"].isoformat(),
+                    "runs": d["runs"],
+                    "skipped": d["skipped"],
+                    "input_tokens": d["in_tokens"],
+                    "cached_input_tokens": d["cached_tokens"],
+                    "output_tokens": d["out_tokens"],
+                    "cost_usd": round(d["cost"], 4),
+                }
+                for d in data["days"]
+            ],
+        }
+    )
+
+
 @app.get("/pipeline", response_class=HTMLResponse)
 def pipeline(request: Request, msg: str | None = None):
     from app.web.pipeline_view import discarded_leads, load_board

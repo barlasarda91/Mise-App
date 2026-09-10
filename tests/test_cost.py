@@ -169,3 +169,44 @@ def test_execute_run_records_skip_without_model_call(session_factory, monkeypatc
 
         note = s.query(RunMessage).filter_by(run_id=run_id).one()
         assert "Skipped" in note.content[0]["text"]
+
+
+def test_conversation_caching_enabled(session_factory):
+    """Phase 1b: every request carries the top-level auto-cache alongside the
+    stable system-prompt breakpoint."""
+    with session_factory() as s:
+        routine_id = _routine(s).id
+
+    r1 = FakeResponse([text_block("done")], "end_turn")
+    client = FakeClient([r1])
+    execute_run(routine_id, trigger=RunTrigger.MANUAL,
+                client=client, session_factory=session_factory)
+
+    request = client.requests[0]
+    assert request["cache_control"] == {"type": "ephemeral"}
+    assert request["system"][0]["cache_control"] == {"type": "ephemeral"}
+
+
+def test_daily_costs_buckets_by_day_and_routine(session_factory, monkeypatch):
+    import app.web.runs_view as rv
+
+    monkeypatch.setattr(rv, "db_session", session_factory)
+    now = datetime.now(timezone.utc)
+    with session_factory() as s:
+        tracker = _routine(s, key="lead_tracker")
+        agenda = _routine(s, key="daily_agenda")
+        s.add(Run(routine_id=tracker.id, status=RunStatus.COMPLETED, started_at=now,
+                  cost_usd=0.50, usage={"input_tokens": 1000, "cache_read_input_tokens": 9000,
+                                        "cache_creation_input_tokens": 0, "output_tokens": 500}))
+        s.add(Run(routine_id=agenda.id, status=RunStatus.SKIPPED, started_at=now))
+        s.add(Run(routine_id=agenda.id, status=RunStatus.COMPLETED,
+                  started_at=now - timedelta(days=30), cost_usd=9.99))  # outside window
+
+    costs = rv.daily_costs(days=14)
+    assert len(costs["days"]) == 1
+    day = costs["days"][0]
+    assert day["runs"] == 1 and day["skipped"] == 1
+    assert day["in_tokens"] == 10_000 and day["cached_tokens"] == 9_000
+    assert day["cost"] == pytest.approx(0.50)
+    assert costs["total"] == pytest.approx(0.50)
+    assert costs["routines"][0][0] == "lead_tracker"

@@ -259,6 +259,65 @@ def _fmt_cost(cost) -> str:
     return f"${float(cost):.2f}" if cost is not None else ""
 
 
+def daily_costs(days: int = 14) -> dict:
+    """Per-day run/cost log for the /costs page and its JSON twin: executed
+    vs skipped runs, token totals (with the cached share), dollars, and a
+    per-routine cost split over the window."""
+    from datetime import timedelta, timezone as dt_timezone
+
+    from app.models import RunStatus
+
+    tz = ZoneInfo(get_settings().default_tz)
+    today = datetime.now(tz).date()
+    cutoff = today - timedelta(days=days - 1)
+
+    def _aware(dt):
+        return dt.replace(tzinfo=dt_timezone.utc) if dt is not None and dt.tzinfo is None else dt
+
+    buckets: dict = {}
+    routines: dict = {}
+    try:
+        with db_session() as s:
+            runs = s.scalars(
+                select(Run)
+                .options(joinedload(Run.routine))
+                .order_by(Run.started_at.desc(), Run.id.desc())
+                .limit(1500)
+            ).all()
+            for run in runs:
+                started = _aware(run.started_at)
+                if started is None:
+                    continue
+                day = started.astimezone(tz).date()
+                if day < cutoff or day > today:
+                    continue
+                b = buckets.setdefault(
+                    day,
+                    {"date": day, "runs": 0, "skipped": 0, "cost": 0.0,
+                     "in_tokens": 0, "cached_tokens": 0, "out_tokens": 0},
+                )
+                if run.status == RunStatus.SKIPPED:
+                    b["skipped"] += 1
+                else:
+                    b["runs"] += 1
+                cost = float(run.cost_usd) if run.cost_usd is not None else 0.0
+                b["cost"] += cost
+                usage = run.usage or {}
+                b["in_tokens"] += usage.get("input_tokens", 0) + usage.get("cache_read_input_tokens", 0) + usage.get("cache_creation_input_tokens", 0)
+                b["cached_tokens"] += usage.get("cache_read_input_tokens", 0)
+                b["out_tokens"] += usage.get("output_tokens", 0)
+                routines[run.routine.name] = routines.get(run.routine.name, 0.0) + cost
+    except Exception:
+        pass
+    day_rows = sorted(buckets.values(), key=lambda b: b["date"], reverse=True)
+    return {
+        "days": day_rows,
+        "routines": sorted(routines.items(), key=lambda kv: kv[1], reverse=True),
+        "total": sum(b["cost"] for b in day_rows),
+        "window_days": days,
+    }
+
+
 def load_runs_index(limit: int = 40) -> list[dict]:
     try:
         with db_session() as s:

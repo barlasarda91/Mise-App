@@ -100,12 +100,17 @@ def execute_run(
     messages: list[dict] = [{"role": "user", "content": context_text}]
     _persist_message(session_factory, run_id, MessageRole.USER, {"text": context_text})
 
-    # Request shape: stable system prompt carries the cache breakpoint; the
-    # volatile runtime context lives in messages, after it. Tool list is
+    # Request shape: stable system prompt carries a fixed cache breakpoint;
+    # the volatile runtime context lives in messages, after it. Tool list is
     # sorted (toolkit) so the cached prefix stays byte-stable across runs.
+    # The top-level cache_control additionally auto-caches the deepest block
+    # of the growing conversation each iteration (roadmap phase 1b): loop
+    # iterations are seconds apart, so from iteration 2 on, prior transcript
+    # bills as cache reads (~0.1x) instead of fresh input.
     request_base = dict(
         model=model,
         max_tokens=MAX_TOKENS,
+        cache_control={"type": "ephemeral"},
         system=[{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}],
         thinking={"type": "adaptive"},
         tools=tool_specs(),

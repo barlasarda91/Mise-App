@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}API Costs{% endblock %}
+{% block heading %}API Costs{% endblock %}
+{% block content %}
+
+<div class="grid2">
+  <div class="box" style="align-self:start">
+    <div class="box-hd"><span class="lbl">Daily log</span><span class="ix">LAST {{ costs.window_days }} DAYS · {{ "$%.2f" | format(costs.total) }} TOTAL</span></div>
+    <div class="box-bd" style="overflow-x:auto">
+      <table class="md" style="width:100%;border-collapse:collapse;font-size:13px">
+        <tr>
+          <th style="text-align:left;padding:6px 10px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);border-bottom:1px solid var(--ink)">Date</th>
+          <th style="text-align:right;padding:6px 10px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);border-bottom:1px solid var(--ink)">Ran</th>
+          <th style="text-align:right;padding:6px 10px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);border-bottom:1px solid var(--ink)">Skipped</th>
+          <th style="text-align:right;padding:6px 10px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);border-bottom:1px solid var(--ink)">In (cached)</th>
+          <th style="text-align:right;padding:6px 10px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);border-bottom:1px solid var(--ink)">Out</th>
+          <th style="text-align:right;padding:6px 10px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);border-bottom:1px solid var(--ink)">Cost</th>
+        </tr>
+        {% for d in costs.days %}
+        <tr>
+          <td style="padding:8px 10px;border-bottom:1px solid var(--line);font-family:var(--font-mono);font-size:12px">{{ d.date }}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid var(--line);text-align:right">{{ d.runs }}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;color:var(--ink-soft)">{{ d.skipped }}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid var(--line);text-align:right">{{ "%.0f" | format(d.in_tokens / 1000) }}k ({{ "%.0f" | format(d.cached_tokens / 1000) }}k)</td>
+          <td style="padding:8px 10px;border-bottom:1px solid var(--line);text-align:right">{{ "%.1f" | format(d.out_tokens / 1000) }}k</td>
+          <td style="padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;font-weight:600">{{ "$%.2f" | format(d.cost) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" style="padding:12px 10px"><span class="note">No runs in the window yet.</span></td></tr>
+        {% endfor %}
+      </table>
+    </div>
+  </div>
+
+  <div style="align-self:start">
+    <div class="box">
+      <div class="box-hd"><span class="lbl">By routine</span><span class="ix">{{ costs.window_days }}D</span></div>
+      <div>
+        {% for name, cost in costs.routines %}
+        <div class="row"><span class="name" style="font-size:13.5px">{{ name }}</span><span class="spacer"></span><span class="code">{{ "$%.2f" | format(cost) }}</span></div>
+        {% else %}
+        <div class="box-bd"><span class="note">Nothing yet.</span></div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="box">
+      <div class="box-hd"><span class="lbl">Reading this</span><span class="ix">NOTES</span></div>
+      <div class="box-bd" style="font-size:13.5px">
+        <p><b>Skipped</b> runs cost $0 — the quiet pre-flight found no new mail (and, for the agenda, no calendar change), so the model was never called.</p>
+        <p style="margin-top:8px"><b>In (cached)</b>: total input tokens, with the portion served from prompt cache at ~0.1× price in parentheses. After the conversation-caching change (phase 1b), the cached share should dominate.</p>
+        <p style="margin-top:8px">Machine-readable twin at <a href="/costs.json">/costs.json</a> — paste it to Claude when reviewing the cost roadmap (docs/cost-roadmap.md).</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -130,7 +130,7 @@
 <div class="note" style="margin-top:14px">
   DB: {% if db_status == "ok" %}<span class="pill green">connected</span>{% elif db_status == "absent" %}<span class="pill ghost">not configured</span>{% else %}<span class="pill ember">{{ db_status }}</span>{% endif %}
   &nbsp;·&nbsp; TZ: AMERICA/LOS_ANGELES
-  {% if spend %}&nbsp;·&nbsp; API TODAY {{ "$%.2f" | format(spend.today) }} · 7D {{ "$%.2f" | format(spend.week) }}{% endif %}
+  {% if spend %}&nbsp;·&nbsp; <a href="/costs">API TODAY {{ "$%.2f" | format(spend.today) }} · 7D {{ "$%.2f" | format(spend.week) }}</a>{% endif %}
   &nbsp;·&nbsp; <a href="/pipeline">Pipeline</a> · <a href="/board">Board</a> · <a href="/runs">Runs</a>
 </div>
 

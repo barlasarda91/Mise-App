@@ -34,7 +34,7 @@ record a `skipped — no new activity` run and never call the model. Intraday
 hours are mostly quiet; expect roughly half to two-thirds of the 21 daily runs
 to become $0. First-of-day runs always execute (calendar + A/R + inbox sweep).
 
-**1b. Cache the conversation, not just the system prompt.** Move to top-level
+**1b. Cache the conversation, not just the system prompt. (SHIPPED 2026-09-10)** Move to top-level
 `cache_control: {"type": "ephemeral"}` (auto-caches the deepest prefix) or a
 breakpoint on the last message each iteration. Iterations are seconds apart,
 well inside the 5-minute TTL, so from iteration 2 onward almost all input

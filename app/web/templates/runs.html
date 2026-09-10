@@ -11,7 +11,7 @@
 {%- endmacro %}
 
 {% if spend %}
-<div class="note" style="margin:0 0 14px">API SPEND · today {{ "$%.2f" | format(spend.today) }} · 7 days {{ "$%.2f" | format(spend.week) }}{% if spend.skipped_today %} · {{ spend.skipped_today }} quiet run{{ "s" if spend.skipped_today != 1 }} skipped today ($0){% endif %}</div>
+<div class="note" style="margin:0 0 14px"><a href="/costs">API SPEND</a> · today {{ "$%.2f" | format(spend.today) }} · 7 days {{ "$%.2f" | format(spend.week) }}{% if spend.skipped_today %} · {{ spend.skipped_today }} quiet run{{ "s" if spend.skipped_today != 1 }} skipped today ($0){% endif %} · <a href="/costs">full log →</a></div>
 {% endif %}
 
 {% if not runs %}
