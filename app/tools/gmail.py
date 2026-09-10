@@ -193,6 +193,33 @@ def search_messages(
     return out
 
 
+def search_page(
+    mailbox: FromMailbox,
+    query: str,
+    page_token: str | None = None,
+    page_size: int = 100,
+) -> tuple[list[dict], str | None]:
+    """One page of header summaries plus the next-page token — for the mail
+    index's paged sweeps (search_messages caps at 50 with no paging)."""
+    svc = gmail_service(mailbox_address(mailbox))
+    listing = (
+        svc.users()
+        .messages()
+        .list(userId="me", q=query, maxResults=page_size, pageToken=page_token)
+        .execute()
+    )
+    out = []
+    for ref in listing.get("messages", []):
+        message = (
+            svc.users()
+            .messages()
+            .get(userId="me", id=ref["id"], format="metadata", metadataHeaders=METADATA_HEADERS)
+            .execute()
+        )
+        out.append(_summarize(message))
+    return out, listing.get("nextPageToken")
+
+
 def count_messages(mailbox: FromMailbox, query: str) -> int:
     """Fast size estimate for a query (no per-message fetches)."""
     svc = gmail_service(mailbox_address(mailbox))

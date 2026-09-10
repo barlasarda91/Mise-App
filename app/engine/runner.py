@@ -76,6 +76,22 @@ def execute_run(
             skipped_id = run.id
         else:
             skipped_id = None
+            # Keep the local mail index current before the run reads context —
+            # cheap (only unseen messages) and token-free.
+            try:
+                from app.models.enums import FromMailbox
+                from app.tools.google_client import sa_configured
+                from app.tools.mail_index import index_recent
+
+                if sa_configured():
+                    for source, mailbox in (
+                        ("gmail_arda", FromMailbox.ARDA),
+                        ("gmail_hello", FromMailbox.HELLO),
+                    ):
+                        if source in (routine.connectors or []):
+                            index_recent(mailbox)
+            except Exception:
+                log.warning("mail index upkeep failed — run continues", exc_info=True)
             model = resolve_model(routine.model)
             system_prompt = routine.system_prompt
             context_text = build_runtime_context(s, routine, trigger=trigger.value)

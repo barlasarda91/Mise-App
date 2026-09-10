@@ -981,6 +981,7 @@ def settings_page(request: Request, msg: str | None = None):
     }
     from app.tools.quickbooks import configured as qbo_configured
     from app.tools.quickbooks import qbo_status
+    from app.tools.mail_index import index_status as mail_index_status
     from app.web.board_view import disregard_rules
     from app.web.inbox_view import muted_list
 
@@ -1005,8 +1006,20 @@ def settings_page(request: Request, msg: str | None = None):
         outbound_ip=outbound_ip,
         muted=muted_list(),
         disregarded=disregard_rules(),
+        mail_index=mail_index_status(),
         msg=msg,
     )
+
+
+@app.post("/settings/mail-index/backfill")
+def mail_index_backfill():
+    from app.tools.mail_index import start_backfill
+
+    try:
+        msg = start_backfill()
+    except Exception as exc:
+        msg = f"Error: {exc}"
+    return RedirectResponse(f"/settings?msg={msg}", status_code=303)
 
 
 def _qbo_redirect_uri(request: Request) -> str:

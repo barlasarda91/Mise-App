@@ -73,6 +73,28 @@ def build_runtime_context(session, routine: Routine, trigger: str | None = None)
             f"last action {lead.last_confirmed_action or '—'} · {idle_txt}{pending}"
         )
 
+    if any(c.startswith("gmail") for c in routine.connectors or []):
+        try:
+            from app.tools.mail_index import awaiting_reply
+
+            waiting = awaiting_reply(session)
+        except Exception:
+            waiting = []
+        if waiting:
+            lines.append(
+                "\n## Threads awaiting a Boxx reply (from the local 90-day mail index — "
+                "read or unread, these have no reply from us)"
+            )
+            for t in waiting:
+                lines.append(
+                    f"- [{t['mailbox']}@ · msg {t['gmail_msg_id']}] {t['from_name']} — "
+                    f"\"{t['subject']}\" · last message {t['last_message']} ({t['age_days']}d ago)"
+                )
+            lines.append(
+                "Triage these: anything needing Arda becomes a briefing item + task "
+                "(get_gmail_message for detail). This list replaces manual left-hanging searches."
+            )
+
     from app.models import DisregardRule
 
     rules = session.scalars(select(DisregardRule).order_by(DisregardRule.id.desc()).limit(20)).all()

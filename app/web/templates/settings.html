@@ -85,6 +85,28 @@
 </div>
 
 <div class="box">
+  <div class="box-hd"><span class="lbl">Mail index</span><span class="ix">{{ mail_index.rows }} MESSAGES · LOCAL MEMORY</span></div>
+  <div>
+    {% for mb, info in mail_index.per_mailbox.items() %}
+    <div class="kv"><div class="lft"><span class="kt">{{ mb }}@</span><span class="ks" style="margin-left:8px">{{ info.rows }} messages{% if info.newest %} · newest {{ info.newest.strftime("%Y-%m-%d %H:%M") }}{% endif %}</span></div></div>
+    {% endfor %}
+    <div class="kv">
+      <div class="lft">
+        {% if mail_index.backfill %}
+        <span class="ks">Backfill: {{ mail_index.backfill.state }} · {{ mail_index.backfill.indexed or 0 }} indexed{% if mail_index.backfill.state == "error" %} · {{ mail_index.backfill.error }}{% endif %}</span>
+        {% else %}
+        <span class="ks">No backfill run yet — the index only knows mail seen since it was created.</span>
+        {% endif %}
+      </div>
+      <form method="post" action="/settings/mail-index/backfill">
+        <button class="linkish solid" type="submit">Run 90-day sweep</button>
+      </form>
+    </div>
+  </div>
+</div>
+<div class="note" style="margin:10px 0 14px">The index caches headers of the last 90 days (both mailboxes) so "threads awaiting a reply" is computed locally — read mail included — instead of searched live. Runs keep it current automatically; the sweep is a one-time build (re-running is safe) and uses zero model tokens.</div>
+
+<div class="box">
   <div class="box-hd"><span class="lbl">Disregarded</span><span class="ix">{{ disregarded | length }} · HIDDEN FROM BRIEFING &amp; BOARD</span></div>
   <div>
     {% for r in disregarded %}
