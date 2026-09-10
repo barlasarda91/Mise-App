@@ -78,6 +78,31 @@ def events_on(day: date) -> list[dict]:
     return list_events(start, start + timedelta(days=1))
 
 
+RSVP_STATUS = {"yes": "accepted", "no": "declined", "maybe": "tentative"}
+
+
+def respond_to_event(event_id: str, response: str) -> dict:
+    """RSVP to an invite as arda (OPERATOR-ONLY: called from the Calendar
+    tab's Yes/Maybe/No buttons — never from a model tool). Notifies the
+    organizer like responding in Google Calendar would."""
+    status = RSVP_STATUS[response]
+    svc = calendar_service(_calendar_address())
+    event = svc.events().get(calendarId="primary", eventId=event_id).execute()
+    attendees = event.get("attendees") or []
+    for attendee in attendees:
+        if attendee.get("self"):
+            attendee["responseStatus"] = status
+            break
+    else:
+        raise ValueError("You aren't an attendee on this invite.")
+    patched = (
+        svc.events()
+        .patch(calendarId="primary", eventId=event_id, body={"attendees": attendees}, sendUpdates="all")
+        .execute()
+    )
+    return {"event_id": event_id, "status": status, "summary": patched.get("summary", "")}
+
+
 def create_reminder(requested_date: date, summary: str, description: str) -> dict:
     """Popup reminder event; description should carry contact name, phone/email,
     and one line of context (spec §7.1)."""

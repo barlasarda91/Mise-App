@@ -438,10 +438,26 @@ def inbox_draft(
 
 
 @app.get("/calendar", response_class=HTMLResponse)
-def calendar_page(request: Request):
+def calendar_page(request: Request, msg: str | None = None):
     from app.web.calendar_view import load_calendar
 
-    return render_page(request, "calendar.html", "calendar", cal=load_calendar())
+    return render_page(request, "calendar.html", "calendar", cal=load_calendar(), msg=msg)
+
+
+@app.post("/calendar/respond")
+def calendar_respond(event_id: str = Form(...), response: str = Form(...)):
+    """OPERATOR RSVP from the Calendar tab — notifies the organizer, exactly
+    like answering the invite in Google Calendar."""
+    from app.tools.calendar import RSVP_STATUS, respond_to_event
+
+    try:
+        if response not in RSVP_STATUS:
+            raise ValueError("response must be yes, maybe, or no")
+        result = respond_to_event(event_id, response)
+        msg = f"RSVP sent: {response} — {result['summary'] or 'invite'} (organizer notified)."
+    except Exception as exc:
+        msg = f"RSVP failed: {type(exc).__name__}: {exc}"
+    return RedirectResponse(f"/calendar?msg={msg}", status_code=303)
 
 
 @app.get("/runs", response_class=HTMLResponse)

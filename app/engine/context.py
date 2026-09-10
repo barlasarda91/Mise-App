@@ -22,7 +22,7 @@ MAX_TASKS = 25
 COLD_START_DAYS = 90
 
 
-def build_runtime_context(session, routine: Routine) -> str:
+def build_runtime_context(session, routine: Routine, trigger: str | None = None) -> str:
     tz = ZoneInfo(routine.timezone or get_settings().default_tz)
     now = datetime.now(tz)
     today = now.date()
@@ -30,6 +30,13 @@ def build_runtime_context(session, routine: Routine) -> str:
         "## Runtime context",
         f"Current datetime: {now.strftime('%A %Y-%m-%d %H:%M')} ({tz})",
     ]
+    if trigger == "manual":
+        lines.append(
+            "Trigger: MANUAL — Arda pressed Run now and wants a full fresh look, "
+            "not just the hourly delta."
+        )
+    elif trigger:
+        lines.append(f"Trigger: {trigger}")
 
     sync_rows = session.scalars(
         select(SyncState).where(SyncState.routine_id == routine.id).order_by(SyncState.source)

@@ -559,9 +559,12 @@ def _list_calendar_events(session: Session, date_from: str, date_to: str):
     out = []
     for event in events:
         start_info = event.get("start") or {}
+        me = next((a for a in event.get("attendees") or [] if a.get("self")), None)
         out.append(
             {
                 "summary": event.get("summary", "(no title)"),
+                # arda's own RSVP: accepted / declined / tentative / needsAction
+                "my_response": me.get("responseStatus") if me else None,
                 "start": start_info.get("dateTime") or start_info.get("date"),
                 "end": (event.get("end") or {}).get("dateTime") or (event.get("end") or {}).get("date"),
                 "all_day": "date" in start_info,

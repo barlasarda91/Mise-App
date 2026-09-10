@@ -59,3 +59,56 @@ def test_load_calendar_unconfigured(monkeypatch):
     result = load_calendar()
     assert "not configured" in result["error"]
     assert result["days"] == []
+
+
+def test_shape_days_carries_rsvp_state():
+    events = [
+        _event("CCENTRAL call", {"dateTime": "2026-09-04T10:00:00-07:00"},
+               {"dateTime": "2026-09-04T10:45:00-07:00"},
+               id="ev1",
+               attendees=[
+                   {"email": "ardabarlas@boxxcoffee.com", "self": True, "responseStatus": "accepted"},
+                   {"email": "tnh@ccentralhg.com", "responseStatus": "needsAction"},
+               ]),
+        _event("Unanswered invite", {"dateTime": "2026-09-04T13:00:00-07:00"},
+               {"dateTime": "2026-09-04T13:30:00-07:00"},
+               id="ev2",
+               attendees=[{"email": "ardabarlas@boxxcoffee.com", "self": True,
+                           "responseStatus": "needsAction"}]),
+    ]
+    today = shape_days(events, TODAY, LA)[0]["events"]
+    assert today[0]["my_response"] == "accepted" and today[0]["id"] == "ev1"
+    assert today[1]["my_response"] == "needsAction"
+
+
+def test_respond_to_event_patches_self_attendee(monkeypatch):
+    import app.tools.calendar as cal
+
+    stored = {"attendees": [
+        {"email": "ble@ccentralhg.com", "responseStatus": "needsAction"},
+        {"email": "ardabarlas@boxxcoffee.com", "self": True, "responseStatus": "needsAction"},
+    ], "summary": "CCENTRAL call"}
+    patches = {}
+
+    class FakeEvents:
+        def get(self, calendarId, eventId):
+            return type("R", (), {"execute": lambda s: dict(stored)})()
+
+        def patch(self, calendarId, eventId, body, sendUpdates):
+            patches.update(body=body, sendUpdates=sendUpdates, eventId=eventId)
+            return type("R", (), {"execute": lambda s: {"summary": stored["summary"]}})()
+
+    class FakeSvc:
+        def events(self):
+            return FakeEvents()
+
+    monkeypatch.setattr(cal, "calendar_service", lambda addr: FakeSvc())
+    monkeypatch.setattr(cal, "_calendar_address", lambda: "ardabarlas@boxxcoffee.com")
+
+    result = cal.respond_to_event("ev1", "yes")
+    assert result["status"] == "accepted"
+    me = next(a for a in patches["body"]["attendees"] if a.get("self"))
+    other = next(a for a in patches["body"]["attendees"] if not a.get("self"))
+    assert me["responseStatus"] == "accepted"
+    assert other["responseStatus"] == "needsAction"  # untouched
+    assert patches["sendUpdates"] == "all"

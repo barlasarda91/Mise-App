@@ -3,6 +3,8 @@
 {% block heading %}Calendar{% endblock %}
 {% block content %}
 
+{% if msg %}<div class="note" style="margin:0 0 14px">▸ {{ msg }}</div>{% endif %}
+
 {% if cal.error %}
 <div class="box"><div class="box-bd"><div class="note">{{ cal.error }}</div></div></div>
 {% else %}
@@ -18,6 +20,21 @@
         <span class="meta">{% if e.location %}{{ e.location }}{% endif %}{% if e.attendees > 1 %} · {{ e.attendees }} people{% endif %}</span>
         <span class="spacer"></span>
         {% if e.tz_mismatch %}<span class="pill ember" title="Invite timezone differs from America/Los_Angeles — double-check the join time">TZ?</span>{% endif %}
+        {% if e.my_response == "needsAction" and e.id %}
+        <span style="display:inline-flex;gap:4px;align-items:center">
+          <span class="pill ember">RSVP?</span>
+          {% for r, label in [("yes","Yes"), ("maybe","Maybe"), ("no","No")] %}
+          <form method="post" action="/calendar/respond" style="display:inline">
+            <input type="hidden" name="event_id" value="{{ e.id }}">
+            <input type="hidden" name="response" value="{{ r }}">
+            <button class="linkish" type="submit" style="padding:1px 6px">{{ label }}</button>
+          </form>
+          {% endfor %}
+        </span>
+        {% elif e.my_response == "accepted" %}<span class="pill green" title="You accepted this invite">✓ going</span>
+        {% elif e.my_response == "tentative" %}<span class="pill ghost">~ maybe</span>
+        {% elif e.my_response == "declined" %}<span class="pill ghost">✗ declined</span>
+        {% endif %}
       </div>
       {% else %}
       <div class="box-bd"><span class="note">Nothing scheduled.</span></div>

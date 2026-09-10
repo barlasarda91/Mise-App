@@ -78,7 +78,7 @@ def execute_run(
             skipped_id = None
             model = resolve_model(routine.model)
             system_prompt = routine.system_prompt
-            context_text = build_runtime_context(s, routine)
+            context_text = build_runtime_context(s, routine, trigger=trigger.value)
             run = Run(routine_id=routine_id, trigger=trigger, status=RunStatus.RUNNING)
             s.add(run)
             s.flush()

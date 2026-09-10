@@ -39,8 +39,11 @@ def shape_days(events: list[dict], today: date, tz: ZoneInfo, days: int = DAYS) 
             if not (start.date() <= day <= end.date()):
                 continue
             tz_label = (event.get("start") or {}).get("timeZone")
+            me = next((a for a in event.get("attendees") or [] if a.get("self")), None)
             bucket["events"].append(
                 {
+                    "id": event.get("id"),
+                    "my_response": me.get("responseStatus") if me else None,
                     "all_day": all_day,
                     "time": "ALL DAY" if all_day else f"{start.strftime('%H:%M')}–{end.strftime('%H:%M')}",
                     "sort": (0 if all_day else 1, start),
