@@ -1,0 +1,30 @@
+{# Calendar invites found in the conversation (set `invites` and `rsvp_next` before including). #}
+{% if invites %}
+<div class="box" style="border-color:var(--ember)">
+  <div class="box-hd"><span class="lbl">Calendar invite</span><span class="ix" style="color:var(--ember)">{{ invites | length }} · RSVP FROM HERE</span></div>
+  <div>
+    {% for inv in invites %}
+    <div class="row">
+      <span class="name" style="font-size:13.5px">{{ inv.summary }}</span>
+      <span class="meta">{{ inv.start | replace("T", " ") | truncate(16, True, "") }}</span>
+      <span class="spacer"></span>
+      {% if inv.my_response in (None, "needsAction") %}
+      <span style="display:inline-flex;gap:4px;align-items:center">
+        {% for r, label in [("yes","Yes"), ("maybe","Maybe"), ("no","No")] %}
+        <form method="post" action="/calendar/respond" style="display:inline">
+          <input type="hidden" name="event_id" value="{{ inv.event_id }}">
+          <input type="hidden" name="response" value="{{ r }}">
+          <input type="hidden" name="next" value="{{ rsvp_next }}">
+          <button class="linkish" type="submit" style="padding:1px 6px">{{ label }}</button>
+        </form>
+        {% endfor %}
+      </span>
+      {% elif inv.my_response == "accepted" %}<span class="pill green">✓ going</span>
+      {% elif inv.my_response == "tentative" %}<span class="pill ghost">~ maybe</span>
+      {% elif inv.my_response == "declined" %}<span class="pill ghost">✗ declined</span>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}

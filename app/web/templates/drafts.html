@@ -118,6 +118,9 @@
   <div style="align-self:start;min-width:0">
   {% set alinks = thread.action_links %}
   {% include "_action_links.html" %}
+  {% set invites = thread.invites %}
+  {% set rsvp_next = "/drafts?draft=" ~ selected.id if selected else "/drafts" %}
+  {% include "_invite_rsvp.html" %}
   <div class="box" style="min-width:0">
     <div class="box-hd"><span class="lbl">{{ "Thread" if thread.label == "thread" else "Recent history" }}</span><span class="ix">{{ thread.messages | length }} MESSAGES · OLDEST FIRST</span></div>
     <div class="box-bd">

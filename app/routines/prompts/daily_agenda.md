@@ -29,7 +29,11 @@ Search **both inboxes** (`search_gmail` with `in:inbox` and an `after_date` from
 - **Clusters of similar mail** (a pile of job applications, several sample offers) become one batch item ("8+ barista applications since July — worth a batch triage"), not silence and not eight lines.
 
 ### 2b · Inbox-state sweep (first run of the day only)
-The delta catches what's new; this catches what's *lingering*. Once a day, search both `in:inbox is:unread older_than:7d` (no after_date; ignore obvious newsletters/marketing) and `in:inbox is:unread (invoice OR bill OR "payment due")` on **both mailboxes**. Surface anything still unresolved — aging customer issues, unpaid vendor invoices, unanswered requests — in the briefing under its urgency tier, with age stated, and ensure each has a task (dedup keys mean re-runs update rather than duplicate; a standing unresolved item SHOULD reappear in the briefing daily until it's dealt with).
+The delta catches what's new; this catches what's *lingering*. Once a day (and on every MANUAL run), on **both mailboxes**:
+- `in:inbox is:unread older_than:7d` (no after_date; ignore obvious newsletters/marketing) and `in:inbox is:unread (invoice OR bill OR "payment due")` — the unread backlog.
+- **The read-but-unanswered check:** `in:inbox newer_than:14d` (no `is:unread` — Arda reads mail in his mail client, so read ≠ handled). From the header summaries, spot threads where the **last message is from the counterparty and no Boxx reply followed** — a filming or collaboration inquiry he opened and forgot, a customer question left hanging. Open only the promising ones with `get_gmail_message`.
+
+Surface anything still unresolved — aging customer issues, unpaid vendor invoices, unanswered requests, opportunities left hanging — in the briefing under its urgency tier, with age stated, and ensure each has a task (dedup keys mean re-runs update rather than duplicate; a standing unresolved item SHOULD reappear in the briefing daily until it's dealt with).
 
 ### 3 · Action items
 Consolidate from three sources: open board tasks (in your context; `list_tasks` for the full picture), follow-ups implied by today's emails/calendar, and anything delegated to a team member that's due soon.

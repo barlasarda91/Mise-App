@@ -445,9 +445,10 @@ def calendar_page(request: Request, msg: str | None = None):
 
 
 @app.post("/calendar/respond")
-def calendar_respond(event_id: str = Form(...), response: str = Form(...)):
-    """OPERATOR RSVP from the Calendar tab — notifies the organizer, exactly
-    like answering the invite in Google Calendar."""
+def calendar_respond(event_id: str = Form(...), response: str = Form(...), next: str = Form("/calendar")):
+    """OPERATOR RSVP — from the Calendar tab or an invite card on a task,
+    lead, inbox, or draft page. Notifies the organizer, exactly like
+    answering the invite in Google Calendar."""
     from app.tools.calendar import RSVP_STATUS, respond_to_event
 
     try:
@@ -457,7 +458,9 @@ def calendar_respond(event_id: str = Form(...), response: str = Form(...)):
         msg = f"RSVP sent: {response} — {result['summary'] or 'invite'} (organizer notified)."
     except Exception as exc:
         msg = f"RSVP failed: {type(exc).__name__}: {exc}"
-    return RedirectResponse(f"/calendar?msg={msg}", status_code=303)
+    target = next if next.startswith("/") and not next.startswith("//") else "/calendar"
+    sep = "&" if "?" in target else "?"
+    return RedirectResponse(f"{target}{sep}msg={msg}", status_code=303)
 
 
 @app.get("/runs", response_class=HTMLResponse)

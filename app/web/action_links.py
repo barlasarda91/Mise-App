@@ -24,6 +24,7 @@ RULES = [
     ("square.link", "", "Pay · Square"),
     ("squareup.com", "/pay", "Pay · Square"),
     ("bill.com", "", "View invoice · Bill.com"),
+    ("calendar.google.com", "/calendar/event", "Open invite · Google Calendar"),
 ]
 
 MAX_LINKS = 6
@@ -41,6 +42,30 @@ def _label_for(url: str) -> str | None:
         ):
             return label
     return None
+
+
+_EID_RE = re.compile(r"calendar\.google\.com/calendar/event\?[^\s\"'<>\)\]]*\beid=([A-Za-z0-9_-]+)")
+
+
+def extract_invite_event_ids(messages: list[dict], limit: int = 2) -> list[str]:
+    """Google Calendar event ids referenced by invite emails in a thread.
+    The eid URL param is unpadded base64url of "<event id> <calendar email>"."""
+    import base64
+
+    ids: list[str] = []
+    for message in reversed(messages):
+        for eid in _EID_RE.findall(message.get("body") or ""):
+            try:
+                padded = eid + "=" * (-len(eid) % 4)
+                decoded = base64.urlsafe_b64decode(padded).decode("utf-8", "ignore")
+                event_id = decoded.split()[0]
+            except Exception:
+                continue
+            if event_id and event_id not in ids:
+                ids.append(event_id)
+                if len(ids) >= limit:
+                    return ids
+    return ids
 
 
 def extract_action_links(messages: list[dict]) -> list[dict]:

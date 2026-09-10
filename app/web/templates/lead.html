@@ -48,6 +48,9 @@
 
     {% set alinks = email_ctx.action_links if email_ctx else none %}
     {% include "_action_links.html" %}
+    {% set invites = email_ctx.invites if email_ctx else none %}
+    {% set rsvp_next = "/pipeline/lead/" ~ lead.id %}
+    {% include "_invite_rsvp.html" %}
 
     <div class="box">
       <div class="box-hd"><span class="lbl">Email</span>

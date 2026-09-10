@@ -272,8 +272,19 @@ def load_thread(selected: dict | None) -> dict | None:
         messages = gmail.get_thread_messages(mailbox, thread_id, last_n=8)
     except Exception as exc:
         return {"error": f"{type(exc).__name__}: {exc}", "messages": [], "label": label,
-                "thread_id": thread_id, "mailbox": selected["mailbox"], "action_links": []}
-    from app.web.action_links import extract_action_links
+                "thread_id": thread_id, "mailbox": selected["mailbox"], "action_links": [], "invites": []}
+    from app.web.action_links import extract_action_links, extract_invite_event_ids
+
+    invites = []
+    try:
+        from app.tools.calendar import event_rsvp_state
+
+        for event_id in extract_invite_event_ids(messages):
+            state = event_rsvp_state(event_id)
+            if state is not None:
+                invites.append(state)
+    except Exception:
+        invites = []
 
     shaped = []
     for m in messages:
@@ -290,7 +301,8 @@ def load_thread(selected: dict | None) -> dict | None:
     return {"error": None, "messages": shaped, "label": label,
             "thread_id": thread_id, "mailbox": selected["mailbox"],
             # extracted from the full bodies, before display truncation
-            "action_links": extract_action_links(messages)}
+            "action_links": extract_action_links(messages),
+            "invites": invites}
 
 
 # ---------- services ----------

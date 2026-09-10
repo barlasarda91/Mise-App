@@ -126,10 +126,22 @@ def load_open_message(mailbox: str, msg_id: str) -> dict | None:
         message = gmail.get_message(FromMailbox(mailbox), msg_id)
     except Exception as exc:
         return {"error": f"{type(exc).__name__}: {exc}"}
-    from app.web.action_links import extract_action_links
+    from app.web.action_links import extract_action_links, extract_invite_event_ids
+
+    invites = []
+    try:
+        from app.tools.calendar import event_rsvp_state
+
+        for event_id in extract_invite_event_ids([message]):
+            state = event_rsvp_state(event_id)
+            if state is not None:
+                invites.append(state)
+    except Exception:
+        invites = []
 
     return {
         "action_links": extract_action_links([message]),
+        "invites": invites,
         "error": None,
         "mailbox": mailbox,
         "id": message["id"],

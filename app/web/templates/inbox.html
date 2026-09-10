@@ -47,6 +47,9 @@
       <div style="font-weight:600;font-size:15px;margin-bottom:10px">{{ opened.subject }}</div>
       {% set alinks = opened.action_links %}
       {% include "_action_links.html" %}
+      {% set invites = opened.invites %}
+      {% set rsvp_next = "/inbox?open=" ~ opened.mailbox ~ ":" ~ opened.id %}
+      {% include "_invite_rsvp.html" %}
       <div class="mailbody" style="font-size:14px">{{ opened.body }}</div>
 
       <div class="box" style="margin-top:16px">

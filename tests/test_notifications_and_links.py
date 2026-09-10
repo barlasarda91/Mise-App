@@ -557,3 +557,46 @@ def test_disregard_list_reaches_runtime_context(session_factory):
         context = build_runtime_context(s, routine)
     assert "Disregarded by Arda" in context
     assert "steph@213filming.com" in context
+
+
+# ---------- calendar invites in email threads ----------
+
+
+def test_extract_invite_event_ids_decodes_eid():
+    import base64
+
+    from app.web.action_links import extract_invite_event_ids
+
+    eid = base64.urlsafe_b64encode(b"abc123eventid ardabarlas@boxxcoffee.com").decode().rstrip("=")
+    messages = [
+        {"body": f"View event: https://calendar.google.com/calendar/event?action=VIEW&eid={eid}&tok=x"},
+        {"body": "no invite here"},
+    ]
+    assert extract_invite_event_ids(messages) == ["abc123eventid"]
+    assert extract_invite_event_ids([{"body": "eid=%%%garbage"}]) == []
+
+
+def test_event_rsvp_state_shapes_and_handles_missing(monkeypatch):
+    import app.tools.calendar as cal
+
+    class FakeEvents:
+        def get(self, calendarId, eventId):
+            if eventId == "gone":
+                raise RuntimeError("404")
+            return type("R", (), {"execute": lambda s: {
+                "summary": "Boxx x Sidestream Connect",
+                "start": {"dateTime": "2026-09-11T15:00:00-07:00"},
+                "attendees": [{"email": "a@b.c", "self": True, "responseStatus": "needsAction"}],
+            }})()
+
+    class FakeSvc:
+        def events(self):
+            return FakeEvents()
+
+    monkeypatch.setattr(cal, "calendar_service", lambda addr: FakeSvc())
+    monkeypatch.setattr(cal, "_calendar_address", lambda: "a@b.c")
+
+    state = cal.event_rsvp_state("ev1")
+    assert state["summary"] == "Boxx x Sidestream Connect"
+    assert state["my_response"] == "needsAction"
+    assert cal.event_rsvp_state("gone") is None

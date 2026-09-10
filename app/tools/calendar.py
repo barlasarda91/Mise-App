@@ -81,6 +81,26 @@ def events_on(day: date) -> list[dict]:
 RSVP_STATUS = {"yes": "accepted", "no": "declined", "maybe": "tentative"}
 
 
+def event_rsvp_state(event_id: str) -> dict | None:
+    """Summary + arda's response for one event; None when it isn't on the
+    calendar (e.g. an invite that never landed) or can't be fetched."""
+    try:
+        svc = calendar_service(_calendar_address())
+        event = svc.events().get(calendarId="primary", eventId=event_id).execute()
+    except Exception:
+        return None
+    if event.get("status") == "cancelled":
+        return None
+    me = next((a for a in event.get("attendees") or [] if a.get("self")), None)
+    start = event.get("start") or {}
+    return {
+        "event_id": event_id,
+        "summary": event.get("summary", "(no title)"),
+        "start": start.get("dateTime") or start.get("date") or "",
+        "my_response": me.get("responseStatus") if me else None,
+    }
+
+
 def respond_to_event(event_id: str, response: str) -> dict:
     """RSVP to an invite as arda (OPERATOR-ONLY: called from the Calendar
     tab's Yes/Maybe/No buttons — never from a model tool). Notifies the

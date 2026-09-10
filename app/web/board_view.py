@@ -267,11 +267,11 @@ def load_task_email_context(task: dict | None) -> dict | None:
             ctx["reply_addr"] = contact
             return ctx
         return {"error": None, "messages": [], "label": "history", "thread_id": None,
-                "mailbox": "arda", "reply_addr": contact, "action_links": []}
+                "mailbox": "arda", "reply_addr": contact, "action_links": [], "invites": []}
 
     if last_error:
         return {"error": last_error, "messages": [], "label": "thread", "thread_id": None,
-                "mailbox": "arda", "reply_addr": "", "action_links": []}
+                "mailbox": "arda", "reply_addr": "", "action_links": [], "invites": []}
     return None
 
 
