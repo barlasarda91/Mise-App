@@ -84,10 +84,17 @@ register(
 )
 
 
+RUN_BODY_CHARS = 3000  # tool-result hygiene (cost roadmap 1c): don't feed whole novels to the loop
+
+
 def _get_gmail_message(session: Session, mailbox: str, msg_id: str):
     from app.tools import gmail
 
-    return gmail.get_message(FromMailbox(mailbox), msg_id)
+    message = gmail.get_message(FromMailbox(mailbox), msg_id)
+    body = message.get("body") or ""
+    if len(body) > RUN_BODY_CHARS:
+        message["body"] = body[:RUN_BODY_CHARS] + "\n… (truncated — the full text stays in Gmail)"
+    return message
 
 
 register(
@@ -540,6 +547,8 @@ def _list_calendar_events(session: Session, date_from: str, date_to: str):
                 "timezone_label": start_info.get("timeZone"),
                 "location": event.get("location"),
                 "attendees": [a.get("email") for a in event.get("attendees") or []],
+                # prep notes live here ("Check Larder order increase") — capped
+                "description": (event.get("description") or "")[:500] or None,
             }
         )
     return out
@@ -550,7 +559,8 @@ register(
         name="list_calendar_events",
         description=(
             "List arda's calendar events between two dates inclusive (YYYY-MM-DD). "
-            "Includes each event's timezone label so displayed-vs-actual offsets can be checked."
+            "Includes each event's timezone label (so displayed-vs-actual offsets can be "
+            "checked) and its description — prep notes often live there."
         ),
         input_schema={
             "type": "object",

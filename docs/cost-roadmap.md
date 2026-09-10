@@ -41,7 +41,7 @@ well inside the 5-minute TTL, so from iteration 2 onward almost all input
 bills at ~0.1×. Verify with the Phase 0 numbers: `cache_read_input_tokens`
 should dominate. Expect the input side of a run to drop by well over half.
 
-**1c. Tool-result hygiene.** Cap Gmail body text returned to the model
+**1c. Tool-result hygiene. (SHIPPED 2026-09-10)** Cap Gmail body text returned to the model
 (`get_gmail_message` currently returns full bodies; thread context already
 caps at 2.5k chars — apply a similar cap, with a "truncated" marker, to the
 run tools) and keep search results to header summaries. Runtime context is

@@ -210,3 +210,56 @@ def test_daily_costs_buckets_by_day_and_routine(session_factory, monkeypatch):
     assert day["cost"] == pytest.approx(0.50)
     assert costs["total"] == pytest.approx(0.50)
     assert costs["routines"][0][0] == "lead_tracker"
+
+
+# ---------- phase 1c: tool-result hygiene ----------
+
+
+def test_gmail_body_capped_in_run_tool(session_factory, monkeypatch):
+    import app.tools.gmail as gmail
+    from app.routines.tools import RUN_BODY_CHARS, _get_gmail_message
+
+    monkeypatch.setattr(
+        gmail, "get_message",
+        lambda mb, mid: {"id": mid, "from": "x", "body": "long " * 2000},
+    )
+    with session_factory() as s:
+        result = _get_gmail_message(s, "arda", "m1")
+    assert len(result["body"]) <= RUN_BODY_CHARS + 60
+    assert "truncated" in result["body"]
+
+
+def test_calendar_tool_includes_capped_description(session_factory, monkeypatch):
+    import app.tools.calendar as cal
+    from app.routines.tools import _list_calendar_events
+
+    monkeypatch.setattr(
+        cal, "list_events",
+        lambda start, end: [{
+            "summary": "Vendors Meeting",
+            "start": {"dateTime": "2026-09-10T10:30:00-07:00", "timeZone": "America/Los_Angeles"},
+            "end": {"dateTime": "2026-09-10T11:00:00-07:00"},
+            "description": "Check Larder order increase. " + "pad " * 300,
+        }],
+    )
+    with session_factory() as s:
+        (event,) = _list_calendar_events(s, "2026-09-10", "2026-09-10")
+    assert event["description"].startswith("Check Larder order increase.")
+    assert len(event["description"]) == 500
+
+
+def test_dispatch_caps_oversized_results(session_factory):
+    from app.engine.toolkit import MAX_RESULT_CHARS, ToolDef, _REGISTRY, dispatch
+
+    _REGISTRY["_test_blob"] = ToolDef(
+        name="_test_blob", description="", input_schema={"type": "object", "properties": {}},
+        handler=lambda session: {"blob": "x" * (MAX_RESULT_CHARS * 2)},
+    )
+    try:
+        with session_factory() as s:
+            content, is_error = dispatch("_test_blob", {}, s)
+        assert not is_error
+        assert len(content) < MAX_RESULT_CHARS + 200
+        assert "result truncated" in content
+    finally:
+        del _REGISTRY["_test_blob"]

@@ -71,6 +71,9 @@ def tool_specs(names: list[str] | None = None) -> list[dict]:
     return out
 
 
+MAX_RESULT_CHARS = 24000  # safety net (cost roadmap 1c): no tool result floods the loop
+
+
 def dispatch(name: str, tool_input: dict, session: Session) -> tuple[str, bool]:
     """Run a tool; returns (content, is_error). Errors are returned to the
     model as tool results, never raised into the run loop."""
@@ -79,7 +82,13 @@ def dispatch(name: str, tool_input: dict, session: Session) -> tuple[str, bool]:
         return f"Error: unknown tool '{name}'", True
     try:
         result = tool.handler(session, **tool_input)
-        return json.dumps(result, default=str, ensure_ascii=False), False
+        content = json.dumps(result, default=str, ensure_ascii=False)
+        if len(content) > MAX_RESULT_CHARS:
+            content = (
+                content[:MAX_RESULT_CHARS]
+                + f"\n… (result truncated at {MAX_RESULT_CHARS} chars — narrow the query for the rest)"
+            )
+        return content, False
     except Exception as exc:
         return f"Error: {type(exc).__name__}: {exc}", True
 
