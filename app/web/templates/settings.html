@@ -31,7 +31,7 @@
     {% endfor %}
   </div>
 </div>
-<div class="note" style="margin:-8px 0 14px">Routines are seeded disabled with placeholder prompts — the real Lead Tracker and Agenda prompts land in milestones 7–8. "Run now" queues a background run.</div>
+<div class="note" style="margin:10px 0 14px">Prompts, schedules, and connectors are versioned in the repo (app/routines/) and sync on each deploy. "Run now" queues a background run and always does a full fresh look. Per-run costs: <a href="/costs">Runs → full log</a>.</div>
 
 <div class="box">
   <div class="box-hd"><span class="lbl">Google Workspace · Service Account</span><span class="ix">DOMAIN-WIDE DELEGATION</span></div>
@@ -122,5 +122,5 @@
   </div>
 </div>
 
-<div class="note">Connector checks run live against Google on page load. CLI equivalent: <b>python -m app.tools.check_google</b>. Routines configuration lands in milestone 5.</div>
+<div class="note">Connector checks run live against Google on page load. CLI equivalent: <b>python -m app.tools.check_google</b>.</div>
 {% endblock %}
