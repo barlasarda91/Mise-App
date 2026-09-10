@@ -69,6 +69,7 @@
         </label>
         <label>To<input name="to" value="{{ selected.to }}" placeholder="comma-separated"></label>
         <label>Cc<input name="cc" value="{{ selected.cc }}" placeholder="comma-separated"></label>
+        <label>Bcc<input name="bcc" value="{{ selected.bcc }}" placeholder="comma-separated — recipients won't see each other"></label>
         <label>Subject<input name="subject" value="{{ selected.subject if selected.subject != '(no subject)' else '' }}"></label>
         <label>Body<textarea name="body" rows="14">{{ selected.body }}</textarea></label>
         <button class="linkish" type="submit">Save changes</button>
@@ -158,7 +159,7 @@
     if (!editor) return;
     document.querySelectorAll('form.carryedit').forEach(function (f) {
       f.addEventListener('submit', function () {
-        ['from_mailbox', 'to', 'cc', 'subject', 'body'].forEach(function (name) {
+        ['from_mailbox', 'to', 'cc', 'bcc', 'subject', 'body'].forEach(function (name) {
           const src = editor.elements[name];
           if (!src) return;
           let h = f.querySelector('input[type=hidden][name="' + name + '"]');

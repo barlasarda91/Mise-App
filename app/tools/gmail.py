@@ -50,6 +50,7 @@ def build_mime(
     subject: str,
     body: str,
     cc: list[str] | None = None,
+    bcc: list[str] | None = None,
     in_reply_to: str | None = None,
     references: str | None = None,
     attachments: list[dict] | None = None,
@@ -66,6 +67,8 @@ def build_mime(
     msg["To"] = ", ".join(clean(a) for a in to)
     if cc:
         msg["Cc"] = ", ".join(clean(a) for a in cc)
+    if bcc:
+        msg["Bcc"] = ", ".join(clean(a) for a in bcc)
     msg["Subject"] = clean(subject)
     if in_reply_to:
         msg["In-Reply-To"] = clean(in_reply_to)
@@ -286,6 +289,7 @@ def create_draft(
     subject: str,
     body: str,
     cc: list[str] | None = None,
+    bcc: list[str] | None = None,
     thread_id: str | None = None,
     attachments: list[dict] | None = None,
 ) -> dict:
@@ -297,7 +301,7 @@ def create_draft(
     if thread_id:
         in_reply_to, references = _thread_reply_headers(svc, thread_id)
     message: dict = {
-        "raw": build_mime(address, to, subject, body, cc, in_reply_to, references, attachments)
+        "raw": build_mime(address, to, subject, body, cc=cc, bcc=bcc, in_reply_to=in_reply_to, references=references, attachments=attachments)
     }
     if thread_id:
         message["threadId"] = thread_id
@@ -316,6 +320,7 @@ def update_draft(
     subject: str,
     body: str,
     cc: list[str] | None = None,
+    bcc: list[str] | None = None,
     thread_id: str | None = None,
     attachments: list[dict] | None = None,
 ) -> dict:
@@ -325,7 +330,7 @@ def update_draft(
     if thread_id:
         in_reply_to, references = _thread_reply_headers(svc, thread_id)
     message: dict = {
-        "raw": build_mime(address, to, subject, body, cc, in_reply_to, references, attachments)
+        "raw": build_mime(address, to, subject, body, cc=cc, bcc=bcc, in_reply_to=in_reply_to, references=references, attachments=attachments)
     }
     if thread_id:
         message["threadId"] = thread_id

@@ -849,13 +849,14 @@ def drafts_update(
     from_mailbox: str = Form(...),
     to: str = Form(""),
     cc: str = Form(""),
+    bcc: str = Form(""),
     subject: str = Form(""),
     body: str = Form(""),
 ):
     from app.web.drafts_view import update_fields
 
     try:
-        msg = update_fields(draft_id, from_mailbox, to, cc, subject, body)
+        msg = update_fields(draft_id, from_mailbox, to, cc, subject, body, bcc=bcc)
     except Exception as exc:
         msg = f"Error: {exc}"
     return RedirectResponse(f"/drafts?draft={draft_id}&msg={msg}", status_code=303)
@@ -876,6 +877,7 @@ def _save_carried_edits(draft_id: int, form: dict) -> None:
         str(form.get("cc") or ""),
         str(form.get("subject") or ""),
         str(form.get("body") or ""),
+        bcc=str(form.get("bcc") or ""),
     )
 
 

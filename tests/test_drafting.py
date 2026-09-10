@@ -170,11 +170,11 @@ def test_save_to_gmail_and_update_flow(session_factory, monkeypatch):
 
     import app.tools.gmail as gm
 
-    def fake_create(mailbox, to, subject, body, cc=None, thread_id=None, attachments=None):
+    def fake_create(mailbox, to, subject, body, cc=None, bcc=None, thread_id=None, attachments=None):
         calls["create"] = dict(mailbox=mailbox, to=to, subject=subject, cc=cc, thread_id=thread_id)
         return {"draft_id": "gd-1", "message_id": "m-1", "thread_id": "t-9"}
 
-    def fake_update(mailbox, draft_id, to, subject, body, cc=None, thread_id=None, attachments=None):
+    def fake_update(mailbox, draft_id, to, subject, body, cc=None, bcc=None, thread_id=None, attachments=None):
         calls["update"] = dict(draft_id=draft_id)
         return {"draft_id": "gd-1", "message_id": "m-2", "thread_id": "t-9"}
 
@@ -287,7 +287,7 @@ def test_send_now_syncs_then_sends_and_locks(session_factory, monkeypatch):
 
     monkeypatch.setattr(
         gm, "create_draft",
-        lambda mailbox, to, subject, body, cc=None, thread_id=None, attachments=None: (
+        lambda mailbox, to, subject, body, cc=None, bcc=None, thread_id=None, attachments=None: (
             calls.append("create") or {"draft_id": "gd-7", "message_id": "m", "thread_id": "t-1"}
         ),
     )
@@ -335,7 +335,7 @@ def test_send_advances_linked_lead(session_factory, monkeypatch):
     monkeypatch.setattr(dv, "db_session", session_factory)
     monkeypatch.setattr(
         gm, "create_draft",
-        lambda mailbox, to, subject, body, cc=None, thread_id=None, attachments=None: {
+        lambda mailbox, to, subject, body, cc=None, bcc=None, thread_id=None, attachments=None: {
             "draft_id": "gd-1", "message_id": "m-sent-1", "thread_id": "t-1"},
     )
     monkeypatch.setattr(
@@ -377,7 +377,7 @@ def test_send_matches_unlinked_draft_to_lead_by_address(session_factory, monkeyp
     monkeypatch.setattr(dv, "db_session", session_factory)
     monkeypatch.setattr(
         gm, "create_draft",
-        lambda mailbox, to, subject, body, cc=None, thread_id=None, attachments=None: {
+        lambda mailbox, to, subject, body, cc=None, bcc=None, thread_id=None, attachments=None: {
             "draft_id": "gd-3", "message_id": "m-sent-3", "thread_id": None},
     )
     monkeypatch.setattr(
@@ -408,7 +408,7 @@ def test_send_completes_linked_task(session_factory, monkeypatch):
     monkeypatch.setattr(dv, "db_session", session_factory)
     monkeypatch.setattr(
         gm, "create_draft",
-        lambda mailbox, to, subject, body, cc=None, thread_id=None, attachments=None: {
+        lambda mailbox, to, subject, body, cc=None, bcc=None, thread_id=None, attachments=None: {
             "draft_id": "gd-4", "message_id": "m-sent-4", "thread_id": "t-la"},
     )
     monkeypatch.setattr(
@@ -443,7 +443,7 @@ def test_send_resets_timer_without_stage_change_for_later_stages(session_factory
     monkeypatch.setattr(dv, "db_session", session_factory)
     monkeypatch.setattr(
         gm, "create_draft",
-        lambda mailbox, to, subject, body, cc=None, thread_id=None, attachments=None: {
+        lambda mailbox, to, subject, body, cc=None, bcc=None, thread_id=None, attachments=None: {
             "draft_id": "gd-2", "message_id": "m-sent-2", "thread_id": None},
     )
     monkeypatch.setattr(
@@ -514,7 +514,7 @@ def test_attachments_flow_and_gmail_payload(session_factory, monkeypatch):
     # saving passes attachment payloads through to Gmail
     captured = {}
 
-    def fake_create(mailbox, to, subject, body, cc=None, thread_id=None, attachments=None):
+    def fake_create(mailbox, to, subject, body, cc=None, bcc=None, thread_id=None, attachments=None):
         captured["attachments"] = attachments
         return {"draft_id": "gd-1", "message_id": "m", "thread_id": None}
 
@@ -614,3 +614,35 @@ def test_create_email_draft_tool_dedups_per_run(session_factory):
             assert draft.run_id == 42
     finally:
         clear_run_context()
+
+
+def test_bcc_round_trip(session_factory, monkeypatch):
+    import app.web.drafts_view as dv
+    from app.tools.gmail import build_mime, decode_mime
+
+    # MIME carries the Bcc header
+    raw = build_mime("a@boxxcoffee.com", ["to@x.com"], "s", "b",
+                     cc=["cc@x.com"], bcc=["quiet@x.com"])
+    msg = decode_mime(raw)
+    assert msg["Bcc"] == "quiet@x.com"
+    assert msg["Cc"] == "cc@x.com"
+
+    # editor round-trip persists bcc and hands it to the Gmail sync payload
+    monkeypatch.setattr(dv, "db_session", session_factory)
+    with session_factory() as s:
+        draft = EmailDraft(subject="s", from_mailbox=FromMailbox.ARDA,
+                           status=DraftStatus.COMPOSED, body="b")
+        s.add(draft)
+        s.flush()
+        draft_id = draft.id
+    assert dv.update_fields(draft_id, "arda", "to@x.com", "", "s", "b", bcc="quiet@x.com; two@x.com") == "Saved."
+    loaded = dv.load_draft(draft_id)
+    assert loaded["bcc"] == "quiet@x.com, two@x.com"
+
+    captured = {}
+    monkeypatch.setattr(
+        "app.tools.gmail.create_draft",
+        lambda mailbox, **payload: captured.update(payload) or {"draft_id": "d1", "thread_id": None},
+    )
+    ok, _ = dv._sync_to_gmail(draft_id)
+    assert ok and captured["bcc"] == ["quiet@x.com", "two@x.com"]

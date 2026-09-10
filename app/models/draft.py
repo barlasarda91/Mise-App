@@ -51,9 +51,10 @@ class EmailDraft(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     subject: Mapped[str] = mapped_column(String(500), default="")
     body: Mapped[str | None] = mapped_column(Text)
-    # From, To, and Cc are editable in the draft UI before saving to Gmail.
+    # From, To, Cc, and Bcc are editable in the draft UI before saving to Gmail.
     to_addrs: Mapped[list | None] = mapped_column(PortableJSON)
     cc_addrs: Mapped[list | None] = mapped_column(PortableJSON)
+    bcc_addrs: Mapped[list | None] = mapped_column(PortableJSON)
     from_mailbox: Mapped[FromMailbox] = mapped_column(db_enum(FromMailbox))
     # Set when the draft replies to an existing conversation: the Gmail draft
     # is created on that thread with reply headers, not as a fresh compose.

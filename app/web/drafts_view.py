@@ -125,6 +125,7 @@ def load_draft(draft_id: int) -> dict | None:
                 **_row(draft),
                 "to": _addrs(draft.to_addrs),
                 "cc": _addrs(draft.cc_addrs),
+                "bcc": _addrs(draft.bcc_addrs),
                 "body": draft.body or "",
                 "lead_name": lead_name,
                 "gmail_draft_id": draft.gmail_draft_id,
@@ -348,7 +349,7 @@ def create_blank(mailbox: str) -> int:
         return draft.id
 
 
-def update_fields(draft_id: int, from_mailbox: str, to: str, cc: str, subject: str, body: str) -> str:
+def update_fields(draft_id: int, from_mailbox: str, to: str, cc: str, subject: str, body: str, bcc: str = "") -> str:
     with db_session() as s:
         draft = s.get(EmailDraft, draft_id)
         if draft is None:
@@ -358,6 +359,7 @@ def update_fields(draft_id: int, from_mailbox: str, to: str, cc: str, subject: s
         draft.from_mailbox = FromMailbox(from_mailbox)
         draft.to_addrs = _parse_addrs(to)
         draft.cc_addrs = _parse_addrs(cc)
+        draft.bcc_addrs = _parse_addrs(bcc)
         draft.subject = subject.strip()
         draft.body = body
         if draft.status == DraftStatus.SAVED_TO_GMAIL:
@@ -395,6 +397,7 @@ def _sync_to_gmail(draft_id: int) -> tuple[bool, str]:
             subject=draft.subject,
             body=draft.body or "",
             cc=list(draft.cc_addrs) if draft.cc_addrs else None,
+            bcc=list(draft.bcc_addrs) if draft.bcc_addrs else None,
             thread_id=draft.gmail_thread_id,
             attachments=attachments or None,
         )
