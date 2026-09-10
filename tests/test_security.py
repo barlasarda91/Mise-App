@@ -111,3 +111,35 @@ def test_redirect_targets_validated(client):
         follow_redirects=False,
     )
     assert r.headers["location"].startswith("/board")
+
+
+def test_safe_next_rejects_backslash_and_protocol_relative():
+    from app.main import _safe_next
+
+    assert _safe_next("/board?tab=payments", "/") == "/board?tab=payments"
+    assert _safe_next("//evil.com", "/") == "/"
+    assert _safe_next("/\\evil.com", "/") == "/"  # browsers normalize \ to /
+    assert _safe_next("https://evil.com", "/") == "/"
+    assert _safe_next("", "/board") == "/board"
+
+
+def test_cross_origin_post_refused(client):
+    # same-origin (or origin-less, e.g. curl) posts pass through to the route
+    ok = client.post("/login", data={"password": "wrong"})
+    assert ok.status_code in (200, 401, 429, 303)
+    # a browser-sent cross-origin POST is refused before any route runs
+    blocked = client.post(
+        "/login",
+        data={"password": "wrong"},
+        headers={"origin": "https://evil.example"},
+    )
+    assert blocked.status_code == 403
+
+
+def test_security_headers_include_csp(client):
+    response = client.get("/login")
+    csp = response.headers.get("content-security-policy", "")
+    assert "default-src 'self'" in csp
+    assert "form-action 'self'" in csp
+    assert "frame-ancestors 'none'" in csp
+    assert response.headers.get("x-frame-options") == "DENY"

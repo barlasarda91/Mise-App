@@ -97,13 +97,50 @@ class AuthGateMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+# Templates use inline scripts/styles by design, so those stay allowed; the
+# rest is locked to self (+ Google Fonts). form-action 'self' stops any
+# injected form from posting off-site; frame-ancestors backs up XFO DENY.
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline'; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src https://fonts.gstatic.com; "
+    "img-src 'self' data:; "
+    "connect-src 'self'; "
+    "frame-ancestors 'none'; "
+    "form-action 'self'; "
+    "base-uri 'self'"
+)
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        # CSRF belt-and-suspenders alongside the SameSite=Lax cookie: a
+        # cross-origin POST (browser-sent Origin differing from our host)
+        # is refused before it reaches any route.
+        if request.method == "POST":
+            origin = request.headers.get("origin")
+            if origin:
+                from urllib.parse import urlparse
+
+                origin_host = urlparse(origin).netloc
+                if origin_host and origin_host != request.headers.get("host", ""):
+                    return JSONResponse({"detail": "cross-origin POST refused"}, status_code=403)
         response = await call_next(request)
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("Referrer-Policy", "same-origin")
+        response.headers.setdefault("Content-Security-Policy", _CSP)
         return response
+
+
+def _safe_next(target: str, fallback: str) -> str:
+    """In-app redirect targets only: must start with a single '/', and never
+    contain a backslash (browsers normalize '\\' to '/', so '/\\evil.com'
+    would become protocol-relative)."""
+    if target.startswith("/") and not target.startswith("//") and "\\" not in target:
+        return target
+    return fallback
 
 
 app.add_middleware(AuthGateMiddleware)
@@ -407,7 +444,7 @@ def inbox_mute(email: str = Form(...), back: str = Form("/inbox")):
         message = mute_sender(email)
     except Exception as exc:
         message = f"Error: {exc}"
-    target = back if back.startswith("/") and not back.startswith("//") else "/inbox"
+    target = _safe_next(back, "/inbox")
     sep = "&" if "?" in target else "?"
     return RedirectResponse(f"{target}{sep}msg={message}", status_code=303)
 
@@ -420,7 +457,7 @@ def inbox_unmute(email: str = Form(...), back: str = Form("/settings")):
         message = unmute_sender(email)
     except Exception as exc:
         message = f"Error: {exc}"
-    target = back if back.startswith("/") and not back.startswith("//") else "/settings"
+    target = _safe_next(back, "/settings")
     sep = "&" if "?" in target else "?"
     return RedirectResponse(f"{target}{sep}msg={message}", status_code=303)
 
@@ -464,7 +501,7 @@ def calendar_respond(event_id: str = Form(...), response: str = Form(...), next:
         msg = f"RSVP sent: {response} — {result['summary'] or 'invite'} (organizer notified)."
     except Exception as exc:
         msg = f"RSVP failed: {type(exc).__name__}: {exc}"
-    target = next if next.startswith("/") and not next.startswith("//") else "/calendar"
+    target = _safe_next(next, "/calendar")
     sep = "&" if "?" in target else "?"
     return RedirectResponse(f"{target}{sep}msg={msg}", status_code=303)
 
@@ -717,7 +754,7 @@ def task_disregard(task_id: int, next: str = Form("/")):
         msg = disregard_task(task_id)
     except Exception as exc:
         msg = f"Error: {exc}"
-    target = next if next.startswith("/") and not next.startswith("//") else "/"
+    target = _safe_next(next, "/")
     sep = "&" if "?" in target else "?"
     return RedirectResponse(f"{target}{sep}msg={msg}", status_code=303)
 
@@ -752,7 +789,7 @@ def task_set_status(task_id: int, status: str = Form(...), waiting_on: str = For
         msg = set_task_status(task_id, status, waiting_on)
     except Exception as exc:
         msg = f"Error: {exc}"
-    target = next if next.startswith("/") and not next.startswith("//") else "/board"
+    target = _safe_next(next, "/board")
     sep = "&" if "?" in target else "?"
     return RedirectResponse(f"{target}{sep}msg={msg}", status_code=303)
 

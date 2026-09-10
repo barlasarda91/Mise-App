@@ -61,6 +61,8 @@ def extract_invite_event_ids(messages: list[dict], limit: int = 2) -> list[str]:
                 event_id = decoded.split()[0]
             except Exception:
                 continue
+            if len(event_id) > 128:
+                continue  # event ids are short; oversized means garbage input
             if event_id and event_id not in ids:
                 ids.append(event_id)
                 if len(ids) >= limit:
