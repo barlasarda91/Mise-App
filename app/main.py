@@ -44,6 +44,14 @@ async def lifespan(app: FastAPI):
         seed_routines()
     except Exception as exc:
         log.warning("routine seed skipped: %s", exc)
+    try:
+        from app.web.vendor_view import seed_known_importers
+
+        seeded = seed_known_importers()
+        if seeded:
+            log.info("seeded %d known green bean importers", seeded)
+    except Exception as exc:
+        log.warning("vendor seed skipped: %s", exc)
     # Backfill: attach open, unlinked board tasks to leads by confident name
     # match (new tasks link at creation time).
     try:
@@ -808,6 +816,48 @@ def task_disregard(task_id: int, next: str = Form("/")):
     return RedirectResponse(f"{target}{sep}msg={msg}", status_code=303)
 
 
+def _vendor_groups_safe() -> dict:
+    try:
+        from app.web.vendor_view import vendor_groups
+
+        return vendor_groups()
+    except Exception:
+        return {"green": [], "other": [], "unconfirmed": []}
+
+
+@app.post("/settings/vendors/add")
+def settings_vendor_add(name: str = Form(""), domains: str = Form(""), kind: str = Form("other")):
+    from app.web.vendor_view import add_vendor
+
+    try:
+        message = add_vendor(name, domains, kind)
+    except Exception as exc:
+        message = f"Error: {exc}"
+    return RedirectResponse(f"/settings?msg={message}", status_code=303)
+
+
+@app.post("/settings/vendors/{vendor_id}/kind")
+def settings_vendor_kind(vendor_id: int, kind: str = Form("")):
+    from app.web.vendor_view import set_vendor_kind
+
+    try:
+        message = set_vendor_kind(vendor_id, kind)
+    except Exception as exc:
+        message = f"Error: {exc}"
+    return RedirectResponse(f"/settings?msg={message}", status_code=303)
+
+
+@app.post("/settings/vendors/{vendor_id}/remove")
+def settings_vendor_remove(vendor_id: int):
+    from app.web.vendor_view import remove_vendor
+
+    try:
+        message = remove_vendor(vendor_id)
+    except Exception as exc:
+        message = f"Error: {exc}"
+    return RedirectResponse(f"/settings?msg={message}", status_code=303)
+
+
 @app.post("/settings/disregard/{rule_id}/remove")
 def disregard_remove(rule_id: int):
     from app.web.board_view import remove_disregard_rule
@@ -1101,6 +1151,7 @@ def settings_page(request: Request, msg: str | None = None):
         muted=muted_list(),
         disregarded=disregard_rules(),
         mail_index=mail_index_status(),
+        vendors=_vendor_groups_safe(),
         msg=msg,
     )
 

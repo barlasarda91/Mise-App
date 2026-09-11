@@ -98,6 +98,42 @@ def build_runtime_context(session, routine: Routine, trigger: str | None = None)
                 "skipping an entry is not allowed. get_gmail_message (with the msg id) for detail."
             )
 
+    if routine.key == "daily_agenda":
+        try:
+            from app.models import Vendor
+
+            vendors = session.scalars(select(Vendor).order_by(Vendor.name)).all()
+        except Exception:
+            vendors = []
+        if vendors:
+            green = [v for v in vendors if v.kind == "green_importer" and v.confirmed]
+            other = [v for v in vendors if v.kind != "green_importer" and v.confirmed]
+            pending = [v for v in vendors if not v.confirmed]
+            lines.append(
+                "\n## Known vendors (mail/bills from these domains are supplier A/P, "
+                "not customer mail)"
+            )
+            if green:
+                lines.append(
+                    "Green bean importers — their bills are GREEN COFFEE purchases "
+                    "(inventory-critical): "
+                    + "; ".join(f"{v.name} ({v.domains})" for v in green[:30])
+                )
+            if other:
+                lines.append(
+                    "Other vendors: " + "; ".join(f"{v.name} ({v.domains})" for v in other[:30])
+                )
+            if pending:
+                lines.append(
+                    "Auto-recognized, awaiting Arda's confirmation in Settings (treat as "
+                    "vendors, don't re-register): "
+                    + "; ".join(f"{v.name} ({v.domains}, {v.kind})" for v in pending[:15])
+                )
+            lines.append(
+                "An invoice/bill from a supplier NOT listed here: register_vendor with "
+                "your best kind guess."
+            )
+
     from app.models import DisregardRule
 
     rules = session.scalars(select(DisregardRule).order_by(DisregardRule.id.desc()).limit(20)).all()

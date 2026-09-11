@@ -123,6 +123,48 @@
 </div>
 
 <div class="box">
+  <div class="box-hd"><span class="lbl">Vendors</span><span class="ix">{{ vendors.green | length }} GREEN · {{ vendors.other | length }} OTHER{% if vendors.unconfirmed %} · <span style="color:var(--ember)">{{ vendors.unconfirmed | length }} TO CONFIRM</span>{% endif %}</span></div>
+  <div>
+    {% if vendors.unconfirmed %}
+    <div class="kv"><div class="lft"><span class="kt" style="color:var(--ember)">Auto-recognized — confirm or fix</span></div></div>
+    {% for v in vendors.unconfirmed %}
+    <div class="kv">
+      <div class="lft"><span class="kt">{{ v.name }}</span><span class="ks" style="margin-left:8px">{{ v.domains }} · guessed {{ "green importer" if v.kind == "green_importer" else "other" }}{% if v.notes %} · {{ v.notes }}{% endif %}</span></div>
+      <div style="display:flex;gap:8px">
+        <form method="post" action="/settings/vendors/{{ v.id }}/kind"><input type="hidden" name="kind" value="green_importer"><button class="linkish" type="submit">Green importer</button></form>
+        <form method="post" action="/settings/vendors/{{ v.id }}/kind"><input type="hidden" name="kind" value="other"><button class="linkish" type="submit">Other</button></form>
+        <form method="post" action="/settings/vendors/{{ v.id }}/remove"><button class="linkish" type="submit">Remove</button></form>
+      </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+    {% for group, label in [(vendors.green, "Green bean importers"), (vendors.other, "Other vendors")] %}
+    {% if group %}
+    <div class="kv"><div class="lft"><span class="kt">{{ label }}</span></div></div>
+    {% for v in group %}
+    <div class="kv">
+      <div class="lft"><span class="ks">{{ v.name }} · {{ v.domains }}{% if v.notes %} · {{ v.notes }}{% endif %}</span></div>
+      <div style="display:flex;gap:8px">
+        <form method="post" action="/settings/vendors/{{ v.id }}/kind"><input type="hidden" name="kind" value="{{ "other" if v.kind == "green_importer" else "green_importer" }}"><button class="linkish" type="submit">→ {{ "other" if v.kind == "green_importer" else "green" }}</button></form>
+        <form method="post" action="/settings/vendors/{{ v.id }}/remove"><button class="linkish" type="submit">Remove</button></form>
+      </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+    {% endfor %}
+    <div class="kv">
+      <form method="post" action="/settings/vendors/add" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;width:100%">
+        <input type="text" name="name" placeholder="Vendor name" style="flex:1;min-width:140px">
+        <input type="text" name="domains" placeholder="domains, comma-separated" style="flex:1;min-width:160px">
+        <select name="kind"><option value="green_importer">Green importer</option><option value="other" selected>Other vendor</option></select>
+        <button class="linkish solid" type="submit">Add</button>
+      </form>
+    </div>
+  </div>
+</div>
+<div class="note" style="margin:10px 0 14px">The briefing uses this list to tell green coffee purchases (inventory-critical) from ordinary supplier bills. Routines auto-register vendors they meet in invoice mail — those wait here for your confirm. The initial green importer list is a standard industry roster: remove any Boxx doesn't buy from.</div>
+
+<div class="box">
   <div class="box-hd"><span class="lbl">Server</span><span class="ix">NETWORK</span></div>
   <div>
     <div class="kv">

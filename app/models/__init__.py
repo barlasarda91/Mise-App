@@ -20,7 +20,7 @@ from app.models.enums import (
     TaskSource,
     TaskStatus,
 )
-from app.models.infra import AppState, DisregardRule, ExternalMutation, MutedSender, User
+from app.models.infra import AppState, DisregardRule, ExternalMutation, MutedSender, User, Vendor
 from app.models.lead import Lead, LeadActivity
 from app.models.mail import AwaitingDismissal, MailMessage
 from app.models.routine import Routine, Run, RunMessage, SyncState
@@ -48,6 +48,7 @@ __all__ = [
     "MutationKind",
     "DisregardRule",
     "MutedSender",
+    "Vendor",
     "OPEN_LEAD_STAGES",
     "Project",
     "ProjectedUnit",

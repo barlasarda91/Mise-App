@@ -60,6 +60,25 @@ class DisregardRule(Base):
     )
 
 
+class Vendor(Base):
+    """A supplier Boxx buys from, classified so the briefing can tell green
+    bean importers (inventory-critical green coffee purchases) from other
+    vendors. Rows come from the seed list, Settings, or a routine's
+    register_vendor (those start unconfirmed until Arda confirms)."""
+
+    __tablename__ = "vendors"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    kind: Mapped[str] = mapped_column(String(30), default="other")  # green_importer / other
+    domains: Mapped[str] = mapped_column(String(500))  # comma-separated email domains
+    confirmed: Mapped[bool] = mapped_column(default=True)
+    notes: Mapped[str | None] = mapped_column(String(300))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 class MutedSender(Base):
     """Senders marked unimportant — hidden from the Inbox tab and its count."""
 

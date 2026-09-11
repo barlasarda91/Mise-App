@@ -621,6 +621,43 @@ register(
 )
 
 
+# ---------- vendor recognition ----------
+
+
+def _register_vendor(session: Session, name: str, domain: str, kind: str, evidence=None):
+    from app.web.vendor_view import register_vendor_impl
+
+    return register_vendor_impl(session, name, domain, kind, notes=evidence)
+
+
+register(
+    ToolDef(
+        name="register_vendor",
+        description=(
+            "Register a supplier not in the runtime context's known-vendors list, so the "
+            "app learns to classify their mail. kind: 'green_importer' for green coffee "
+            "bean suppliers/importers, 'other' for every other supplier (packaging, "
+            "equipment, services, utilities). Use it when an invoice/bill arrives from an "
+            "unlisted vendor — never for customers, newsletters, or one-off senders. The "
+            "row lands unconfirmed; Arda confirms or reclassifies it in Settings. "
+            "evidence: one short line on why (e.g. 'invoice #123 for 5 bags Colombia')."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "domain": {"type": "string", "description": "email domain, e.g. royalcoffee.com"},
+                "kind": {"type": "string", "enum": ["green_importer", "other"]},
+                "evidence": NULLABLE_STR,
+            },
+            "required": ["name", "domain", "kind"],
+            "additionalProperties": False,
+        },
+        handler=_register_vendor,
+    )
+)
+
+
 # ---------- email drafts (never sent — reviewed in the Drafts UI) ----------
 
 
