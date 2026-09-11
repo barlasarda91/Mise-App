@@ -15,7 +15,7 @@ from app.models import Lead, OPEN_LEAD_STAGES, Routine, SyncState, Task, TaskSta
 from app.settings import get_settings
 
 MAX_LEADS = 40
-MAX_TASKS = 25
+MAX_TASKS_PER_CATEGORY = 12
 
 # First-ever-run gather window: with no last_run_at for a source, routines
 # scan the past 90 days (~3 months) of backlog instead of "everything".
@@ -108,15 +108,40 @@ def build_runtime_context(session, routine: Routine, trigger: str | None = None)
             lines.append(f"- {' · '.join(parts)}")
         lines.append("Mail from these senders / about these items is noise: skip it silently.")
 
-    tasks = session.scalars(
-        select(Task).where(Task.status != TaskStatus.DONE).order_by(Task.due_date.is_(None), Task.due_date)
-    ).all()
-    lines.append(f"\n## Incomplete board tasks ({len(tasks)})")
-    for task in tasks[:MAX_TASKS]:
-        due = f" · due {task.due_date}" if task.due_date else ""
-        overdue = " · OVERDUE" if task.due_date and task.due_date < today else ""
-        lines.append(
-            f"- [{task.id}] {task.title} · {task.category.value} · {task.status.value}{due}{overdue}"
-        )
+    # Grouped by category with a per-category cap so a crowded tab (say, a
+    # wave of invoice tasks) can never push another tab — governance reply
+    # tasks especially — out of the model's view entirely.
+    tasks = session.scalars(select(Task).where(Task.status != TaskStatus.DONE)).all()
+    lines.append(
+        f"\n## Incomplete board tasks ({len(tasks)}) — every category below is "
+        "briefing material, not just the dated ones"
+    )
+    from app.models import TaskCategory
+
+    by_category: dict = {}
+    for task in tasks:
+        by_category.setdefault(task.category, []).append(task)
+    for category in TaskCategory:
+        group = by_category.get(category)
+        if not group:
+            continue
+        group.sort(key=lambda t: (t.due_date is None, t.due_date or today, t.id))
+        lines.append(f"### {category.value} ({len(group)})")
+        for task in group[:MAX_TASKS_PER_CATEGORY]:
+            due = f" · due {task.due_date}" if task.due_date else ""
+            overdue = " · OVERDUE" if task.due_date and task.due_date < today else ""
+            age = ""
+            if not task.due_date and task.created_at:
+                created = task.created_at
+                if created.tzinfo is None:
+                    created = created.replace(tzinfo=ZoneInfo("UTC"))
+                days_on_board = max(0, (today - created.astimezone(tz).date()).days)
+                age = f" · on board {days_on_board}d"
+            lines.append(f"- [{task.id}] {task.title} · {task.status.value}{due}{overdue}{age}")
+        if len(group) > MAX_TASKS_PER_CATEGORY:
+            lines.append(
+                f"- …plus {len(group) - MAX_TASKS_PER_CATEGORY} more {category.value} "
+                "tasks (list_tasks for the rest)"
+            )
 
     return "\n".join(lines)

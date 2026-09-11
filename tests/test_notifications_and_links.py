@@ -600,3 +600,28 @@ def test_event_rsvp_state_shapes_and_handles_missing(monkeypatch):
     assert state["summary"] == "Boxx x Sidestream Connect"
     assert state["my_response"] == "needsAction"
     assert cal.event_rsvp_state("gone") is None
+
+
+def test_context_tasks_grouped_by_category_with_fair_caps(session_factory):
+    """A due-date-heavy board can't crowd undated governance tasks out of the
+    model's view: grouping is per category, capped per category."""
+    from datetime import date, timedelta
+
+    from app.engine.context import MAX_TASKS_PER_CATEGORY, build_runtime_context
+    from app.models import Routine, Task, TaskCategory
+
+    with session_factory() as s:
+        for i in range(MAX_TASKS_PER_CATEGORY + 3):
+            s.add(Task(category=TaskCategory.INVOICE_TRACKING, title=f"Chase invoice {i}",
+                       due_date=date.today() + timedelta(days=i)))
+        s.add(Task(category=TaskCategory.GOVERNANCE, title="Reply to Eddie Navarrette — SOW"))
+        routine = Routine(key="daily_agenda", name="Daily Agenda", system_prompt="p")
+        s.add(routine)
+        s.flush()
+        context = build_runtime_context(s, routine)
+    assert "### governance (1)" in context
+    assert "Reply to Eddie Navarrette — SOW" in context
+    assert "on board 0d" in context  # undated tasks carry their age instead
+    assert f"### invoice_tracking ({MAX_TASKS_PER_CATEGORY + 3})" in context
+    assert f"plus 3 more invoice_tracking" in context
+    assert "every category below is briefing material" in context
