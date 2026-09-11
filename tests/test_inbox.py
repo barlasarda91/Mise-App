@@ -140,3 +140,34 @@ def test_mark_awaiting_done_and_task_autodismiss(session_factory):
     with session_factory() as s:
         marks = {(d.mailbox, d.thread_id) for d in s.query(AwaitingDismissal)}
     assert marks == {("arda", "th-1"), ("arda", "th-film")}
+
+
+def test_batch_awaiting_done_and_task(session_factory):
+    from datetime import datetime, timezone
+
+    from app.models import AwaitingDismissal, MailMessage, Task
+
+    with session_factory() as s:
+        s.add(MailMessage(mailbox="arda", gmail_msg_id="b1", thread_id="tb1",
+                          from_addr="eddie@fed.com", from_name="Eddie", subject="SOW",
+                          sent_at=datetime.now(timezone.utc), is_outbound=False))
+        s.add(MailMessage(mailbox="hello", gmail_msg_id="b2", thread_id=None,
+                          from_addr="steph@213filming.com", from_name="Steph", subject="Filming",
+                          sent_at=datetime.now(timezone.utc), is_outbound=False))
+
+    assert "tick some rows" in iv.batch_awaiting("done", [])
+    assert "Unknown batch action" in iv.batch_awaiting("nuke", ["arda:b1"])
+
+    msg = iv.batch_awaiting("done", ["arda:b1", "hello:b2", "arda:missing"])
+    assert "Marked 2 done" in msg and "1 not found" in msg
+    with session_factory() as s:
+        marks = {(d.mailbox, d.thread_id) for d in s.query(AwaitingDismissal)}
+    assert marks == {("arda", "tb1"), ("hello", "b2")}  # null thread falls back to msg id
+
+    msg = iv.batch_awaiting("task", ["arda:b1", "hello:b2"])
+    assert "2 task(s) created" in msg
+    msg = iv.batch_awaiting("task", ["arda:b1"])
+    assert "1 already on the board" in msg
+    with session_factory() as s:
+        titles = sorted(t.title for t in s.query(Task))
+    assert titles == ["Reply to Eddie — SOW", "Reply to Steph — Filming"]

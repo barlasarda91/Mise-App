@@ -159,6 +159,74 @@ def mark_awaiting_done(mailbox: str, thread_id: str, label: str = "") -> str:
     return f"Marked done{who}. It reappears only if they write again."
 
 
+MAX_BATCH = 100
+
+
+def batch_awaiting(action: str, sels: list[str]) -> str:
+    """Batch Done / batch → task over checked awaiting rows. The form carries
+    only 'mailbox:msg_id' refs; everything else (sender, subject, thread) is
+    re-derived from the mail index so stale form data can't mislabel a task."""
+    from app.models import MailMessage
+
+    if action not in ("done", "task"):
+        return "Unknown batch action."
+    refs = []
+    for sel in sels[:MAX_BATCH]:
+        mailbox, _, msg_id = sel.partition(":")
+        if mailbox and msg_id:
+            refs.append((mailbox, msg_id))
+    if not refs:
+        return "Nothing selected — tick some rows first."
+
+    rows: list[dict] = []
+    with db_session() as s:
+        for mailbox, msg_id in refs:
+            row = s.scalar(
+                select(MailMessage).where(
+                    MailMessage.mailbox == mailbox, MailMessage.gmail_msg_id == msg_id
+                )
+            )
+            if row is not None:
+                rows.append(
+                    {
+                        "mailbox": row.mailbox,
+                        "msg_id": row.gmail_msg_id,
+                        "from_name": row.from_name or row.from_addr or "",
+                        "from_addr": row.from_addr or "",
+                        "subject": row.subject or "",
+                        # same fallback the awaiting query keys threads by
+                        "thread_id": row.thread_id or row.gmail_msg_id,
+                    }
+                )
+    skipped = len(refs) - len(rows)
+    if action == "done":
+        with db_session() as s:
+            for r in rows:
+                _dismiss_thread(s, r["mailbox"], r["thread_id"])
+        note = f" ({skipped} not found in the index)" if skipped else ""
+        return f"Marked {len(rows)} done{note}. Each reappears only if that sender writes again."
+
+    created = already = linked = 0
+    for r in rows:
+        msg = make_task_from_thread(
+            r["mailbox"], r["msg_id"], r["from_name"], r["from_addr"], r["subject"], r["thread_id"]
+        )
+        if "Already on the board" in msg:
+            already += 1
+        elif "Task created" in msg:
+            created += 1
+            if "Auto-linked" in msg:
+                linked += 1
+    parts = [f"{created} task(s) created"]
+    if linked:
+        parts.append(f"{linked} lead-linked")
+    if already:
+        parts.append(f"{already} already on the board")
+    if skipped:
+        parts.append(f"{skipped} not found in the index")
+    return "Batch: " + ", ".join(parts) + "."
+
+
 def make_task_from_thread(
     mailbox: str, msg_id: str, from_name: str, from_addr: str, subject: str, thread_id: str = ""
 ) -> str:

@@ -456,6 +456,20 @@ def inbox_awaiting_task(
     return RedirectResponse(f"/inbox?msg={message}", status_code=303)
 
 
+@app.post("/inbox/awaiting/batch")
+def inbox_awaiting_batch(
+    action: str = Form(""),
+    sel: list[str] = Form([]),
+):
+    from app.web.inbox_view import batch_awaiting
+
+    try:
+        message = batch_awaiting(action, sel)
+    except Exception as exc:
+        message = f"Error: {exc}"
+    return RedirectResponse(f"/inbox?msg={message}", status_code=303)
+
+
 @app.post("/inbox/awaiting/done")
 def inbox_awaiting_done(
     mailbox: str = Form(""),

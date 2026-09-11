@@ -54,6 +54,16 @@
     });
   });
 
+  // ---- select-all master checkboxes (data-check-all="<name>") ----
+  document.addEventListener('change', function (ev) {
+    const master = ev.target;
+    if (!master.matches || !master.matches('input[type=checkbox][data-check-all]')) return;
+    const formId = master.getAttribute('form');
+    let sel = 'input[type=checkbox][name="' + master.dataset.checkAll + '"]';
+    if (formId) sel += '[form="' + formId + '"]';
+    document.querySelectorAll(sel).forEach(function (cb) { cb.checked = master.checked; });
+  });
+
   // ---- 2. typed fields survive another form's submit ----
   const FKEY = 'mise-typed-fields';
   const SELECTOR = 'input[type=text], input[type=email], input[type=date], input:not([type]), textarea, select';

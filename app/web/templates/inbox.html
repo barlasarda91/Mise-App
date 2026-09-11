@@ -37,11 +37,20 @@
   </div>
 
     {% if awaiting %}
+    <form id="awaitbatch" method="post" action="/inbox/awaiting/batch"></form>
     <div class="box" style="margin-top:14px">
       <div class="box-hd"><span class="lbl">Awaiting your reply</span><span class="ix" style="color:var(--ember)">{{ awaiting | length }} · READ OR UNREAD · 90D INDEX</span></div>
       <div>
+        <div class="row" style="border-bottom:1px solid var(--line)">
+          <input type="checkbox" data-check-all="sel" form="awaitbatch" title="Select all" style="margin:0">
+          <span class="note" style="font-size:12px">select rows, then:</span>
+          <span class="spacer"></span>
+          <button class="linkish" type="submit" form="awaitbatch" name="action" value="task" title="Put every checked thread on the board">→ tasks</button>
+          <button class="linkish" type="submit" form="awaitbatch" name="action" value="done" title="Mark every checked thread handled">Done</button>
+        </div>
         {% for t in awaiting %}
         <div class="row">
+          <input type="checkbox" form="awaitbatch" name="sel" value="{{ t.mailbox }}:{{ t.gmail_msg_id }}" style="margin:0">
           <span class="pill {% if t.age_days > 7 %}ember{% else %}ghost{% endif %}" style="white-space:nowrap">{{ t.age_days }}d</span>
           <a class="name" href="/inbox?open={{ t.mailbox }}:{{ t.gmail_msg_id }}" style="font-size:13.5px;min-width:0">{{ t.from_name }} — {{ t.subject }}</a>
           <span class="meta">{{ t.mailbox }}@</span>
