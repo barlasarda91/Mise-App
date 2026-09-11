@@ -38,3 +38,19 @@ class MailMessage(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+class AwaitingDismissal(Base):
+    """A thread the operator marked Done on the awaiting-reply list. The
+    dismissal covers messages up to dismissed_at only — if the sender writes
+    again afterwards, the thread reappears (Done is not a mute)."""
+
+    __tablename__ = "awaiting_dismissals"
+    __table_args__ = (
+        UniqueConstraint("mailbox", "thread_id", name="uq_awaiting_dismissal"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    mailbox: Mapped[str] = mapped_column(String(10))
+    thread_id: Mapped[str] = mapped_column(String(64))
+    dismissed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

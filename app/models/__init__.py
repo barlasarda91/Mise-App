@@ -22,7 +22,7 @@ from app.models.enums import (
 )
 from app.models.infra import AppState, DisregardRule, ExternalMutation, MutedSender, User
 from app.models.lead import Lead, LeadActivity
-from app.models.mail import MailMessage
+from app.models.mail import AwaitingDismissal, MailMessage
 from app.models.routine import Routine, Run, RunMessage, SyncState
 from app.models.task import Project, Task, TaskActivity
 
@@ -42,6 +42,7 @@ __all__ = [
     "LeadActivityType",
     "LeadFormat",
     "LeadStage",
+    "AwaitingDismissal",
     "MailMessage",
     "MessageRole",
     "MutationKind",

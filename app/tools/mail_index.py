@@ -167,7 +167,7 @@ def awaiting_reply(session, limit: int = 15, max_age_days: int = BACKFILL_DAYS) 
     receive outbound mail. Muted and disregarded senders are excluded."""
     from email.utils import getaddresses
 
-    from app.models import DisregardRule, MutedSender
+    from app.models import AwaitingDismissal, DisregardRule, MutedSender
 
     tz = ZoneInfo(get_settings().default_tz)
     cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
@@ -175,6 +175,10 @@ def awaiting_reply(session, limit: int = 15, max_age_days: int = BACKFILL_DAYS) 
     excluded |= {
         r.contact_email for r in session.scalars(select(DisregardRule)) if r.contact_email
     }
+    dismissals: dict[tuple, datetime] = {}
+    for d in session.scalars(select(AwaitingDismissal)):
+        when = d.dismissed_at if d.dismissed_at.tzinfo else d.dismissed_at.replace(tzinfo=timezone.utc)
+        dismissals[(d.mailbox, d.thread_id)] = when
 
     rows = session.scalars(
         select(MailMessage).where(MailMessage.sent_at.isnot(None)).order_by(MailMessage.sent_at)
@@ -203,6 +207,9 @@ def awaiting_reply(session, limit: int = 15, max_age_days: int = BACKFILL_DAYS) 
             continue
         if key not in threads_with_outbound and row.from_addr not in correspondents:
             continue  # we've never written to this sender anywhere — not a correspondence
+        dismissed = dismissals.get(key)
+        if dismissed is not None and sent <= dismissed:
+            continue  # marked Done; a newer message from them would resurface it
         out.append(
             {
                 "mailbox": row.mailbox,

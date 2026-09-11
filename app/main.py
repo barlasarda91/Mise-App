@@ -445,11 +445,27 @@ def inbox_awaiting_task(
     from_name: str = Form(""),
     from_addr: str = Form(""),
     subject: str = Form(""),
+    thread_id: str = Form(""),
 ):
     from app.web.inbox_view import make_task_from_thread
 
     try:
-        message = make_task_from_thread(mailbox, msg_id, from_name, from_addr, subject)
+        message = make_task_from_thread(mailbox, msg_id, from_name, from_addr, subject, thread_id)
+    except Exception as exc:
+        message = f"Error: {exc}"
+    return RedirectResponse(f"/inbox?msg={message}", status_code=303)
+
+
+@app.post("/inbox/awaiting/done")
+def inbox_awaiting_done(
+    mailbox: str = Form(""),
+    thread_id: str = Form(""),
+    label: str = Form(""),
+):
+    from app.web.inbox_view import mark_awaiting_done
+
+    try:
+        message = mark_awaiting_done(mailbox, thread_id, label)
     except Exception as exc:
         message = f"Error: {exc}"
     return RedirectResponse(f"/inbox?msg={message}", status_code=303)

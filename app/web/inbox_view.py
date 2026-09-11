@@ -119,7 +119,7 @@ def load_inbox() -> dict:
     return {"error": "; ".join(errors) if errors else None, "messages": merged}
 
 
-def awaiting_list(limit: int = 40) -> list[dict]:
+def awaiting_list(limit: int = 80) -> list[dict]:
     """The mail index's awaiting-reply threads, for the Inbox tab panel —
     the same list the agenda triages, made visible and one-click actionable."""
     try:
@@ -131,9 +131,40 @@ def awaiting_list(limit: int = 40) -> list[dict]:
         return []
 
 
-def make_task_from_thread(mailbox: str, msg_id: str, from_name: str, from_addr: str, subject: str) -> str:
+def _dismiss_thread(session, mailbox: str, thread_id: str) -> None:
+    """Upsert a Done-mark: the thread stays off the awaiting list unless the
+    sender writes again after this moment."""
+    from datetime import datetime, timezone
+
+    from app.models import AwaitingDismissal
+
+    row = session.scalar(
+        select(AwaitingDismissal).where(
+            AwaitingDismissal.mailbox == mailbox, AwaitingDismissal.thread_id == thread_id
+        )
+    )
+    now = datetime.now(timezone.utc)
+    if row is None:
+        session.add(AwaitingDismissal(mailbox=mailbox, thread_id=thread_id, dismissed_at=now))
+    else:
+        row.dismissed_at = now
+
+
+def mark_awaiting_done(mailbox: str, thread_id: str, label: str = "") -> str:
+    if not thread_id:
+        return "That row has no thread id — re-run the sweep and try again."
+    with db_session() as s:
+        _dismiss_thread(s, mailbox, thread_id)
+    who = f" — {label}" if label else ""
+    return f"Marked done{who}. It reappears only if they write again."
+
+
+def make_task_from_thread(
+    mailbox: str, msg_id: str, from_name: str, from_addr: str, subject: str, thread_id: str = ""
+) -> str:
     """One-click 'turn this hanging thread into a board task' — deduped per
-    message, linked to a lead when the sender matches one."""
+    message, linked to a lead when the sender matches one. Also Done-marks
+    the thread on the awaiting list: it's on the board now."""
     from app.models import ExternalMutation, MutationKind, Task, TaskActivity, TaskCategory, TaskSource
 
     dedup_key = f"task:{msg_id}"
@@ -145,6 +176,8 @@ def make_task_from_thread(mailbox: str, msg_id: str, from_name: str, from_addr: 
         if ledger and ledger.external_id:
             existing = s.get(Task, int(ledger.external_id))
             if existing is not None:
+                if thread_id:
+                    _dismiss_thread(s, mailbox, thread_id)
                 return f"Already on the board: {existing.title}."
         task = Task(
             category=TaskCategory.GOVERNANCE,
@@ -183,6 +216,8 @@ def make_task_from_thread(mailbox: str, msg_id: str, from_name: str, from_addr: 
         else:
             matched = auto_link_lead(s, task)
         note = f" Auto-linked to {matched.business_name}." if matched else ""
+        if thread_id:
+            _dismiss_thread(s, mailbox, thread_id)
         task_id = task.id
     return f"Task created (#{task_id}): {title}.{note}"
 

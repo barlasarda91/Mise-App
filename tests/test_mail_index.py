@@ -164,3 +164,28 @@ def test_resweep_backfills_bulk_flag(session_factory):
         assert not mi.upsert_summary(s, "arda", {**_summary("m1", "News <hi@list.example.com>", _days_ago(5)), "bulk": True})
         s.commit()
         assert s.query(MailMessage).one().is_bulk is True
+
+
+def test_awaiting_reply_respects_done_marks(session_factory):
+    from datetime import datetime, timedelta, timezone
+
+    from app.models import AwaitingDismissal
+
+    with session_factory() as s:
+        mi.upsert_summary(s, "arda", _summary("g1", "Arda <ardabarlas@boxxcoffee.com>", _days_ago(31), thread="sow", to="eddie@fed.com"))
+        mi.upsert_summary(s, "arda", _summary("g2", "Eddie <eddie@fed.com>", _days_ago(30), thread="sow"))
+        s.commit()
+        assert [t["thread_id"] for t in mi.awaiting_reply(s)] == ["sow"]
+
+        # Done-mark (a little in the past, so the resurfacing message below is
+        # unambiguously newer despite second-granularity date headers).
+        s.add(AwaitingDismissal(mailbox="arda", thread_id="sow",
+                                dismissed_at=datetime.now(timezone.utc) - timedelta(minutes=5)))
+        s.commit()
+        assert mi.awaiting_reply(s) == []
+
+        # Eddie writes again after the dismissal: thread resurfaces.
+        mi.upsert_summary(s, "arda", _summary("g3", "Eddie <eddie@fed.com>", _days_ago(0), thread="sow"))
+        s.commit()
+        waiting = mi.awaiting_reply(s)
+    assert [t["gmail_msg_id"] for t in waiting] == ["g3"]

@@ -52,11 +52,18 @@
             <input type="hidden" name="from_name" value="{{ t.from_name }}">
             <input type="hidden" name="from_addr" value="{{ t.from_addr }}">
             <input type="hidden" name="subject" value="{{ t.subject }}">
+            <input type="hidden" name="thread_id" value="{{ t.thread_id or '' }}">
             <button class="linkish" type="submit" title="Put this on the board">→ task</button>
+          </form>
+          <form method="post" action="/inbox/awaiting/done">
+            <input type="hidden" name="mailbox" value="{{ t.mailbox }}">
+            <input type="hidden" name="thread_id" value="{{ t.thread_id or '' }}">
+            <input type="hidden" name="label" value="{{ t.from_name }}">
+            <button class="linkish" type="submit" title="Handled — drop it from this list (reappears if they write again)">Done</button>
           </form>
         </div>
         {% endfor %}
-        <div class="box-bd"><span class="note">Threads where the other side spoke last and no Boxx reply followed — computed from the local mail index, bulk mail filtered. The Daily Agenda triages the oldest 15 of these automatically; → task puts one on the board yourself.</span></div>
+        <div class="box-bd"><span class="note">Threads where the other side spoke last and no Boxx reply followed — computed from the local mail index, bulk mail filtered, oldest first{% if awaiting | length >= 80 %} — <strong>list capped at 80</strong>: mark handled ones Done to surface the rest{% endif %}. The Daily Agenda triages the oldest 15 automatically; → task puts one on the board (and marks it Done here); Done drops it until they write again.</span></div>
       </div>
     </div>
     {% endif %}

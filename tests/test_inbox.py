@@ -122,3 +122,21 @@ def test_make_task_from_thread_dedupes_and_links(session_factory, monkeypatch):
         assert task.source_ref["gmail_msg_id"] == "m-sow"
         assert task.source_ref["contact_email"] == "eddie@fedesignandconsulting.com"
         assert task.source_ref["lead_id"] is not None
+
+
+def test_mark_awaiting_done_and_task_autodismiss(session_factory):
+    from app.models import AwaitingDismissal
+
+    assert "no thread id" in iv.mark_awaiting_done("arda", "")
+    msg = iv.mark_awaiting_done("arda", "th-1", "Eddie")
+    assert "Marked done — Eddie" in msg
+    iv.mark_awaiting_done("arda", "th-1")  # idempotent upsert, no unique clash
+
+    # → task also Done-marks its thread (including on the dedup path).
+    iv.make_task_from_thread("arda", "m-x", "Steph", "steph@213filming.com",
+                             "Filming", thread_id="th-film")
+    iv.make_task_from_thread("arda", "m-x", "Steph", "steph@213filming.com",
+                             "Filming", thread_id="th-film")
+    with session_factory() as s:
+        marks = {(d.mailbox, d.thread_id) for d in s.query(AwaitingDismissal)}
+    assert marks == {("arda", "th-1"), ("arda", "th-film")}
