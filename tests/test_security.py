@@ -143,3 +143,20 @@ def test_security_headers_include_csp(client):
     assert "form-action 'self'" in csp
     assert "frame-ancestors 'none'" in csp
     assert response.headers.get("x-frame-options") == "DENY"
+
+
+def test_board_move_answers_fetch_with_json_and_forms_with_redirect(client):
+    """Card moves from the board post via fetch (X-Fetch: 1) and get JSON —
+    no reload; the same route stays a classic 303 for plain form posts."""
+    client.post("/login", data={"password": "test-password"})
+    live = client.post(
+        "/tasks/999999/status", data={"status": "doing"},
+        headers={"X-Fetch": "1"}, follow_redirects=False,
+    )
+    assert live.status_code == 200
+    body = live.json()
+    assert body["ok"] is False and body["msg"]  # unknown task reports, not moves
+    classic = client.post(
+        "/tasks/999999/status", data={"status": "doing"}, follow_redirects=False,
+    )
+    assert classic.status_code == 303 and classic.headers["location"].startswith("/board")

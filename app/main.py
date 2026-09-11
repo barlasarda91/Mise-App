@@ -881,13 +881,24 @@ def task_link_lead(task_id: int, lead_id: str = Form("")):
 
 
 @app.post("/tasks/{task_id}/status")
-def task_set_status(task_id: int, status: str = Form(...), waiting_on: str = Form(""), next: str = Form("/board")):
+def task_set_status(
+    request: Request,
+    task_id: int,
+    status: str = Form(...),
+    waiting_on: str = Form(""),
+    next: str = Form("/board"),
+):
     from app.web.board_view import set_task_status
 
     try:
         msg = set_task_status(task_id, status, waiting_on)
     except Exception as exc:
         msg = f"Error: {exc}"
+    # Board moves come in via fetch (no page reload); answer those with JSON
+    # and keep the redirect for plain form posts (JS off, other callers).
+    if request.headers.get("x-fetch") == "1":
+        ok = not (msg.startswith("Error") or msg == "Task not found.")
+        return JSONResponse({"ok": ok, "msg": msg})
     target = _safe_next(next, "/board")
     sep = "&" if "?" in target else "?"
     return RedirectResponse(f"{target}{sep}msg={msg}", status_code=303)

@@ -4,10 +4,11 @@
 {% block content %}
 
 {% if msg %}<div class="note" style="margin:0 0 14px">▸ {{ msg }}</div>{% endif %}
+<div class="note" id="liveMsg" hidden style="margin:0 0 14px"></div>
 
 <div class="tabbar" id="catTabs">
   {% for b in boards %}
-  <span class="tab{% if b.key == active_tab %} on{% endif %}" data-cat="{{ b.key }}">{{ b.label }}{% if b.open %} · {{ b.open }}{% endif %}</span>
+  <span class="tab{% if b.key == active_tab %} on{% endif %}" data-cat="{{ b.key }}" data-label="{{ b.label }}" data-open="{{ b.open }}">{{ b.label }}{% if b.open %} · {{ b.open }}{% endif %}</span>
   {% endfor %}
 </div>
 
@@ -15,14 +16,14 @@
 <div class="catboard{% if b.key == active_tab %} on{% endif %}" data-cat="{{ b.key }}">
   <div class="lanes">
     {% for lane in b.lanes %}
-    <div class="lane">
+    <div class="lane" data-status="{{ lane.status }}">
       <div class="lane-hd"><span class="ln">{{ lane.label }}</span><span class="ct">{{ "%02d" | format(lane.cards | length) }}</span></div>
       {% for c in lane.cards %}
       <div class="card">
         <a class="cn" href="/board/task/{{ c.id }}" style="text-decoration:none;display:block">{{ c.title }}</a>
         <div class="cmeta">
           <span>↳ {{ c.source }}</span>
-          {% if c.waiting_on %}<span>waits: {{ c.waiting_on }}</span>{% endif %}
+          {% if c.waiting_on %}<span class="waits">waits: {{ c.waiting_on }}</span>{% endif %}
         </div>
         <div class="cbadges">
           {% if c.overdue %}<span class="pill ember">due {{ c.due }}</span>
@@ -81,6 +82,71 @@
     const url = new URL(location); url.searchParams.set('tab', t.dataset.cat); url.searchParams.delete('msg');
     history.replaceState(null, '', url);
     document.querySelector('form[action="/board/tasks"] select[name="category"]').value = t.dataset.cat;
+  });
+
+  // Card moves post in the background and re-slot the card in place — no page
+  // reload. Any fetch failure falls back to the classic full-page submit.
+  function liveNote(msg) {
+    const el = document.getElementById('liveMsg');
+    el.textContent = '▸ ' + msg;
+    el.hidden = false;
+  }
+  function recount(lane) {
+    const ct = lane.querySelector('.lane-hd .ct');
+    if (ct) ct.textContent = String(lane.querySelectorAll('.card').length).padStart(2, '0');
+  }
+  function bumpTabOpen(catboard, delta) {
+    if (!delta) return;
+    const tab = catTabs.querySelector('.tab[data-cat="' + catboard.dataset.cat + '"]');
+    if (!tab) return;
+    const open = Math.max(0, (parseInt(tab.dataset.open, 10) || 0) + delta);
+    tab.dataset.open = open;
+    tab.textContent = tab.dataset.label + (open ? ' · ' + open : '');
+  }
+  document.addEventListener('submit', async (e) => {
+    const form = e.target.closest('form.cardmove');
+    if (!form || form.dataset.fallback) return;
+    e.preventDefault();
+    const btn = form.querySelector('button[type=submit]');
+    btn.disabled = true;
+    try {
+      const res = await fetch(form.action, {
+        method: 'POST', body: new FormData(form), headers: { 'X-Fetch': '1' },
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      liveNote(data.msg);
+      if (!data.ok) return;
+      const card = form.closest('.card');
+      const catboard = form.closest('.catboard');
+      const status = form.querySelector('select[name=status]').value;
+      const lane = catboard.querySelector('.lane[data-status="' + status + '"]');
+      const from = card.parentElement;
+      if (lane && from !== lane) {
+        const wasDone = from.dataset.status === 'done';
+        lane.appendChild(card);
+        recount(from); recount(lane);
+        bumpTabOpen(catboard, (status === 'done' ? -1 : 0) + (wasDone ? 1 : 0));
+      }
+      const waits = form.querySelector('input[name=waiting_on]').value.trim();
+      let span = card.querySelector('.cmeta .waits');
+      if (status === 'waiting' && waits) {
+        if (!span) {
+          span = document.createElement('span');
+          span.className = 'waits';
+          card.querySelector('.cmeta').appendChild(span);
+        }
+        span.textContent = 'waits: ' + waits;
+      } else if (span) {
+        span.remove();
+      }
+    } catch (err) {
+      form.dataset.fallback = '1';  // don't intercept the retry
+      form.submit();
+      return;
+    } finally {
+      btn.disabled = false;
+    }
   });
 </script>
 {% endblock %}
