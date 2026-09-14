@@ -27,13 +27,15 @@ ROUTINE_DEFAULTS = [
     {
         "key": "lead_tracker",
         "name": "Wholesale Lead Tracker",
-        "schedule_cron": "30 7-16 * * 1-5",  # hourly 07:30–16:30 LA, weekdays only
+        # Day NAMES, not numbers: APScheduler reads numeric weekdays as
+        # 0=Mon..6=Sun (so "1-5" silently meant Tue–Sat); names are safe.
+        "schedule_cron": "30 7-16 * * mon-fri",  # hourly 07:30–16:30 LA, weekdays only
         "connectors": ["gmail_arda", "gmail_hello", "calendar"],
     },
     {
         "key": "daily_agenda",
         "name": "Daily Agenda",
-        "schedule_cron": "0 7-17 * * 1-5",  # hourly 07:00–17:00 LA, weekdays only
+        "schedule_cron": "0 7-17 * * mon-fri",  # hourly 07:00–17:00 LA, weekdays only
         # gmail_hello added 2026-09-10: non-wholesale business mail (filming,
         # collabs, press) lands there and no routine was watching it.
         "connectors": ["gmail_arda", "gmail_hello", "calendar", "quickbooks"],

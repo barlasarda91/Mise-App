@@ -60,9 +60,10 @@ def test_sync_jobs_adds_enabled_and_removes_disabled(session_factory, sched):
     jobs = {j.id: j for j in sched.get_jobs()}
     assert set(jobs) == {"routine:lead_tracker"}
     assert jobs["routine:lead_tracker"].args == (tracker_id, "scheduled")
-    # cron 30 7-16 * * * in LA (hourly workday runs)
+    # cron 30 7-16 * * mon-fri in LA (hourly workday runs, weekdays only)
     trigger = jobs["routine:lead_tracker"].trigger
     assert "hour='7-16'" in str(trigger) and "minute='30'" in str(trigger)
+    assert "day_of_week='mon-fri'" in str(trigger)
 
     with session_factory() as s:
         s.query(Routine).filter_by(key="lead_tracker").one().enabled = False
@@ -90,3 +91,29 @@ def test_run_routine_job_invokes_engine(monkeypatch):
     monkeypatch.setattr(runner, "execute_run", lambda rid, trig: calls.append((rid, trig.value)))
     run_routine_job(5, "manual")
     assert calls == [(5, "manual")]
+
+
+def test_weekday_crons_fire_monday_not_saturday():
+    """Regression: APScheduler reads numeric day-of-week as 0=Mon..6=Sun, so
+    '… * * 1-5' scheduled Tue–Sat — Saturday runs, silent Mondays. Both the
+    translator and the seeded name-based crons must mean Mon–Fri."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from apscheduler.triggers.cron import CronTrigger
+
+    from app.scheduler import standard_crontab
+
+    assert standard_crontab("0 7-17 * * 1-5") == "0 7-17 * * mon-fri"
+    assert standard_crontab("0 8 * * 0,6") == "0 8 * * sun,sat"
+    assert standard_crontab("0 8 * * 1-5/2") == "0 8 * * mon-fri/2"
+    assert standard_crontab("0 8 * * *") == "0 8 * * *"
+    assert standard_crontab("not a cron") == "not a cron"
+
+    tz = ZoneInfo("America/Los_Angeles")
+    for expr in ("0 7-17 * * 1-5", "0 7-17 * * mon-fri"):
+        trig = CronTrigger.from_crontab(standard_crontab(expr), timezone="America/Los_Angeles")
+        sat = datetime(2026, 9, 12, 6, 0, tzinfo=tz)   # Saturday
+        mon = datetime(2026, 9, 14, 6, 0, tzinfo=tz)   # Monday
+        assert trig.get_next_fire_time(None, sat).weekday() == 0  # skips to Monday
+        assert trig.get_next_fire_time(None, mon).weekday() == 0  # fires Monday 07:00

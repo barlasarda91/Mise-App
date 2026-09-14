@@ -66,6 +66,28 @@ def get_scheduler() -> BackgroundScheduler | None:
     return _scheduler
 
 
+_DOW_NAMES = {"0": "sun", "1": "mon", "2": "tue", "3": "wed", "4": "thu",
+              "5": "fri", "6": "sat", "7": "sun"}
+
+
+def standard_crontab(expr: str) -> str:
+    """Translate a standard-cron day-of-week field to day names before handing
+    it to APScheduler. Standard cron numbers weekdays 0/7=Sun, 1-5=Mon–Fri,
+    but APScheduler's CronTrigger reads numbers as 0=Mon..6=Sun and
+    from_crontab passes them through unchanged — so '… * * 1-5' silently
+    scheduled Tue–Sat (Saturday runs, silent Mondays). Names mean the same
+    thing in both systems."""
+    import re
+
+    fields = expr.split()
+    if len(fields) != 5:
+        return expr
+    dow, slash, step = fields[4].partition("/")
+    dow = re.sub(r"\d", lambda m: _DOW_NAMES[m.group()], dow)
+    fields[4] = dow + slash + step
+    return " ".join(fields)
+
+
 def sync_jobs(sched: BackgroundScheduler, session_factory=db_session) -> None:
     """Reconcile scheduler jobs with the routines table: enabled routines with
     a cron get a job (replacing any stale stored one); others are removed."""
@@ -78,7 +100,7 @@ def sync_jobs(sched: BackgroundScheduler, session_factory=db_session) -> None:
         if routine.enabled and routine.schedule_cron:
             sched.add_job(
                 run_routine_job,
-                CronTrigger.from_crontab(routine.schedule_cron, timezone=routine.timezone),
+                CronTrigger.from_crontab(standard_crontab(routine.schedule_cron), timezone=routine.timezone),
                 args=[routine.id, "scheduled"],
                 id=job_id,
                 name=routine.name,
