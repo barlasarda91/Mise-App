@@ -678,6 +678,20 @@ def _create_email_draft(
     from app.models import DraftStatus, EmailDraft
     from app.models.enums import FromMailbox as FM
 
+    # Gmail ids are per-mailbox: a thread id captured while reading one
+    # mailbox 404s when drafting from the other. Verify/remap at creation so
+    # the draft is born reply-able; on transient errors keep the id as given.
+    thread_note = None
+    if gmail_thread_id:
+        from app.tools import gmail as gmail_tools
+
+        try:
+            gmail_thread_id, thread_note = gmail_tools.resolve_thread_for_mailbox(
+                FM(mailbox), gmail_thread_id
+            )
+        except Exception:
+            thread_note = None
+
     ctx = get_run_context()
     dedup_key = f"draft:{purpose}:{lead_id or task_id or 'none'}:{ctx.get('run_id')}"
     ledger = session.scalar(select(ExternalMutation).where(ExternalMutation.dedup_key == dedup_key))
@@ -721,6 +735,8 @@ def _create_email_draft(
             session.add(DraftAttachment(draft_id=draft.id, file_id=stored.id))
             attached.append(stored.label or stored.filename)
     result = {"outcome": "created", "draft_id": draft.id}
+    if thread_note:
+        result["thread_note"] = thread_note
     if attached:
         result["attached"] = attached
     if missing:

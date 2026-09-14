@@ -283,6 +283,84 @@ def _thread_reply_headers(svc, thread_id: str) -> tuple[str | None, str | None]:
     return headers.get("message-id"), headers.get("references")
 
 
+def _http_status(exc: Exception) -> int | None:
+    status = getattr(getattr(exc, "resp", None), "status", None)
+    if status is None:
+        status = getattr(exc, "status_code", None)
+    try:
+        return int(status)
+    except (TypeError, ValueError):
+        return None
+
+
+def is_not_found(exc: Exception) -> bool:
+    return _http_status(exc) == 404
+
+
+def resolve_thread_for_mailbox(mailbox: FromMailbox, thread_id: str) -> tuple[str | None, str | None]:
+    """(usable_thread_id, note). Gmail message/thread ids are PER-MAILBOX: the
+    same conversation carries different ids in arda@ and hello@, so an id
+    captured while reading one mailbox 404s when used to draft from the other.
+    If the id isn't in `mailbox`, look for the same conversation there via the
+    other mailbox's RFC822 Message-ID; failing that, return None (send as a
+    new email) with a note saying why."""
+    svc = gmail_service(mailbox_address(mailbox))
+    try:
+        svc.users().threads().get(userId="me", id=thread_id, format="minimal").execute()
+        return thread_id, None
+    except Exception as exc:
+        if not is_not_found(exc):
+            raise
+    for other in FromMailbox:
+        if other == mailbox:
+            continue
+        try:
+            other_thread = (
+                gmail_service(mailbox_address(other))
+                .users()
+                .threads()
+                .get(userId="me", id=thread_id, format="metadata", metadataHeaders=["Message-ID"])
+                .execute()
+            )
+        except Exception:
+            continue
+        for message in other_thread.get("messages") or []:
+            rfc_id = (_headers_dict(message).get("message-id") or "").strip("<> ")
+            if not rfc_id:
+                continue
+            hits = (
+                svc.users()
+                .messages()
+                .list(userId="me", q=f"rfc822msgid:{rfc_id}", maxResults=1)
+                .execute()
+            ).get("messages") or []
+            if hits and hits[0].get("threadId"):
+                return hits[0]["threadId"], (
+                    f"thread id was {other.value}@'s copy — remapped to {mailbox.value}@'s "
+                    "(Gmail ids are per-mailbox)"
+                )
+        return None, (
+            f"that conversation exists only in {other.value}@ with no copy in "
+            f"{mailbox.value}@ — this sends as a new email (or switch the From mailbox)"
+        )
+    return None, "thread id not found in either mailbox — this sends as a new email"
+
+
+def _reply_setup(svc, thread_id: str | None) -> tuple[str | None, str | None, str | None]:
+    """(thread_id, in_reply_to, references) for a draft. A thread id that
+    doesn't exist in this mailbox degrades to an unthreaded new email instead
+    of failing the whole save/send."""
+    if not thread_id:
+        return None, None, None
+    try:
+        in_reply_to, references = _thread_reply_headers(svc, thread_id)
+    except Exception as exc:
+        if is_not_found(exc):
+            return None, None, None
+        raise
+    return thread_id, in_reply_to, references
+
+
 def create_draft(
     mailbox: FromMailbox,
     to: list[str],
@@ -297,9 +375,7 @@ def create_draft(
     draft is attached to that conversation with proper reply headers."""
     address = mailbox_address(mailbox)
     svc = gmail_service(address)
-    in_reply_to = references = None
-    if thread_id:
-        in_reply_to, references = _thread_reply_headers(svc, thread_id)
+    thread_id, in_reply_to, references = _reply_setup(svc, thread_id)
     message: dict = {
         "raw": build_mime(address, to, subject, body, cc=cc, bcc=bcc, in_reply_to=in_reply_to, references=references, attachments=attachments)
     }
@@ -326,9 +402,7 @@ def update_draft(
 ) -> dict:
     address = mailbox_address(mailbox)
     svc = gmail_service(address)
-    in_reply_to = references = None
-    if thread_id:
-        in_reply_to, references = _thread_reply_headers(svc, thread_id)
+    thread_id, in_reply_to, references = _reply_setup(svc, thread_id)
     message: dict = {
         "raw": build_mime(address, to, subject, body, cc=cc, bcc=bcc, in_reply_to=in_reply_to, references=references, attachments=attachments)
     }

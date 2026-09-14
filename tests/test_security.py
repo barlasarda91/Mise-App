@@ -160,3 +160,18 @@ def test_board_move_answers_fetch_with_json_and_forms_with_redirect(client):
         "/tasks/999999/status", data={"status": "doing"}, follow_redirects=False,
     )
     assert classic.status_code == 303 and classic.headers["location"].startswith("/board")
+
+
+def test_lead_stage_move_answers_fetch_with_json(client):
+    client.post("/login", data={"password": "test-password"})
+    live = client.post(
+        "/leads/999999/stage", data={"stage": "sampled"},
+        headers={"X-Fetch": "1"}, follow_redirects=False,
+    )
+    assert live.status_code == 200
+    body = live.json()
+    assert body["ok"] is False and body["stage"] == "sampled" and body["stage_since"]
+    classic = client.post(
+        "/leads/999999/stage", data={"stage": "sampled"}, follow_redirects=False,
+    )
+    assert classic.status_code == 303 and "/pipeline/lead/999999" in classic.headers["location"]

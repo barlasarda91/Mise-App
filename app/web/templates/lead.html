@@ -4,6 +4,7 @@
 {% block content %}
 
 {% if msg %}<div class="note" style="margin:0 0 14px">▸ {{ msg }}</div>{% endif %}
+<div class="note" id="liveMsg" hidden style="margin:0 0 14px"></div>
 <div class="note" style="margin:0 0 14px;display:flex;align-items:baseline"><a href="/pipeline">← back to pipeline</a><span style="flex:1"></span>{% if lead.next_id %}<a href="/pipeline/lead/{{ lead.next_id }}" title="{{ lead.next_name }}">view next lead →</a>{% endif %}</div>
 
 {% if lead.discarded %}
@@ -20,14 +21,14 @@
   <div>
     <div class="box">
       <div class="box-hd"><span class="lbl">Lead</span>
-        <span class="ix">{{ lead.stage | upper }}{% if lead.overdue %} · <span style="color:var(--ember)">{{ lead.idle }}D OVERDUE</span>{% endif %}</span>
+        <span class="ix"><span id="stageTop">{{ lead.stage | upper }}</span>{% if lead.overdue %} · <span style="color:var(--ember)">{{ lead.idle }}D OVERDUE</span>{% endif %}</span>
       </div>
       <div class="box-bd" style="font-size:14px">
         <div class="kv"><span class="ks">Contact</span><span>{{ lead.contact_name or "—" }}</span></div>
         <div class="kv"><span class="ks">Email</span><span>{{ lead.contact_email or "—" }}</span></div>
         <div class="kv"><span class="ks">Phone</span><span>{{ lead.contact_phone or "—" }}</span></div>
         <div class="kv"><span class="ks">Source</span><span>{{ lead.source or "—" }}</span></div>
-        <div class="kv"><span class="ks">Stage since</span><span>{{ lead.stage_since or "—" }}</span></div>
+        <div class="kv"><span class="ks">Stage since</span><span id="stageSince">{{ lead.stage_since or "—" }}</span></div>
         <div class="kv"><span class="ks">Last confirmed action</span><span>{{ lead.last or "—" }}</span></div>
         {% if lead.loss_reason %}<div class="kv"><span class="ks">Loss reason</span><span>{{ lead.loss_reason }}</span></div>{% endif %}
       </div>
@@ -91,8 +92,8 @@
     </div>
 
     <div class="box">
-      <div class="box-hd"><span class="lbl">Activity</span><span class="ix">{{ lead.activities | length }}</span></div>
-      <div>
+      <div class="box-hd"><span class="lbl">Activity</span><span class="ix" id="activityCount">{{ lead.activities | length }}</span></div>
+      <div id="activityList">
         {% for a in lead.activities %}
         {% if a.editable %}
         <details data-key="act-{{ a.id }}">
@@ -171,7 +172,7 @@
     </div>
 
     <div class="box">
-      <div class="box-hd"><span class="lbl">Change stage</span><span class="ix">NOW: {{ lead.stage | upper }}</span></div>
+      <div class="box-hd"><span class="lbl">Change stage</span><span class="ix" id="stageNow">NOW: {{ lead.stage | upper }}</span></div>
       <div class="box-bd">
         <form method="post" action="/leads/{{ lead.id }}/stage" class="stack">
           <label>Stage
@@ -206,4 +207,53 @@
     </div>
   </div>
 </div>
+
+<script>
+  // Stage changes post in the background — labels, stage-since, and the
+  // activity log update in place; a fetch failure falls back to full submit.
+  (function () {
+    const form = document.querySelector('form[action="/leads/{{ lead.id }}/stage"]');
+    if (!form) return;
+    form.addEventListener('submit', async (e) => {
+      if (form.dataset.fallback) return;
+      e.preventDefault();
+      const btn = form.querySelector('button[type=submit]');
+      btn.disabled = true;
+      try {
+        const res = await fetch(form.action, {
+          method: 'POST', body: new FormData(form), headers: { 'X-Fetch': '1' },
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const note = document.getElementById('liveMsg');
+        note.textContent = '▸ ' + data.msg;
+        note.hidden = false;
+        if (!data.ok) return;
+        const oldStage = (document.getElementById('stageTop').textContent || '').toLowerCase();
+        document.getElementById('stageTop').textContent = data.stage.toUpperCase();
+        document.getElementById('stageNow').textContent = 'NOW: ' + data.stage.toUpperCase();
+        const since = document.getElementById('stageSince');
+        if (since) since.textContent = data.stage_since;
+        const list = document.getElementById('activityList');
+        if (list) {
+          const row = document.createElement('div');
+          row.className = 'row';
+          row.innerHTML = '<span class="code"></span><span class="name" style="font-size:13.5px">stage_change</span>'
+            + '<span class="meta"></span><span class="spacer"></span><span class="pill ghost">manual</span>';
+          row.querySelector('.code').textContent = data.stage_since;
+          row.querySelector('.meta').textContent = oldStage + ' → ' + data.stage;
+          list.prepend(row);
+          const count = document.getElementById('activityCount');
+          if (count) count.textContent = String((parseInt(count.textContent, 10) || 0) + 1);
+        }
+      } catch (err) {
+        form.dataset.fallback = '1';
+        form.submit();
+        return;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  })();
+</script>
 {% endblock %}

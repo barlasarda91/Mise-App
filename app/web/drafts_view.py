@@ -272,8 +272,30 @@ def load_thread(selected: dict | None) -> dict | None:
             label = "history"
         messages = gmail.get_thread_messages(mailbox, thread_id, last_n=8)
     except Exception as exc:
-        return {"error": f"{type(exc).__name__}: {exc}", "messages": [], "label": label,
-                "thread_id": thread_id, "mailbox": selected["mailbox"], "action_links": [], "invites": []}
+        # A reply draft whose thread id lives in the OTHER mailbox (Gmail ids
+        # are per-mailbox): still show the conversation, and say what's up.
+        messages = None
+        if label == "thread" and gmail.is_not_found(exc):
+            for other in FromMailbox:
+                if other == mailbox:
+                    continue
+                try:
+                    messages = gmail.get_thread_messages(other, thread_id, last_n=8)
+                    label = f"thread · in {other.value}@ — re-linked on save"
+                    break
+                except Exception:
+                    pass
+        if messages is None:
+            detail = f"{type(exc).__name__}: {exc}"
+            if gmail.is_not_found(exc):
+                detail = (
+                    "This thread id doesn't exist in this mailbox (Gmail ids are "
+                    "per-mailbox) and no copy was found in the other one — it may "
+                    "have been deleted. Save/Send will start a new email instead "
+                    "of failing."
+                )
+            return {"error": detail, "messages": [], "label": label,
+                    "thread_id": thread_id, "mailbox": selected["mailbox"], "action_links": [], "invites": []}
     from app.web.action_links import extract_action_links, extract_invite_event_ids
 
     invites = []
@@ -405,6 +427,20 @@ def _sync_to_gmail(draft_id: int) -> tuple[bool, str]:
 
     from app.tools import gmail
 
+    # Heal a cross-mailbox thread id before saving (Gmail ids are per-mailbox):
+    # remap to this mailbox's copy of the conversation when one exists, else
+    # drop the link and send as a new email — never fail the save over it.
+    thread_note = ""
+    if payload["thread_id"]:
+        try:
+            resolved, note = gmail.resolve_thread_for_mailbox(mailbox, payload["thread_id"])
+            if resolved != payload["thread_id"]:
+                payload["thread_id"] = resolved
+                if note:
+                    thread_note = f" Note: {note}."
+        except Exception:
+            pass  # verification unavailable — create/update degrade on 404 themselves
+
     try:
         if existing_gmail_id:
             result = gmail.update_draft(mailbox, existing_gmail_id, **payload)
@@ -419,7 +455,7 @@ def _sync_to_gmail(draft_id: int) -> tuple[bool, str]:
         if result.get("thread_id"):
             draft.gmail_thread_id = result["thread_id"]
         draft.status = DraftStatus.SAVED_TO_GMAIL
-    return True, f"Saved as a Gmail draft in {_mailbox_address(mailbox)}."
+    return True, f"Saved as a Gmail draft in {_mailbox_address(mailbox)}.{thread_note}"
 
 
 def save_to_gmail(draft_id: int) -> str:

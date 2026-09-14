@@ -682,13 +682,21 @@ def lead_log_activity(lead_id: int, type: str = Form(...), occurred_on: str = Fo
 
 
 @app.post("/leads/{lead_id}/stage")
-def lead_change_stage(lead_id: int, stage: str = Form(...), loss_reason: str = Form("")):
+def lead_change_stage(
+    request: Request, lead_id: int, stage: str = Form(...), loss_reason: str = Form("")
+):
     from app.web.pipeline_view import change_stage_manual
 
     try:
         msg = change_stage_manual(lead_id, stage, loss_reason)
     except Exception as exc:
         msg = f"Error: {exc}"
+    # Lead-page stage moves post via fetch and update in place (like board
+    # card moves); plain form posts keep the redirect.
+    if request.headers.get("x-fetch") == "1":
+        ok = msg.startswith("Stage → ")
+        today = datetime.now(ZoneInfo(get_settings().default_tz)).date().isoformat()
+        return JSONResponse({"ok": ok, "msg": msg, "stage": stage, "stage_since": today})
     return RedirectResponse(f"/pipeline/lead/{lead_id}?msg={msg}", status_code=303)
 
 
