@@ -646,3 +646,49 @@ def test_bcc_round_trip(session_factory, monkeypatch):
     )
     ok, _ = dv._sync_to_gmail(draft_id)
     assert ok and captured["bcc"] == ["quiet@x.com", "two@x.com"]
+
+
+def test_create_email_draft_tool_dedups_across_runs(session_factory):
+    """Regression: two consecutive runs both drafting a reply to the same
+    thread produced two drafts (the ledger key is run-scoped). An unsent,
+    undiscarded draft for the same thread/lead now blocks a second one."""
+    lead_id = _seed_lead(session_factory)
+    args = dict(
+        mailbox="hello", to=["austin@pineconebakeshop.com"], cc=None,
+        subject="Re: New Wholesale Inquiry", body="Hey Austin",
+        purpose="inquiry_reply", lead_id=lead_id, task_id=None,
+        gmail_thread_id="th-austin",
+    )
+    set_run_context(run_id=101, routine_id=1, started_at=datetime(2026, 9, 15, tzinfo=timezone.utc))
+    try:
+        with session_factory() as s:
+            first = json.loads(dispatch("create_email_draft", dict(args), s)[0])
+        assert first["outcome"] == "created"
+    finally:
+        clear_run_context()
+
+    set_run_context(run_id=102, routine_id=1, started_at=datetime(2026, 9, 15, tzinfo=timezone.utc))
+    try:
+        with session_factory() as s:
+            second = json.loads(dispatch("create_email_draft", dict(args), s)[0])
+        assert second["outcome"] == "already_exists"
+        assert second["draft_id"] == first["draft_id"]
+        assert "awaiting" in second["note"]
+
+        # same lead, no thread id -> still blocked while the draft is unsent
+        no_thread = dict(args, gmail_thread_id=None, purpose="followup")
+        with session_factory() as s:
+            third = json.loads(dispatch("create_email_draft", dict(no_thread), s)[0])
+        assert third["outcome"] == "already_exists"
+
+        # once the draft is sent (or discarded), a new one is allowed
+        with session_factory() as s:
+            d = s.get(EmailDraft, first["draft_id"])
+            d.sent_at = datetime(2026, 9, 15, 12, 0, tzinfo=timezone.utc)
+        with session_factory() as s:
+            fourth = json.loads(dispatch("create_email_draft", dict(args), s)[0])
+        assert fourth["outcome"] == "created"
+        with session_factory() as s:
+            assert s.query(EmailDraft).count() == 2
+    finally:
+        clear_run_context()

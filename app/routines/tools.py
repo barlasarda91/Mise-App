@@ -697,6 +697,38 @@ def _create_email_draft(
     ledger = session.scalar(select(ExternalMutation).where(ExternalMutation.dedup_key == dedup_key))
     if ledger and ledger.external_id:
         return {"outcome": "already_exists", "draft_id": int(ledger.external_id)}
+
+    # Cross-RUN dedup: the run-scoped ledger above can't stop run N+1 from
+    # re-drafting what run N already drafted. An unsent, undiscarded draft on
+    # the same thread (or for the same lead/task) means the reply is already
+    # sitting in Drafts awaiting Arda — never pile a second one on it.
+    open_clauses = []
+    if gmail_thread_id:
+        open_clauses.append(EmailDraft.gmail_thread_id == gmail_thread_id)
+    if lead_id:
+        open_clauses.append(EmailDraft.related_lead_id == lead_id)
+    if task_id:
+        open_clauses.append(EmailDraft.related_task_id == task_id)
+    if open_clauses:
+        from sqlalchemy import or_
+
+        existing = session.scalar(
+            select(EmailDraft).where(
+                EmailDraft.sent_at.is_(None),
+                EmailDraft.status != DraftStatus.DISCARDED,
+                or_(*open_clauses),
+            )
+        )
+        if existing is not None:
+            return {
+                "outcome": "already_exists",
+                "draft_id": existing.id,
+                "note": (
+                    "an unsent draft for this conversation is already awaiting "
+                    "Arda's review in Drafts — do not create another; mention it "
+                    "in the briefing instead if it's aging"
+                ),
+            }
     draft = EmailDraft(
         subject=subject,
         body=body,
