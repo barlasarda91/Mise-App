@@ -48,13 +48,40 @@ def _is_first_run_of_day(session, routine: Routine) -> bool:
     return _aware(latest.started_at).astimezone(tz).date() < datetime.now(tz).date()
 
 
-def _new_mail_count(mailbox: FromMailbox, since: datetime) -> int:
+MAX_IGNORED_IN_QUERY = 40
+
+# Bulk-mail categories the briefing ignores anyway: their arrival alone must
+# not force a paid run. category:updates stays counted — invoices, shipping
+# and bank notices land there and those ARE actionable.
+QUIET_INBOX_BASE = "in:inbox -category:promotions -category:social -category:forums"
+
+
+def _ignored_senders(session) -> list[str]:
+    """Muted + disregarded addresses — mail from them never reaches the
+    briefing, so it shouldn't count as 'something happened' either."""
+    from app.models import DisregardRule, MutedSender
+
+    emails = {e.lower() for e in session.scalars(select(MutedSender.email))}
+    emails |= {
+        r.contact_email.lower()
+        for r in session.scalars(select(DisregardRule))
+        if r.contact_email
+    }
+    return sorted(emails)[:MAX_IGNORED_IN_QUERY]
+
+
+def _new_mail_count(mailbox: FromMailbox, since: datetime, ignored: list[str] | None = None) -> int:
+    """Mail a routine would actually act on: inbox minus bulk categories and
+    muted/disregarded senders, plus anything sent (own outbound is always
+    signal). The old any-mail-at-all count made skips nearly impossible on a
+    busy inbox — some newsletter arrives almost every hour."""
     from app.tools import gmail
 
     epoch = int(_aware(since).timestamp())
-    return sum(
-        gmail.count_messages(mailbox, f"{scope} after:{epoch}")
-        for scope in ("in:inbox", "in:sent")
+    negations = " ".join(f"-from:{a}" for a in (ignored or []))
+    inbox_query = f"{QUIET_INBOX_BASE} {negations} after:{epoch}".replace("  ", " ")
+    return gmail.count_messages(mailbox, inbox_query) + gmail.count_messages(
+        mailbox, f"in:sent after:{epoch}"
     )
 
 
@@ -112,6 +139,7 @@ def skip_reason(session, routine: Routine, trigger: RunTrigger) -> str | None:
             )
         }
 
+        ignored = _ignored_senders(session)
         quiet_notes = []
         for source, mailbox in GMAIL_SOURCES.items():
             if source not in (routine.connectors or []):
@@ -119,7 +147,7 @@ def skip_reason(session, routine: Routine, trigger: RunTrigger) -> str | None:
             since = gather.get(source)
             if since is None:
                 return None  # cold start — let the run establish state
-            if _new_mail_count(mailbox, since) > 0:
+            if _new_mail_count(mailbox, since, ignored) > 0:
                 return None
             quiet_notes.append(f"{mailbox.value}@ since {_aware(since).astimezone(ZoneInfo(get_settings().default_tz)).strftime('%H:%M')}")
         if not quiet_notes:

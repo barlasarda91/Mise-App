@@ -95,6 +95,12 @@ def execute_run(
             model = resolve_model(routine.model)
             system_prompt = routine.system_prompt
             context_text = build_runtime_context(s, routine, trigger=trigger.value)
+            # Phase 2a: intraday delta runs think at medium effort; the day's
+            # first executed run (it writes the briefing / A-R / sweep) and
+            # manual runs keep the default high.
+            from app.engine.preflight import _is_first_run_of_day
+
+            intraday = trigger == RunTrigger.SCHEDULED and not _is_first_run_of_day(s, routine)
             run = Run(routine_id=routine_id, trigger=trigger, status=RunStatus.RUNNING)
             s.add(run)
             s.flush()
@@ -134,6 +140,7 @@ def execute_run(
         # a safety decline re-runs the request on a fallback model in-call.
         betas=["server-side-fallback-2026-07-01"],
         fallbacks="default",
+        output_config={"effort": "medium" if intraday else "high"},
     )
 
     # Phase 0: accumulate token usage and dollars across the run's API calls.
@@ -143,6 +150,7 @@ def execute_run(
         "output_tokens": 0,
         "cache_read_input_tokens": 0,
         "cache_creation_input_tokens": 0,
+        "effort": request_base["output_config"]["effort"],
     }
     cost = 0.0
 

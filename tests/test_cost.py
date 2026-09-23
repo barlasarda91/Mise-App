@@ -101,7 +101,7 @@ def _quiet_setup(s, key="lead_tracker"):
 
 
 def test_manual_and_first_of_day_always_run(session_factory, monkeypatch):
-    monkeypatch.setattr(pf, "_new_mail_count", lambda mb, since: 0)
+    monkeypatch.setattr(pf, "_new_mail_count", lambda mb, since, ignored=None: 0)
     with session_factory() as s:
         routine = _routine(s)
         assert pf.skip_reason(s, routine, RunTrigger.MANUAL) is None
@@ -114,16 +114,16 @@ def test_quiet_hour_skips_and_new_mail_runs(session_factory, monkeypatch):
         routine = _quiet_setup(s)
         s.commit()
 
-        monkeypatch.setattr(pf, "_new_mail_count", lambda mb, since: 0)
+        monkeypatch.setattr(pf, "_new_mail_count", lambda mb, since, ignored=None: 0)
         reason = pf.skip_reason(s, routine, RunTrigger.SCHEDULED)
         assert reason and "no new mail" in reason
 
-        monkeypatch.setattr(pf, "_new_mail_count", lambda mb, since: 2)
+        monkeypatch.setattr(pf, "_new_mail_count", lambda mb, since, ignored=None: 2)
         assert pf.skip_reason(s, routine, RunTrigger.SCHEDULED) is None
 
 
 def test_agenda_runs_when_calendar_changes(session_factory, monkeypatch):
-    monkeypatch.setattr(pf, "_new_mail_count", lambda mb, since: 0)
+    monkeypatch.setattr(pf, "_new_mail_count", lambda mb, since, ignored=None: 0)
     with session_factory() as s:
         routine = _quiet_setup(s, key="daily_agenda")
         s.commit()
@@ -155,7 +155,7 @@ def test_execute_run_records_skip_without_model_call(session_factory, monkeypatc
     with session_factory() as s:
         routine_id = _quiet_setup(s).id
 
-    monkeypatch.setattr(pf, "_new_mail_count", lambda mb, since: 0)
+    monkeypatch.setattr(pf, "_new_mail_count", lambda mb, since, ignored=None: 0)
     client = FakeClient([])  # any create() call would pop from empty and raise
     run_id = execute_run(routine_id, trigger=RunTrigger.SCHEDULED,
                          client=client, session_factory=session_factory)
@@ -263,3 +263,75 @@ def test_dispatch_caps_oversized_results(session_factory):
         assert "result truncated" in content
     finally:
         del _REGISTRY["_test_blob"]
+
+
+def test_new_mail_count_ignores_bulk_categories_and_muted(monkeypatch):
+    """The quiet check counts mail the routines would act on — a newsletter
+    or a muted sender arriving must not force a paid run."""
+    from datetime import datetime, timezone
+
+    import app.tools.gmail as gm
+
+    queries = []
+    monkeypatch.setattr(gm, "count_messages", lambda mb, q: queries.append(q) or 0)
+    from app.models.enums import FromMailbox
+
+    n = pf._new_mail_count(
+        FromMailbox.ARDA, datetime.now(timezone.utc), ["news@letter.com", "vetoed@x.com"]
+    )
+    assert n == 0
+    inbox_q, sent_q = queries
+    for fragment in ("-category:promotions", "-category:social", "-category:forums",
+                     "-from:news@letter.com", "-from:vetoed@x.com"):
+        assert fragment in inbox_q
+    assert "category:updates" not in inbox_q  # invoices/notices still count
+    assert sent_q.startswith("in:sent after:")
+
+
+def test_ignored_senders_merges_muted_and_disregarded(session_factory):
+    from app.models import DisregardRule, MutedSender
+
+    with session_factory() as s:
+        s.add(MutedSender(email="news@letter.com"))
+        s.add(DisregardRule(contact_email="vetoed@x.com", title="t"))
+        s.flush()
+        assert pf._ignored_senders(s) == ["news@letter.com", "vetoed@x.com"]
+
+
+# ---------- phase 2a: effort by run type ----------
+
+
+def test_effort_tiers_by_run_type(session_factory):
+    """Manual and first-of-day runs think at high effort; intraday scheduled
+    delta runs drop to medium. The effort used is recorded in run.usage."""
+    from datetime import datetime, timezone
+
+    from app.models import RunStatus as RS
+
+    with session_factory() as s:
+        routine_id = _routine(s).id
+
+    def _run_once(trigger):
+        r = FakeResponse([text_block("ok")], "end_turn")
+        r.usage = _usage(input_tokens=100, output_tokens=10)
+        r.model = "claude-opus-5"
+        client = FakeClient([r])
+        run_id = execute_run(routine_id, trigger=trigger,
+                             client=client, session_factory=session_factory)
+        return client.requests[-1], run_id
+
+    # no completed run today -> first of day -> high
+    request, run_id = _run_once(RunTrigger.SCHEDULED)
+    assert request["output_config"] == {"effort": "high"}
+    with session_factory() as s:
+        assert s.get(Run, run_id).usage["effort"] == "high"
+
+    # a completed run exists today -> intraday delta -> medium
+    request, run_id = _run_once(RunTrigger.SCHEDULED)
+    assert request["output_config"] == {"effort": "medium"}
+    with session_factory() as s:
+        assert s.get(Run, run_id).usage["effort"] == "medium"
+
+    # manual stays high regardless
+    request, _ = _run_once(RunTrigger.MANUAL)
+    assert request["output_config"] == {"effort": "high"}

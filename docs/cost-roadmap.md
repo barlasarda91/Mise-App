@@ -47,13 +47,22 @@ caps at 2.5k chars — apply a similar cap, with a "truncated" marker, to the
 run tools) and keep search results to header summaries. Runtime context is
 already capped (40 leads / 25 tasks) — revisit only if Phase 0 shows it heavy.
 
+### Measured (first clean week, 2026-09-15 → 09-22)
+
+~$7.80/weekday average, $0 weekends. Cache reads were 75–78% of input
+tokens (1b working). But skips were 0–1/day, not the projected half —
+root cause: the quiet check counted ANY new mail, and on a busy inbox a
+newsletter arrives almost every hour. **Fixed 2026-09-23:** the check now
+excludes promotions/social/forums categories and muted/disregarded
+senders (category:updates still counts — invoices land there).
+
 ## Phase 2 — cheap tradeoffs (quality held where it matters)
 
-**2a. Effort by run type.** First run of the day: effort high (it writes the
-briefing). Intraday delta runs: effort low or medium via
+**2a. Effort by run type. (SHIPPED 2026-09-23)** First executed run of the day: effort high
+(it writes the briefing). Intraday delta runs: effort medium via
 `output_config={"effort": ...}` — they mostly check mail and file a task or
-two. Lower effort also means fewer, more consolidated tool calls, which
-compounds with 1b.
+two. Manual runs stay high. The effort used is recorded in run.usage; drop
+intraday to "low" later if the briefing quality holds at medium.
 
 **2b. Sonnet for intraday runs.** Keep Opus for the morning briefing (the
 product's voice and judgment showcase); run intraday deltas on Claude Sonnet 5
