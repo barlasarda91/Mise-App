@@ -186,6 +186,10 @@ def load_task(task_id: int) -> dict | None:
             return {
                 **_card(task, today),
                 "lead_name": lead_name,
+                "batch": [
+                    b for b in (ref.get("batch") or [])
+                    if isinstance(b, dict) and b.get("gmail_msg_id")
+                ],
                 "gmail_msg_id": ref.get("gmail_msg_id"),
                 "contact_email": ref.get("contact_email"),
                 "description": task.description,

@@ -369,6 +369,31 @@ def _disregard_rule_for(session, dedup_key, source_ref):
     return None
 
 
+MAX_BATCH_ITEMS = 30
+
+
+def _clean_batch(batch_items) -> list[dict]:
+    """Sanitize model-supplied batch constituents (the individual emails a
+    clustered task covers) for storage in source_ref."""
+    out = []
+    for item in batch_items or []:
+        if not isinstance(item, dict):
+            continue
+        msg_id = str(item.get("gmail_msg_id") or "").strip()[:64]
+        if not msg_id:
+            continue
+        out.append(
+            {
+                "mailbox": "hello" if str(item.get("mailbox")) == "hello" else "arda",
+                "gmail_msg_id": msg_id,
+                "from_name": str(item.get("from_name") or "")[:200],
+                "from_addr": str(item.get("from_addr") or "").lower()[:320],
+                "subject": str(item.get("subject") or "")[:300],
+            }
+        )
+    return out[:MAX_BATCH_ITEMS]
+
+
 def _create_task_impl(session, category, title, dedup_key, description, due_date, assignee, source_ref):
     rule = _disregard_rule_for(session, dedup_key, source_ref)
     if rule is not None:
@@ -384,7 +409,19 @@ def _create_task_impl(session, category, title, dedup_key, description, due_date
         if task is not None:
             if due and task.due_date != due:
                 task.due_date = due
-            return {"outcome": "already_exists", "task_id": task.id, "title": task.title}
+            result = {"outcome": "already_exists", "task_id": task.id, "title": task.title}
+            # A re-seen batch task absorbs newly arrived constituents, so
+            # "8+ applications" grows to 9 without a duplicate task.
+            new_batch = (source_ref or {}).get("batch") or []
+            if new_batch:
+                ref = dict(task.source_ref or {})
+                merged = {i["gmail_msg_id"]: i for i in (ref.get("batch") or [])}
+                for item in new_batch:
+                    merged.setdefault(item["gmail_msg_id"], item)
+                ref["batch"] = list(merged.values())[:MAX_BATCH_ITEMS]
+                task.source_ref = ref
+                result["batch_size"] = len(ref["batch"])
+            return result
     task = Task(
         category=TaskCategory(category),
         title=title,
@@ -422,7 +459,7 @@ def _create_task_impl(session, category, title, dedup_key, description, due_date
 def _create_task(
     session: Session, category, title, dedup_key, description=None, due_date=None,
     assignee=None, lead_id=None, qbo_invoice_id=None, gmail_msg_id=None,
-    contact_email=None,
+    contact_email=None, batch_items=None,
 ):
     source_ref = {
         k: v
@@ -431,6 +468,7 @@ def _create_task(
             "qbo_invoice_id": qbo_invoice_id,
             "gmail_msg_id": gmail_msg_id,
             "contact_email": contact_email,
+            "batch": _clean_batch(batch_items) or None,
         }.items()
         if v
     } or None
@@ -465,6 +503,32 @@ register(
                 "contact_email": {
                     "type": ["string", "null"],
                     "description": "The counterparty's email address, for email-derived tasks",
+                },
+                "batch_items": {
+                    "anyOf": [
+                        {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "mailbox": {"type": "string", "enum": ["arda", "hello"]},
+                                    "gmail_msg_id": {"type": "string"},
+                                    "from_name": {"type": "string"},
+                                    "from_addr": {"type": "string"},
+                                    "subject": {"type": "string"},
+                                },
+                                "required": ["mailbox", "gmail_msg_id"],
+                                "additionalProperties": False,
+                            },
+                        },
+                        {"type": "null"},
+                    ],
+                    "description": (
+                        "For a BATCH task that clusters several emails (a pile of job "
+                        "applications, sample offers): one entry per underlying message, so "
+                        "Arda can expand the item and work them one by one. Re-calling with "
+                        "the same dedup_key adds newly arrived messages to the batch."
+                    ),
                 },
             },
             "required": ["category", "title", "dedup_key"],

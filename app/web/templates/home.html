@@ -49,6 +49,33 @@
         </div>
       </details>
       {% else %}
+      {% set batch = item.tasks[0].batch if item.tasks | length == 1 else [] %}
+      {% if batch %}
+      <details class="check-item" data-key="batch-{{ item.task_ids[0] }}" style="padding:4px 0">
+        <summary style="list-style:none;cursor:pointer;display:flex;gap:9px;align-items:baseline">
+          <form method="post" action="/briefing/check" style="display:contents">
+            <input type="hidden" name="task_ids" value="{{ item.task_ids | join(',') }}">
+            <input type="hidden" name="done" value="{{ '0' if item.done else '1' }}">
+            <input type="checkbox" onclick="event.stopPropagation()" onchange="this.form.submit()" {% if item.done %}checked{% endif %} style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer">
+          </form>
+          <span class="md" style="font-size:14px;{% if item.done %}text-decoration:line-through;color:var(--ink-soft){% endif %}">{{ item.html | safe }}</span>
+          <span class="spacer"></span>
+          <span class="pill ghost" style="white-space:nowrap">{{ batch | length }} ▾</span>
+          <form method="post" action="/tasks/{{ item.task_ids[0] }}/disregard" onsubmit="return confirm('Disregard this item? Deletes the task and ignores its sender until you remove the rule in Settings.')">
+            <button class="linkish" type="submit" title="Disregard: delete + ignore sender" style="color:var(--ink-soft);padding:0 4px">✕</button>
+          </form>
+        </summary>
+        <div style="margin:2px 0 4px 22px;border-left:1px solid var(--line);padding-left:12px">
+          {% for b in batch %}
+          <div style="display:flex;gap:9px;align-items:baseline;padding:3px 0">
+            <a href="/inbox?open={{ b.mailbox }}:{{ b.gmail_msg_id }}" style="font-size:13.5px;min-width:0">{{ b.from_name or b.from_addr }}{% if b.subject %} — {{ b.subject }}{% endif %}</a>
+            <span class="spacer"></span>
+            <span class="pill ghost" style="white-space:nowrap">{{ b.mailbox }}@</span>
+          </div>
+          {% endfor %}
+        </div>
+      </details>
+      {% else %}
       <div class="check-item" style="display:flex;gap:9px;align-items:baseline;padding:4px 0">
         <form method="post" action="/briefing/check" style="display:contents">
           <input type="hidden" name="task_ids" value="{{ item.task_ids | join(',') }}">
@@ -67,6 +94,7 @@
         </form>
         {% endif %}
       </div>
+      {% endif %}
       {% endif %}
       {% endfor %}
     </div>

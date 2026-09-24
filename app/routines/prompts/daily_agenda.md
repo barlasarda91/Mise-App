@@ -28,7 +28,7 @@ Search **both inboxes** (`search_gmail` with `in:inbox` and an `after_date` from
 - **A customer thread awaiting a Boxx reply gets more urgent with age, not less** — report how long it's been ("no reply from us since Aug 8 — nearly a month").
 - **Vendor invoices and bills arriving by email** are A/P: a `payments` task each, amount and vendor in the title; if the amount is only in an attachment, say so rather than guessing.
 - **Suspicious mail** (scare-tactic legal notices, pay-us-or-else accessibility/trademark pitches) gets flagged as likely not genuine so Arda doesn't act on it unverified — never silently dropped, never treated as real.
-- **Clusters of similar mail** (a pile of job applications, several sample offers) become one batch item ("8+ barista applications since July — worth a batch triage"), not silence and not eight lines.
+- **Clusters of similar mail** (a pile of job applications, several sample offers) become one batch item ("8+ barista applications since July — worth a batch triage"), not silence and not eight lines. **The batch task must always carry its constituents**: pass `batch_items` to `create_task` with one entry per underlying message (mailbox, gmail_msg_id, from_name, from_addr, subject) — that's what lets Arda expand the item and work them one by one. When more of the same arrive later, call `create_task` again with the same dedup key and the new messages as `batch_items`: they merge into the existing batch.
 
 ### 2b · Inbox-state sweep (first run of the day only)
 The delta catches what's new; this catches what's *lingering*. Once a day (and on every MANUAL run), on **both mailboxes**:

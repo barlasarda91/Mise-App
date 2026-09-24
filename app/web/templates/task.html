@@ -38,6 +38,22 @@
     </div>
     {% endif %}
 
+    {% if task.batch %}
+    <div class="box">
+      <div class="box-hd"><span class="lbl">Batch items</span><span class="ix">{{ task.batch | length }} · ONE BY ONE</span></div>
+      <div>
+        {% for b in task.batch %}
+        <a class="row" href="/inbox?open={{ b.mailbox }}:{{ b.gmail_msg_id }}" style="text-decoration:none">
+          <span class="name" style="font-size:13.5px;min-width:0">{{ b.from_name or b.from_addr }}{% if b.subject %} — {{ b.subject }}{% endif %}</span>
+          <span class="spacer"></span>
+          <span class="pill ghost">{{ b.mailbox }}@</span>
+        </a>
+        {% endfor %}
+        <div class="box-bd"><span class="note">The individual emails this batch task covers — each opens in the Inbox with reply drafting. Complete the task when the pile is worked through.</span></div>
+      </div>
+    </div>
+    {% endif %}
+
     {% set alinks = email_ctx.action_links if email_ctx else none %}
     {% include "_action_links.html" %}
     {% set invites = email_ctx.invites if email_ctx else none %}

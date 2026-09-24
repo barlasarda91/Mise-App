@@ -625,3 +625,69 @@ def test_context_tasks_grouped_by_category_with_fair_caps(session_factory):
     assert f"### invoice_tracking ({MAX_TASKS_PER_CATEGORY + 3})" in context
     assert f"plus 3 more invoice_tracking" in context
     assert "every category below is briefing material" in context
+
+
+def test_batch_tasks_store_and_merge_constituents(session_factory):
+    """A clustered task carries its individual emails in source_ref.batch;
+    re-creating with the same dedup key merges newly arrived ones."""
+    from app.engine.toolkit import clear_run_context, set_run_context
+    from app.models import Task
+    from app.routines.tools import _create_task
+
+    set_run_context(run_id=None, routine_id=None, started_at=None)
+    try:
+        with session_factory() as s:
+            first = _create_task(
+                s, "governance", "Batch triage: 2+ barista applications", "task:batch-barista",
+                batch_items=[
+                    {"mailbox": "hello", "gmail_msg_id": "b1", "from_name": "A", "from_addr": "A@X.com", "subject": "Barista"},
+                    {"mailbox": "arda", "gmail_msg_id": "b2", "from_name": "B", "subject": "Barista role"},
+                    {"gmail_msg_id": ""},  # junk dropped
+                ],
+            )
+            assert first["outcome"] == "created"
+            s.commit()
+            task = s.get(Task, first["task_id"])
+            batch = task.source_ref["batch"]
+            assert [b["gmail_msg_id"] for b in batch] == ["b1", "b2"]
+            assert batch[0]["from_addr"] == "a@x.com"
+
+            again = _create_task(
+                s, "governance", "Batch triage: 3+ barista applications", "task:batch-barista",
+                batch_items=[
+                    {"mailbox": "hello", "gmail_msg_id": "b1"},  # already known
+                    {"mailbox": "hello", "gmail_msg_id": "b3", "from_name": "C"},
+                ],
+            )
+            assert again["outcome"] == "already_exists" and again["batch_size"] == 3
+            s.commit()
+            task = s.get(Task, first["task_id"])
+            assert [b["gmail_msg_id"] for b in task.source_ref["batch"]] == ["b1", "b2", "b3"]
+            # b1's original details survive the merge
+            assert task.source_ref["batch"][0]["from_name"] == "A"
+    finally:
+        clear_run_context()
+
+
+def test_checklist_items_carry_batch_for_expansion(session_factory):
+    from app.models import Task, TaskCategory
+    from app.web.runs_view import _with_task_state
+
+    with session_factory() as s:
+        task = Task(category=TaskCategory.GOVERNANCE, title="Batch triage",
+                    source_ref={"batch": [
+                        {"mailbox": "hello", "gmail_msg_id": "b1", "from_name": "A", "subject": "s"},
+                        "junk-entry",
+                        {"no_id": True},
+                    ]})
+        plain = Task(category=TaskCategory.GOVERNANCE, title="Reply to Eddie")
+        s.add_all([task, plain])
+        s.flush()
+        items = _with_task_state(s, [
+            {"text": f"Batch triage (#{task.id})", "task_ids": [task.id]},
+            {"text": f"Reply (#{plain.id})", "task_ids": [plain.id]},
+        ])
+    assert items[0]["tasks"][0]["batch"] == [
+        {"mailbox": "hello", "gmail_msg_id": "b1", "from_name": "A", "subject": "s"}
+    ]
+    assert items[1]["tasks"][0]["batch"] == []

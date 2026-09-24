@@ -189,14 +189,18 @@ def _with_task_state(session, items: list[dict]) -> list[dict]:
     from app.models import Task, TaskStatus
 
     all_ids = {tid for item in items for tid in item["task_ids"]}
-    known: dict[int, tuple[str, bool]] = {}
+    known: dict[int, tuple[str, bool, list]] = {}
     if all_ids:
         for task in session.scalars(select(Task).where(Task.id.in_(all_ids))):
-            known[task.id] = (task.title, task.status == TaskStatus.DONE)
+            batch = [
+                b for b in ((task.source_ref or {}).get("batch") or [])
+                if isinstance(b, dict) and b.get("gmail_msg_id")
+            ]
+            known[task.id] = (task.title, task.status == TaskStatus.DONE, batch)
     out = []
     for item in items:
         tasks = [
-            {"id": tid, "title": known[tid][0], "done": known[tid][1]}
+            {"id": tid, "title": known[tid][0], "done": known[tid][1], "batch": known[tid][2]}
             for tid in item["task_ids"]
             if tid in known
         ]
