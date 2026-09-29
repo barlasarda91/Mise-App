@@ -429,6 +429,13 @@ def briefing_check(task_ids: str = Form(""), done: str = Form("1")):
     return RedirectResponse(f"/?msg={msg}", status_code=303)
 
 
+@app.get("/contacts.json")
+def contacts_json():
+    from app.web.contacts_view import contact_directory
+
+    return JSONResponse(contact_directory())
+
+
 @app.get("/inbox", response_class=HTMLResponse)
 def inbox(request: Request, open: str | None = None, msg: str | None = None):
     from app.web.inbox_view import load_inbox, load_open_message
