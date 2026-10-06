@@ -340,6 +340,49 @@ def load_todays_briefing(routine_key: str = "daily_agenda") -> dict | None:
         return None
 
 
+def run_health() -> list[dict]:
+    """Routines whose most recent EXECUTED run failed — the Today tab shows
+    these as a banner so a broken scheduler/API never fails silently.
+    Skipped runs aren't executions; trailing failures are counted so the
+    banner says how long it's been broken. Empty list = all healthy."""
+    from app.models import Routine, RunStatus
+
+    out = []
+    try:
+        with db_session() as s:
+            for routine in s.scalars(select(Routine).where(Routine.enabled.is_(True))):
+                runs = s.scalars(
+                    select(Run)
+                    .where(
+                        Run.routine_id == routine.id,
+                        Run.status.in_((RunStatus.COMPLETED, RunStatus.FAILED)),
+                    )
+                    .order_by(Run.started_at.desc(), Run.id.desc())
+                    .limit(12)
+                ).all()
+                if not runs or runs[0].status != RunStatus.FAILED:
+                    continue
+                streak = 0
+                for run in runs:
+                    if run.status != RunStatus.FAILED:
+                        break
+                    streak += 1
+                latest = runs[0]
+                out.append(
+                    {
+                        "routine": routine.name,
+                        "code": run_code(routine.key, latest.id),
+                        "run_id": latest.id,
+                        "time": _fmt_time(latest.started_at),
+                        "streak": streak,
+                        "error": (latest.error or "unknown error")[:220],
+                    }
+                )
+    except Exception:
+        log.exception("run health check failed")
+    return out
+
+
 def _fmt_cost(cost) -> str:
     return f"${float(cost):.2f}" if cost is not None else ""
 

@@ -110,3 +110,50 @@ def test_promoted_pins_reach_runtime_context(session_factory):
         tracker_ctx = build_runtime_context(s, tracker)
     assert "Arda-promoted" in agenda_ctx and "[5] Answer Gold Mountain" in agenda_ctx
     assert "Arda-promoted" not in tracker_ctx
+
+
+def test_run_health_flags_trailing_failures_only(session_factory):
+    """Banner condition: an ENABLED routine whose latest executed run failed.
+    A later success clears it; skipped runs don't count as executions;
+    disabled routines never alarm."""
+    from datetime import timezone as dt_tz
+
+    from app.models.enums import RunStatus as RS
+
+    now = datetime.now(dt_tz.utc)
+
+    def run_at(s, routine, minutes_ago, status, error=None):
+        r = Run(routine_id=routine.id, status=status, trigger=RunTrigger.SCHEDULED,
+                started_at=now - timedelta(minutes=minutes_ago))
+        r.error = error
+        s.add(r)
+
+    with session_factory() as s:
+        agenda = Routine(key="daily_agenda", name="Daily Agenda", system_prompt="p", enabled=True)
+        tracker = Routine(key="lead_tracker", name="Tracker", system_prompt="p", enabled=True)
+        dead = Routine(key="old", name="Old", system_prompt="p", enabled=False)
+        s.add_all([agenda, tracker, dead])
+        s.flush()
+        # agenda: ok, then three failures, newest skipped (ignored)
+        run_at(s, agenda, 240, RS.COMPLETED)
+        run_at(s, agenda, 180, RS.FAILED, "BadRequestError: credit balance too low")
+        run_at(s, agenda, 120, RS.FAILED, "BadRequestError: credit balance too low")
+        run_at(s, agenda, 60, RS.FAILED, "BadRequestError: credit balance too low")
+        run_at(s, agenda, 30, RS.SKIPPED)
+        # tracker: failed earlier but recovered -> healthy
+        run_at(s, tracker, 120, RS.FAILED, "boom")
+        run_at(s, tracker, 60, RS.COMPLETED)
+        # disabled routine failing -> ignored
+        run_at(s, dead, 60, RS.FAILED, "ignored")
+
+    failing = rv.run_health()
+    assert len(failing) == 1
+    f = failing[0]
+    assert f["routine"] == "Daily Agenda" and f["streak"] == 3
+    assert "credit balance too low" in f["error"]
+
+    # recovery clears the banner
+    with session_factory() as s:
+        routine = s.scalars(rv.select(Routine).filter_by(key="daily_agenda")).first()
+        run_at(s, routine, 5, RS.COMPLETED)
+    assert rv.run_health() == []

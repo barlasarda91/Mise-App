@@ -394,7 +394,7 @@ def home(request: Request, msg: str | None = None):
     except Exception:
         pass
     from app.web.board_view import stale_tasks
-    from app.web.runs_view import load_todays_briefing, spend_summary
+    from app.web.runs_view import load_todays_briefing, run_health, spend_summary
 
     def _awaiting_count() -> int | None:
         try:
@@ -410,6 +410,7 @@ def home(request: Request, msg: str | None = None):
         priority=priority, waiting=waiting, briefing=load_todays_briefing(),
         stale=stale_tasks(), spend=spend_summary(), msg=msg,
         awaiting_count=_awaiting_count(), travel=_travel_mode_safe(),
+        failing=run_health(),
         today_str=now_la.strftime("%A · %d %B %Y").upper(),
     )
 
