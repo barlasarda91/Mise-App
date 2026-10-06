@@ -394,7 +394,32 @@ def _clean_batch(batch_items) -> list[dict]:
     return out[:MAX_BATCH_ITEMS]
 
 
-def _create_task_impl(session, category, title, dedup_key, description, due_date, assignee, source_ref):
+_FREEMAIL_DOMAINS = {
+    "gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "icloud.com",
+    "aol.com", "proton.me", "protonmail.com", "me.com", "live.com", "msn.com",
+}
+
+
+def _open_tasks_for_contact(session, contact_email: str) -> list[Task]:
+    """Open tasks sourced from the same counterparty — exact address, or the
+    same ORGANIZATION domain (a vendor's dunning mail rotates through
+    billing@/credit@/statements@ addresses, but it's one issue). Freemail
+    domains never cluster: two gmail.com senders are unrelated people."""
+    contact = contact_email.strip().lower()
+    domain = contact.rsplit("@", 1)[-1]
+    match_domain = domain not in _FREEMAIL_DOMAINS
+    out = []
+    for task in session.scalars(select(Task).where(Task.status != TaskStatus.DONE)):
+        ref_email = ((task.source_ref or {}).get("contact_email") or "").lower()
+        if not ref_email:
+            continue
+        if ref_email == contact or (match_domain and ref_email.rsplit("@", 1)[-1] == domain):
+            out.append(task)
+    return out
+
+
+def _create_task_impl(session, category, title, dedup_key, description, due_date, assignee, source_ref,
+                      distinct_from_existing=False):
     rule = _disregard_rule_for(session, dedup_key, source_ref)
     if rule is not None:
         return {
@@ -422,6 +447,33 @@ def _create_task_impl(session, category, title, dedup_key, description, due_date
                 task.source_ref = ref
                 result["batch_size"] = len(ref["batch"])
             return result
+
+    # Cross-thread clustering guard: a follow-up email about an existing issue
+    # arrives as a NEW message (often a new thread), mints a new dedup key,
+    # and would quietly become a second task for the same problem. When the
+    # same counterparty already has open tasks, refuse softly: the model must
+    # either update the existing task or assert this is a genuinely distinct
+    # issue (distinct_from_existing=true).
+    contact = ((source_ref or {}).get("contact_email") or "").strip()
+    if contact and not distinct_from_existing:
+        open_same_contact = _open_tasks_for_contact(session, contact)
+        if open_same_contact:
+            return {
+                "outcome": "possible_duplicate",
+                "open_tasks_for_contact": [
+                    {"task_id": t.id, "title": t.title, "status": t.status.value}
+                    for t in open_same_contact[:8]
+                ],
+                "note": (
+                    f"{contact} already has open task(s) above. If this email is a "
+                    "follow-up on one of those issues, do NOT create a task — "
+                    "reference the existing (#id) in the briefing and use "
+                    "update_task if its status/due changed. Only if this is a "
+                    "genuinely different issue, call create_task again with "
+                    "distinct_from_existing=true."
+                ),
+            }
+
     task = Task(
         category=TaskCategory(category),
         title=title,
@@ -459,7 +511,7 @@ def _create_task_impl(session, category, title, dedup_key, description, due_date
 def _create_task(
     session: Session, category, title, dedup_key, description=None, due_date=None,
     assignee=None, lead_id=None, qbo_invoice_id=None, gmail_msg_id=None,
-    contact_email=None, batch_items=None,
+    contact_email=None, batch_items=None, distinct_from_existing=None,
 ):
     source_ref = {
         k: v
@@ -472,7 +524,10 @@ def _create_task(
         }.items()
         if v
     } or None
-    return _create_task_impl(session, category, title, dedup_key, description, due_date, assignee, source_ref)
+    return _create_task_impl(
+        session, category, title, dedup_key, description, due_date, assignee, source_ref,
+        distinct_from_existing=bool(distinct_from_existing),
+    )
 
 
 register(
@@ -503,6 +558,15 @@ register(
                 "contact_email": {
                     "type": ["string", "null"],
                     "description": "The counterparty's email address, for email-derived tasks",
+                },
+                "distinct_from_existing": {
+                    "type": ["boolean", "null"],
+                    "description": (
+                        "Pass true ONLY after a possible_duplicate outcome, to assert this "
+                        "is a genuinely different issue than the counterparty's existing "
+                        "open tasks (a follow-up on the same issue must never become a "
+                        "second task — update the existing one instead)."
+                    ),
                 },
                 "batch_items": {
                     "anyOf": [
@@ -563,7 +627,8 @@ register(
 )
 
 
-def _update_task(session: Session, task_id: int, status=None, waiting_on=None, due_date=None, assignee=None):
+def _update_task(session: Session, task_id: int, status=None, waiting_on=None, due_date=None,
+                 assignee=None, title=None, description=None):
     task = session.get(Task, task_id)
     if task is None:
         raise ValueError(f"task {task_id} not found")
@@ -582,6 +647,20 @@ def _update_task(session: Session, task_id: int, status=None, waiting_on=None, d
     if assignee is not None:
         task.assignee = assignee or None
         changes.append(f"assignee → {assignee}")
+    if title:
+        old = task.title
+        task.title = title[:300]
+        if old != task.title:
+            changes.append(f"title updated (was: {old[:120]})")
+    if description is not None:
+        task.description = description or None
+        changes.append("description updated")
+    if changes:
+        from app.models import TaskActivity
+
+        session.add(TaskActivity(
+            task_id=task_id, type="updated", detail="; ".join(changes), actor="Mise"
+        ))
     return {"outcome": "updated", "task_id": task_id, "changes": changes}
 
 
@@ -591,7 +670,9 @@ register(
         description=(
             "Update a board task: move status (todo/doing/waiting/done — waiting for "
             "blocked-on-third-party, with waiting_on saying who/what), set due date or "
-            "assignee. Pass null for fields you're not changing."
+            "assignee, or rewrite title/description (e.g. updating a task to an "
+            "escalation's latest state when consolidating duplicates). Pass null for "
+            "fields you're not changing."
         ),
         input_schema={
             "type": "object",
@@ -601,6 +682,8 @@ register(
                 "waiting_on": NULLABLE_STR,
                 "due_date": {"type": ["string", "null"], "description": "YYYY-MM-DD, '' to clear, null to keep"},
                 "assignee": NULLABLE_STR,
+                "title": NULLABLE_STR,
+                "description": NULLABLE_STR,
             },
             "required": ["task_id"],
             "additionalProperties": False,

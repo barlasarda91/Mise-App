@@ -691,3 +691,80 @@ def test_checklist_items_carry_batch_for_expansion(session_factory):
         {"mailbox": "hello", "gmail_msg_id": "b1", "from_name": "A", "subject": "s"}
     ]
     assert items[1]["tasks"][0]["batch"] == []
+
+
+def test_follow_up_same_contact_clusters_into_one_task(session_factory):
+    """A follow-up email from the same counterparty (new message, often a new
+    thread = new dedup key) must not mint a second task for the same issue."""
+    from app.engine.toolkit import clear_run_context, set_run_context
+    from app.models import Task, TaskStatus
+    from app.routines.tools import _create_task
+
+    set_run_context(run_id=None, routine_id=None, started_at=None)
+    try:
+        with session_factory() as s:
+            first = _create_task(
+                s, "payments", "Pay Republic ledger", "task:m-1",
+                gmail_msg_id="m-1", contact_email="billing-desk@republicmc.com",
+            )
+            assert first["outcome"] == "created"
+            s.commit()
+
+            # new message id, same sender -> soft refusal naming the open task
+            dup = _create_task(
+                s, "payments", "Republic ledger reminder", "task:m-2",
+                gmail_msg_id="m-2", contact_email="Billing-Desk@republicmc.com",
+            )
+            assert dup["outcome"] == "possible_duplicate"
+            assert dup["open_tasks_for_contact"][0]["task_id"] == first["task_id"]
+
+            # different address at the same company domain also clusters
+            # (dunning mail rotates billing@/credit@), while freemail
+            # domains never do (two gmail senders are unrelated people)
+            org = _create_task(
+                s, "payments", "Republic dunning", "task:m-2b",
+                gmail_msg_id="m-2b", contact_email="credit-control@republicmc.com",
+            )
+            assert org["outcome"] == "possible_duplicate"
+            g1 = _create_task(
+                s, "governance", "Reply to Maya", "task:g-1",
+                gmail_msg_id="g-1", contact_email="maya.r@gmail.com",
+            )
+            assert g1["outcome"] == "created"
+            g2 = _create_task(
+                s, "governance", "Reply to Jon", "task:g-2",
+                gmail_msg_id="g-2", contact_email="jon.k@gmail.com",
+            )
+            assert g2["outcome"] == "created"
+            s.get(Task, g1["task_id"]).status = TaskStatus.DONE
+            s.get(Task, g2["task_id"]).status = TaskStatus.DONE
+            s.flush()
+            assert "update_task" in dup["note"]
+            # first + the two unrelated gmail tasks; both Republic re-asks refused
+            assert s.query(Task).count() == 3
+
+            # the model asserts it's a different matter -> allowed
+            other = _create_task(
+                s, "governance", "Republic contract renewal", "task:m-3",
+                gmail_msg_id="m-3", contact_email="billing-desk@republicmc.com",
+                distinct_from_existing=True,
+            )
+            assert other["outcome"] == "created"
+
+            # once the original is done, the sender's next issue creates freely
+            s.get(Task, first["task_id"]).status = TaskStatus.DONE
+            s.get(Task, other["task_id"]).status = TaskStatus.DONE
+            s.flush()
+            fresh = _create_task(
+                s, "payments", "New Republic invoice", "task:m-4",
+                gmail_msg_id="m-4", contact_email="billing-desk@republicmc.com",
+            )
+            assert fresh["outcome"] == "created"
+            # and the per-message dedup key still wins over the guard
+            again = _create_task(
+                s, "payments", "New Republic invoice", "task:m-4",
+                gmail_msg_id="m-4", contact_email="billing-desk@republicmc.com",
+            )
+            assert again["outcome"] == "already_exists"
+    finally:
+        clear_run_context()

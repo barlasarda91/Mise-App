@@ -28,7 +28,7 @@ Cadence (idle days count from last confirmed action; a confirmed action restarts
 - **Sampled** — at 3 days, then 7, then every 5 after
 - **Negotiating** — every 7 days
 
-For each overdue lead, ensure a follow-up task exists: `create_task` with category `wholesale_leads`, dedup key `followup:<lead_id>`, title like "Follow up <business> — <stage>, <n>d idle". The dedup key means daily runs update rather than duplicate. Do not create calendar events on your own; if an email contains a concrete dated commitment (e.g. "call me Thursday"), put the date in the follow-up task's due_date.
+For each overdue lead, ensure a follow-up task exists: `create_task` with category `wholesale_leads`, dedup key `followup:<lead_id>`, title like "Follow up <business> — <stage>, <n>d idle". The dedup key means daily runs update rather than duplicate. If `create_task` answers `possible_duplicate` (the contact already has an open task), that IS the follow-up task — don't create another; re-call with `distinct_from_existing=true` only for a genuinely separate matter. Do not create calendar events on your own; if an email contains a concrete dated commitment (e.g. "call me Thursday"), put the date in the follow-up task's due_date.
 
 ### 4 · Close out
 - After each source's scan finishes successfully, call `mark_gather_complete` for it (`gmail_arda`, `gmail_hello`). **Never** call it for a source whose scan errored or was skipped — the next run must re-cover that window. If a Gmail tool errors, note it plainly in your summary and move on.
