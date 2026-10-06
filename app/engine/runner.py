@@ -101,6 +101,13 @@ def execute_run(
             from app.engine.preflight import _is_first_run_of_day
 
             intraday = trigger == RunTrigger.SCHEDULED and not _is_first_run_of_day(s, routine)
+            # Phase 2b: intraday deltas run on the cheaper model (60% lower
+            # token rates); the briefing-writing first run of the day and
+            # manual "full fresh look" runs keep the routine's own model.
+            from app.settings import get_settings as _gs
+
+            if intraday and _gs().intraday_model:
+                model = resolve_model(_gs().intraday_model)
             run = Run(routine_id=routine_id, trigger=trigger, status=RunStatus.RUNNING)
             s.add(run)
             s.flush()
@@ -133,7 +140,12 @@ def execute_run(
         model=model,
         max_tokens=MAX_TOKENS,
         cache_control={"type": "ephemeral"},
-        system=[{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}],
+        # Phase 3a: the stable prefix (tools + system prompt) gets a 1-hour
+        # cache TTL — hourly runs on the same model then read it at 0.1x
+        # instead of re-writing it, at 2x on the (once-hourly) write. The
+        # growing conversation keeps the default 5-minute TTL via the
+        # top-level breakpoint; longer-TTL breakpoints must come first.
+        system=[{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral", "ttl": "1h"}}],
         thinking={"type": "adaptive"},
         tools=tool_specs(),
         # Server-side refusal-fallback routing (Claude API default for Opus 5):
@@ -151,6 +163,7 @@ def execute_run(
         "cache_read_input_tokens": 0,
         "cache_creation_input_tokens": 0,
         "effort": request_base["output_config"]["effort"],
+        "model": request_base["model"],
     }
     cost = 0.0
 

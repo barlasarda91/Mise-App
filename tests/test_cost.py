@@ -184,7 +184,7 @@ def test_conversation_caching_enabled(session_factory):
 
     request = client.requests[0]
     assert request["cache_control"] == {"type": "ephemeral"}
-    assert request["system"][0]["cache_control"] == {"type": "ephemeral"}
+    assert request["system"][0]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}
 
 
 def test_daily_costs_buckets_by_day_and_routine(session_factory, monkeypatch):
@@ -320,18 +320,25 @@ def test_effort_tiers_by_run_type(session_factory):
                              client=client, session_factory=session_factory)
         return client.requests[-1], run_id
 
-    # no completed run today -> first of day -> high
+    # no completed run today -> first of day -> high effort, routine's model
     request, run_id = _run_once(RunTrigger.SCHEDULED)
     assert request["output_config"] == {"effort": "high"}
+    assert request["model"] == "claude-opus-5"
     with session_factory() as s:
         assert s.get(Run, run_id).usage["effort"] == "high"
 
-    # a completed run exists today -> intraday delta -> medium
+    # a completed run exists today -> intraday delta -> medium effort, sonnet (2b)
     request, run_id = _run_once(RunTrigger.SCHEDULED)
     assert request["output_config"] == {"effort": "medium"}
+    assert request["model"] == "claude-sonnet-5"
     with session_factory() as s:
         assert s.get(Run, run_id).usage["effort"] == "medium"
+        assert s.get(Run, run_id).usage["model"] == "claude-sonnet-5"
 
-    # manual stays high regardless
+    # manual stays high on the routine's model regardless
     request, _ = _run_once(RunTrigger.MANUAL)
     assert request["output_config"] == {"effort": "high"}
+    assert request["model"] == "claude-opus-5"
+
+    # the system prompt prefix carries the 1h cache TTL (3a)
+    assert request["system"][0]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}

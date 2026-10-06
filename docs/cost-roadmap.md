@@ -64,7 +64,7 @@ senders (category:updates still counts — invoices land there).
 two. Manual runs stay high. The effort used is recorded in run.usage; drop
 intraday to "low" later if the briefing quality holds at medium.
 
-**2b. Sonnet for intraday runs.** Keep Opus for the morning briefing (the
+**2b. Sonnet for intraday runs. (SHIPPED 2026-10-06)** Keep Opus for the morning briefing (the
 product's voice and judgment showcase); run intraday deltas on Claude Sonnet 5
 ($2/$10 — 60% cheaper per token). The `routines.model` column already exists;
 this needs a per-run override (first-of-day vs later) plus a Settings toggle
@@ -88,6 +88,16 @@ drift before considering Sonnet for mornings too.
 Rough current estimate $5–15/weekday. Phase 1 alone should land around
 $2–4/day (quiet-hour skips + cached transcript); Phase 2 around $1–2/day.
 Weekend spend is already $0.
+
+### Measured (2026-09-23 → 10-06, after 2a + quiet-check fix)
+
+Full weekdays $6.60–$8.14; a genuinely quiet day hit $2.43 despite 23
+runs. Skips 0–7/day — better, but mail volume means most hours have
+something, so 2b (cheaper intraday model) is the bigger lever than more
+skipping. Shipped 2026-10-06 alongside **3a**: the tools+system prefix
+now carries a 1-hour cache TTL, so hourly runs on the same model read
+it at 0.1x instead of re-writing it each run. Intraday model is
+INTRADAY_MODEL (default "sonnet", empty disables).
 
 ## Sequencing
 

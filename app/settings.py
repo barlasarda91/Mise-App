@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     session_secret: str = "dev-secret-change-me"
     database_url: str | None = None
     default_tz: str = "America/Los_Angeles"
+    # Cost phase 2b: intraday scheduled delta runs use this model alias;
+    # first-of-day and manual runs keep the routine's own model. Empty
+    # string disables the downshift (intraday runs on the routine's model).
+    intraday_model: str = "sonnet"
 
     # Google Workspace service account (domain-wide delegation): raw JSON or a file path.
     google_sa_json: str | None = None

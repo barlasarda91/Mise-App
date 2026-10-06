@@ -146,7 +146,7 @@ def test_run_with_tool_use_completes_and_persists(session_factory, routine_id):
 
     # request shape: cached system prompt, sorted tools, adaptive thinking
     first = client.requests[0]
-    assert first["system"][0]["cache_control"] == {"type": "ephemeral"}
+    assert first["system"][0]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}
     assert first["thinking"] == {"type": "adaptive"}
     assert [t["name"] for t in first["tools"]] == sorted(t["name"] for t in first["tools"])
     assert first["model"] == "claude-opus-5"  # 'opus' alias resolved
