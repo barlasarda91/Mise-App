@@ -50,7 +50,7 @@ def test_correct_password_grants_session(client):
 
     home = client.get("/")
     assert home.status_code == 200
-    assert "Good morning, Arda." in home.text
+    assert ">Today<" in home.text  # the front-page masthead
 
 
 def test_logout_clears_session(client):

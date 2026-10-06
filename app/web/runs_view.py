@@ -256,6 +256,19 @@ def load_todays_briefing(routine_key: str = "daily_agenda") -> dict | None:
                     "code": run_code(routine_key, run.id),
                     "time": _fmt_time(run.started_at),
                 }
+                # Standfirst: a one-line summary the run writes before the
+                # checklist, rendered as the page's headline. Optional.
+                shaped["standfirst"] = ""
+                try:
+                    lines = report.splitlines()
+                    for i, line in enumerate(lines[:5]):
+                        stripped = line.strip()
+                        if stripped.upper().startswith("STANDFIRST:"):
+                            shaped["standfirst"] = stripped[len("STANDFIRST:"):].strip()
+                            report = "\n".join(lines[:i] + lines[i + 1:])
+                            break
+                except Exception:
+                    pass
                 # each stage degrades on its own: a checklist or linking
                 # failure never blanks the briefing box
                 remaining = report
@@ -295,6 +308,32 @@ def load_todays_briefing(routine_key: str = "daily_agenda") -> dict | None:
                     briefing["checklist"].append(item)
                     seen |= ids
             briefing["latest"] = latest
+
+            # Arda-promoted pins: body items he lifted into Act today. They
+            # join the checklist (tagged) until their task is done; pins on
+            # tasks already referenced add the tag without duplicating.
+            try:
+                from app.web.briefing_pins import open_pins, pinned_ids
+
+                pin_set = set(pinned_ids(s))
+                covered = set()
+                for item in briefing["checklist"]:
+                    item["promoted"] = bool(pin_set & set(item["task_ids"]))
+                    covered |= set(item["task_ids"])
+                extra = [
+                    {"text": f"{task.title} (#{task.id})", "task_ids": [task.id]}
+                    for task in open_pins(s)
+                    if task.id not in covered
+                ]
+                for item in _with_task_state(s, extra):
+                    item["promoted"] = True
+                    briefing["checklist"].append(item)
+            except Exception:
+                log.exception("briefing pins failed — rendering without them")
+
+            briefing["all_task_ids"] = sorted(
+                {tid for item in briefing["checklist"] for tid in item["task_ids"]}
+            )
             return briefing
     except Exception:
         log.exception("briefing loader failed")

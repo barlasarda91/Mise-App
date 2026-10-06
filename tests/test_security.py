@@ -175,3 +175,18 @@ def test_lead_stage_move_answers_fetch_with_json(client):
         "/leads/999999/stage", data={"stage": "sampled"}, follow_redirects=False,
     )
     assert classic.status_code == 303 and "/pipeline/lead/999999" in classic.headers["location"]
+
+
+def test_briefing_promote_answers_fetch_with_json(client):
+    client.post("/login", data={"password": "test-password"})
+    live = client.post(
+        "/briefing/promote", data={"task_id": "999999"},
+        headers={"X-Fetch": "1"}, follow_redirects=False,
+    )
+    assert live.status_code == 200
+    body = live.json()
+    assert body["ok"] is False and body["pinned"] is False
+    classic = client.post(
+        "/briefing/promote", data={"task_id": "999999"}, follow_redirects=False,
+    )
+    assert classic.status_code == 303 and classic.headers["location"].startswith("/?msg=")

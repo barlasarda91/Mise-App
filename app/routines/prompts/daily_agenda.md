@@ -54,12 +54,15 @@ Everything blocked pending a third party — payment links, confirmations, callb
 
 ## Report format — the checklist contract
 
-**Start the report with an "Act today" checklist.** The dashboard lifts it out and renders each line as a live checkbox wired to its board task — checking it off completes the task. That only works if the format is exact:
+**Begin the report with a standfirst**: the very first line of the final report is `STANDFIRST: <one sentence>` — a single-sentence front-page summary of the day ("Two meetings, five payment fronts open, and next week's flight sits on top of both."). The dashboard renders it as the day's headline. Then the checklist:
+
+**Start the report body with an "Act today" checklist.** The dashboard lifts it out and renders each line as a live checkbox wired to its board task — checking it off completes the task. That only works if the format is exact:
 
 - Section heading `## Act today`, then one line per item: `- [ ] <short action> (#<task_id>)`.
 - **Every item MUST end with its board task reference** `(#id)` — you create or update these tasks anyway, so use the id the tool returned (or the id from your runtime context for carry-over items). An item without an id renders as dead text.
 - Grouped items may reference a range: `8 lead follow-ups at 3+ days idle (#91–#98)`.
 - Include overdue carry-over from previous days — an unchecked item stays on the list until done.
+- **Arda-promoted items** (listed in your runtime context when present) are his own editorial picks: each must appear in Act today with its `(#id)` every run until its task is done — never drop or demote one, whatever your own judgment of its urgency.
 - Keep it to what genuinely needs Arda **today**; everything else lives in the body sections below.
 
 ## Closing out

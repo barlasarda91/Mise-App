@@ -1,148 +1,177 @@
 {% extends "base.html" %}
 {% block title %}Today{% endblock %}
-{% block heading %}Good morning, Arda.{% endblock %}
+{% block heading %}Today{% endblock %}
 {% block content %}
 {% if msg %}<div class="note" style="margin:0 0 14px">▸ {{ msg }}</div>{% endif %}
-<div class="grid4" style="margin-bottom:18px">
-  <a class="stat" href="/pipeline"><div class="k">Open leads</div><div class="v">{{ stats.open }}</div></a>
-  <a class="stat{% if stats.overdue and stats.overdue != "—" %} alert{% endif %}" href="/pipeline"><div class="k">Overdue</div><div class="v">{{ stats.overdue }}</div></a>
-  <a class="stat" href="/board"><div class="k">Tasks due today</div><div class="v">{{ stats.due_today }}</div></a>
-  <a class="stat" href="/drafts"><div class="k">Drafts ready</div><div class="v">{{ stats.drafts }}</div></a>
+
+<style>
+  .masthead{border-bottom:3px double var(--ink);padding-bottom:10px;margin-bottom:0;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  .masthead .ed{font-family:var(--font-mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-soft);margin-left:auto}
+  .ticker{display:flex;flex-wrap:wrap;border-bottom:1px solid var(--line);font-family:var(--font-mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;margin-bottom:18px}
+  .ticker a,.ticker span{padding:6px 12px;border-right:1px solid var(--line);color:var(--ink-soft);text-decoration:none}
+  .ticker b{color:var(--ink)}
+  .ticker .em{color:var(--ember)}
+  .newsgrid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(300px,1fr);gap:0}
+  .news-main{min-width:0;padding-right:22px;border-right:1px solid var(--line)}
+  .news-rail{min-width:0;padding-left:22px;align-self:start;position:sticky;top:12px}
+  .standfirst{font-family:var(--font-display);font-weight:700;font-size:25px;line-height:1.15;text-wrap:balance;margin:2px 0 14px}
+  .promote-btn{font-family:var(--font-mono);font-size:9px;letter-spacing:.08em;border:1px solid var(--ink);background:transparent;padding:1px 6px;cursor:pointer;margin-left:6px;vertical-align:1px;white-space:nowrap}
+  .promote-in{font-family:var(--font-mono);font-size:9px;letter-spacing:.08em;color:var(--ink-soft);border:1px solid var(--line);background:var(--panel);padding:1px 6px;margin-left:6px;vertical-align:1px;white-space:nowrap}
+  .pin-pill{font-family:var(--font-mono);font-size:8.5px;letter-spacing:.06em;background:var(--ember);color:var(--paper);border:0;padding:1px 6px;cursor:pointer;white-space:nowrap}
+  @media (max-width:900px){.newsgrid{grid-template-columns:1fr}.news-main{border-right:0;padding-right:0}.news-rail{padding-left:0;position:static;margin-top:18px}}
+</style>
+
+<div class="masthead">
+  <span class="ed" style="margin-left:0">{{ today_str }}</span>
+  <span class="ed">
+    {% if briefing %}EDITION <a href="/runs?run={{ briefing.run_id }}" style="color:inherit">{{ briefing.code }} · RAN {{ briefing.time }}</a>{% else %}NO EDITION YET TODAY{% endif %}
+    {% if travel %} · <span style="color:var(--ember)">TRAVEL MODE</span>{% endif %}
+  </span>
+</div>
+<div class="ticker">
+  <a href="/pipeline">LEADS <b>{{ stats.open }}</b>{% if stats.overdue and stats.overdue != "—" %} · <span class="em">{{ stats.overdue }} OVERDUE</span>{% endif %}</a>
+  <a href="/board">DUE TODAY <b>{{ stats.due_today }}</b></a>
+  <a href="/drafts">DRAFTS READY <b>{{ stats.drafts }}</b></a>
+  {% if awaiting_count is not none %}<a href="/inbox" class="em">AWAITING REPLY {{ awaiting_count }}</a>{% endif %}
+  {% if spend %}<a href="/costs">API TODAY <b>{{ "$%.2f" | format(spend.today) }}</b> · 7D {{ "$%.2f" | format(spend.week) }}</a>{% endif %}
+  <span>DB {% if db_status == "ok" %}<b>OK</b>{% else %}<span class="em">{{ db_status }}</span>{% endif %}</span>
 </div>
 
-<div class="box" style="margin-bottom:18px">
-  <div class="box-hd"><span class="lbl">Today's briefing</span>
-    <span class="ix">{% if briefing %}<a href="/runs?run={{ briefing.run_id }}" style="color:inherit">{{ briefing.code }} · {{ briefing.time }} · OPEN RUN →</a>{% else %}NO RUN YET TODAY{% endif %}</span>
-  </div>
-  <div class="box-bd">
+<div class="newsgrid">
+  <div class="news-main">
     {% if briefing %}
-    {% if briefing.checklist %}
-    <div style="margin-bottom:14px;border-bottom:1px solid var(--line);padding-bottom:10px">
-      <div class="note" style="margin:0 0 8px">✓ ACT TODAY — checking an item completes its board task</div>
-      {% for item in briefing.checklist %}
-      {% if item.tasks | length > 1 %}
-      <details class="check-item" data-key="{{ item.task_ids | join('-') }}" style="padding:4px 0">
-        <summary style="display:flex;gap:9px;align-items:baseline;cursor:pointer">
-          <form method="post" action="/briefing/check" style="display:contents">
-            <input type="hidden" name="task_ids" value="{{ item.task_ids | join(',') }}">
-            <input type="hidden" name="done" value="{{ '0' if item.done else '1' }}">
-            <input type="checkbox" onclick="event.stopPropagation()" onchange="this.form.submit()" {% if item.done %}checked{% endif %} style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer" title="Check all {{ item.tasks | length }}">
-          </form>
-          <span class="md" style="font-size:14px;{% if item.done %}text-decoration:line-through;color:var(--ink-soft){% endif %}">{{ item.html | safe }}</span>
-          <span class="spacer"></span>
-          <span class="pill ghost" style="white-space:nowrap">{{ item.done_count }}/{{ item.tasks | length }} ▾</span>
-        </summary>
-        <div style="margin:6px 0 8px 24px;border-left:1px solid var(--line);padding-left:12px">
-          {% for t in item.tasks %}
-          <div style="display:flex;gap:9px;align-items:baseline;padding:3px 0">
-            <form method="post" action="/briefing/check" class="check-item" style="display:contents">
-              <input type="hidden" name="task_ids" value="{{ t.id }}">
-              <input type="hidden" name="done" value="{{ '0' if t.done else '1' }}">
-              <input type="checkbox" onchange="this.form.submit()" {% if t.done %}checked{% endif %} style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer">
-              <a href="/board/task/{{ t.id }}" style="font-size:13.5px;text-decoration:none;{% if t.done %}text-decoration:line-through;color:var(--ink-soft){% endif %}">{{ t.title }}</a>
+      {% if briefing.standfirst %}<div class="standfirst">{{ briefing.standfirst }}</div>{% endif %}
+      {% if briefing.html %}<div class="md agenda-body" style="font-size:14px">{{ briefing.html | safe }}</div>{% endif %}
+      {% if briefing.latest %}
+      <div class="note" style="margin:16px 0 8px;border-top:1px solid var(--line);padding-top:12px">LATER · <a href="/runs?run={{ briefing.latest.run_id }}">{{ briefing.latest.code }} · {{ briefing.latest.time }}</a></div>
+      <div class="md agenda-body" style="font-size:13.5px">{{ briefing.latest.html | safe }}</div>
+      {% endif %}
+    {% else %}
+    <div class="box"><div class="box-bd"><span class="note">The Daily Agenda hasn't completed a run yet today — it runs hourly 7:00–17:00 LA on weekdays (every 2h around the clock in travel mode), or hit Run now on the <a href="/runs">Runs page</a>.</span></div></div>
+    {% endif %}
+  </div>
+
+  <div class="news-rail">
+    {% if briefing and briefing.checklist %}
+    <div class="box" style="margin-bottom:16px">
+      <div class="box-hd"><span class="lbl">✓ Act today</span><span class="ix">{{ briefing.checklist | selectattr("done") | list | length }}/{{ briefing.checklist | length }}</span></div>
+      <div class="box-bd" id="actTodayList">
+        {% for item in briefing.checklist %}
+        {% if item.tasks | length > 1 %}
+        <details class="check-item" data-key="{{ item.task_ids | join('-') }}" style="padding:4px 0">
+          <summary style="display:flex;gap:9px;align-items:baseline;cursor:pointer">
+            <form method="post" action="/briefing/check" style="display:contents">
+              <input type="hidden" name="task_ids" value="{{ item.task_ids | join(',') }}">
+              <input type="hidden" name="done" value="{{ '0' if item.done else '1' }}">
+              <input type="checkbox" onclick="event.stopPropagation()" onchange="this.form.submit()" {% if item.done %}checked{% endif %} style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer" title="Check all {{ item.tasks | length }}">
             </form>
-            <form method="post" action="/tasks/{{ t.id }}/disregard" onsubmit="return confirm('Disregard {{ t.title | e }}? Deletes the task and ignores its sender until you remove the rule in Settings.')">
+            <span class="md" style="font-size:13.5px;{% if item.done %}text-decoration:line-through;color:var(--ink-soft){% endif %}">{{ item.html | safe }}</span>
+            <span class="spacer"></span>
+            {% if item.promoted %}<button class="pin-pill unpin" data-task="{{ item.task_ids[0] }}" title="Unpin from Act today">PINNED ✕</button>{% endif %}
+            <span class="pill ghost" style="white-space:nowrap">{{ item.done_count }}/{{ item.tasks | length }} ▾</span>
+          </summary>
+          <div style="margin:6px 0 8px 24px;border-left:1px solid var(--line);padding-left:12px">
+            {% for t in item.tasks %}
+            <div style="display:flex;gap:9px;align-items:baseline;padding:3px 0">
+              <form method="post" action="/briefing/check" class="check-item" style="display:contents">
+                <input type="hidden" name="task_ids" value="{{ t.id }}">
+                <input type="hidden" name="done" value="{{ '0' if t.done else '1' }}">
+                <input type="checkbox" onchange="this.form.submit()" {% if t.done %}checked{% endif %} style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer">
+                <a href="/board/task/{{ t.id }}" style="font-size:13px;text-decoration:none;{% if t.done %}text-decoration:line-through;color:var(--ink-soft){% endif %}">{{ t.title }}</a>
+              </form>
+              <form method="post" action="/tasks/{{ t.id }}/disregard" onsubmit="return confirm('Disregard {{ t.title | e }}? Deletes the task and ignores its sender until you remove the rule in Settings.')">
+                <button class="linkish" type="submit" title="Disregard: delete + ignore sender" style="color:var(--ink-soft);padding:0 4px">✕</button>
+              </form>
+            </div>
+            {% endfor %}
+          </div>
+        </details>
+        {% else %}
+        {% set batch = item.tasks[0].batch if item.tasks | length == 1 else [] %}
+        {% if batch %}
+        <details class="check-item" data-key="batch-{{ item.task_ids[0] }}" style="padding:4px 0">
+          <summary style="list-style:none;cursor:pointer;display:flex;gap:9px;align-items:baseline">
+            <form method="post" action="/briefing/check" style="display:contents">
+              <input type="hidden" name="task_ids" value="{{ item.task_ids | join(',') }}">
+              <input type="hidden" name="done" value="{{ '0' if item.done else '1' }}">
+              <input type="checkbox" onclick="event.stopPropagation()" onchange="this.form.submit()" {% if item.done %}checked{% endif %} style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer">
+            </form>
+            <span class="md" style="font-size:13.5px;{% if item.done %}text-decoration:line-through;color:var(--ink-soft){% endif %}">{{ item.html | safe }}</span>
+            <span class="spacer"></span>
+            {% if item.promoted %}<button class="pin-pill unpin" data-task="{{ item.task_ids[0] }}" title="Unpin from Act today">PINNED ✕</button>{% endif %}
+            <span class="pill ghost" style="white-space:nowrap">{{ batch | length }} ▾</span>
+            <form method="post" action="/tasks/{{ item.task_ids[0] }}/disregard" onsubmit="return confirm('Disregard this item? Deletes the task and ignores its sender until you remove the rule in Settings.')">
               <button class="linkish" type="submit" title="Disregard: delete + ignore sender" style="color:var(--ink-soft);padding:0 4px">✕</button>
             </form>
+          </summary>
+          <div style="margin:2px 0 4px 22px;border-left:1px solid var(--line);padding-left:12px">
+            {% for b in batch %}
+            <div style="display:flex;gap:9px;align-items:baseline;padding:3px 0">
+              <a href="/inbox?open={{ b.mailbox }}:{{ b.gmail_msg_id }}" style="font-size:13px;min-width:0">{{ b.from_name or b.from_addr }}{% if b.subject %} — {{ b.subject }}{% endif %}</a>
+              <span class="spacer"></span>
+              <span class="pill ghost" style="white-space:nowrap">{{ b.mailbox }}@</span>
+            </div>
+            {% endfor %}
           </div>
-          {% endfor %}
-        </div>
-      </details>
-      {% else %}
-      {% set batch = item.tasks[0].batch if item.tasks | length == 1 else [] %}
-      {% if batch %}
-      <details class="check-item" data-key="batch-{{ item.task_ids[0] }}" style="padding:4px 0">
-        <summary style="list-style:none;cursor:pointer;display:flex;gap:9px;align-items:baseline">
+        </details>
+        {% else %}
+        <div class="check-item" style="display:flex;gap:9px;align-items:baseline;padding:4px 0">
           <form method="post" action="/briefing/check" style="display:contents">
             <input type="hidden" name="task_ids" value="{{ item.task_ids | join(',') }}">
             <input type="hidden" name="done" value="{{ '0' if item.done else '1' }}">
-            <input type="checkbox" onclick="event.stopPropagation()" onchange="this.form.submit()" {% if item.done %}checked{% endif %} style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer">
+            {% if item.task_ids %}
+            <input type="checkbox" onchange="this.form.submit()" {% if item.done %}checked{% endif %} style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer">
+            {% else %}
+            <span class="code" title="No linked board task — checkbox unavailable" style="min-width:13px;text-align:center">·</span>
+            {% endif %}
           </form>
-          <span class="md" style="font-size:14px;{% if item.done %}text-decoration:line-through;color:var(--ink-soft){% endif %}">{{ item.html | safe }}</span>
+          <span class="md" style="font-size:13.5px;{% if item.done %}text-decoration:line-through;color:var(--ink-soft){% endif %}">{{ item.html | safe }}</span>
           <span class="spacer"></span>
-          <span class="pill ghost" style="white-space:nowrap">{{ batch | length }} ▾</span>
+          {% if item.promoted %}<button class="pin-pill unpin" data-task="{{ item.task_ids[0] }}" title="Unpin from Act today">PINNED ✕</button>{% endif %}
+          {% if item.task_ids | length == 1 %}
           <form method="post" action="/tasks/{{ item.task_ids[0] }}/disregard" onsubmit="return confirm('Disregard this item? Deletes the task and ignores its sender until you remove the rule in Settings.')">
             <button class="linkish" type="submit" title="Disregard: delete + ignore sender" style="color:var(--ink-soft);padding:0 4px">✕</button>
           </form>
-        </summary>
-        <div style="margin:2px 0 4px 22px;border-left:1px solid var(--line);padding-left:12px">
-          {% for b in batch %}
-          <div style="display:flex;gap:9px;align-items:baseline;padding:3px 0">
-            <a href="/inbox?open={{ b.mailbox }}:{{ b.gmail_msg_id }}" style="font-size:13.5px;min-width:0">{{ b.from_name or b.from_addr }}{% if b.subject %} — {{ b.subject }}{% endif %}</a>
-            <span class="spacer"></span>
-            <span class="pill ghost" style="white-space:nowrap">{{ b.mailbox }}@</span>
-          </div>
-          {% endfor %}
-        </div>
-      </details>
-      {% else %}
-      <div class="check-item" style="display:flex;gap:9px;align-items:baseline;padding:4px 0">
-        <form method="post" action="/briefing/check" style="display:contents">
-          <input type="hidden" name="task_ids" value="{{ item.task_ids | join(',') }}">
-          <input type="hidden" name="done" value="{{ '0' if item.done else '1' }}">
-          {% if item.task_ids %}
-          <input type="checkbox" onchange="this.form.submit()" {% if item.done %}checked{% endif %} style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer">
-          {% else %}
-          <span class="code" title="No linked board task — checkbox unavailable" style="min-width:13px;text-align:center">·</span>
           {% endif %}
-        </form>
-        <span class="md" style="font-size:14px;{% if item.done %}text-decoration:line-through;color:var(--ink-soft){% endif %}">{{ item.html | safe }}</span>
-        <span class="spacer"></span>
-        {% if item.task_ids | length == 1 %}
-        <form method="post" action="/tasks/{{ item.task_ids[0] }}/disregard" onsubmit="return confirm('Disregard this item? Deletes the task and ignores its sender until you remove the rule in Settings.')">
-          <button class="linkish" type="submit" title="Disregard: delete + ignore sender" style="color:var(--ink-soft);padding:0 4px">✕</button>
-        </form>
+        </div>
         {% endif %}
+        {% endif %}
+        {% endfor %}
       </div>
-      {% endif %}
-      {% endif %}
-      {% endfor %}
     </div>
     {% endif %}
-    {% if briefing.html %}<div class="md" style="font-size:14px">{{ briefing.html | safe }}</div>{% endif %}
-    {% if briefing.latest %}
-    <div class="note" style="margin:14px 0 8px;border-top:1px solid var(--line);padding-top:12px">Since then · <a href="/runs?run={{ briefing.latest.run_id }}">{{ briefing.latest.code }} · {{ briefing.latest.time }}</a></div>
-    <div class="md" style="font-size:13.5px">{{ briefing.latest.html | safe }}</div>
-    {% endif %}
-    {% else %}
-    <span class="note">The Daily Agenda hasn't completed a run yet today — it runs hourly 7:00–17:00 LA on weekdays, or hit Run now on the <a href="/runs">Runs page</a>.</span>
-    {% endif %}
-  </div>
-</div>
 
-<div class="grid2">
-  <div class="box" style="align-self:start">
-    <div class="box-hd"><span class="lbl">Priority</span><span class="ix">◭ {{ priority | length }} ITEMS</span></div>
-    <div>
-      {% for p in priority %}
-      <a class="row" href="{{ p.href }}" style="text-decoration:none">
-        <span class="name" style="font-size:14px">{{ p.title }}</span>
-        <span class="meta">{{ p.sub | upper }}</span>
-        <span class="spacer"></span>
-        {% if p.urgent %}<span class="pill ember">overdue</span>{% endif %}
-      </a>
-      {% else %}
-      <div class="box-bd"><span class="note">Nothing urgent — due/high-priority tasks and pending confirmations appear here.</span></div>
-      {% endfor %}
+    <div class="box" style="margin-bottom:16px">
+      <div class="box-hd"><span class="lbl">Priority</span><span class="ix">◭ {{ priority | length }} ITEMS</span></div>
+      <div>
+        {% for p in priority %}
+        <a class="row" href="{{ p.href }}" style="text-decoration:none">
+          <span class="name" style="font-size:13.5px">{{ p.title }}</span>
+          <span class="meta">{{ p.sub | upper }}</span>
+          <span class="spacer"></span>
+          {% if p.urgent %}<span class="pill ember">overdue</span>{% endif %}
+        </a>
+        {% else %}
+        <div class="box-bd"><span class="note">Nothing urgent — due/high-priority tasks and pending confirmations appear here.</span></div>
+        {% endfor %}
+      </div>
     </div>
-  </div>
 
-  <div style="align-self:start">
-  <div class="box">
-    <div class="box-hd"><span class="lbl">Waiting On</span><span class="ix">{{ waiting | length }} BLOCKED</span></div>
-    <div>
-      {% for w in waiting %}
-      <a class="row" href="{{ w.href }}" style="text-decoration:none">
-        <span class="name" style="font-size:14px">{{ w.title }}</span>
-        <span class="meta">— {{ w.sub }}</span>
-        <span class="spacer"></span>
-        {% if w.age is not none %}<span class="pill ghost">{{ w.age }}d</span>{% endif %}
-      </a>
-      {% else %}
-      <div class="box-bd"><span class="note">Nothing blocked. Tasks in "waiting" land here with who they wait on.</span></div>
-      {% endfor %}
+    <div class="box" style="margin-bottom:16px">
+      <div class="box-hd"><span class="lbl">Waiting On</span><span class="ix">{{ waiting | length }} BLOCKED</span></div>
+      <div>
+        {% for w in waiting %}
+        <a class="row" href="{{ w.href }}" style="text-decoration:none">
+          <span class="name" style="font-size:13.5px">{{ w.title }}</span>
+          <span class="meta">— {{ w.sub }}</span>
+          <span class="spacer"></span>
+          {% if w.age is not none %}<span class="pill ghost">{{ w.age }}d</span>{% endif %}
+        </a>
+        {% else %}
+        <div class="box-bd"><span class="note">Nothing blocked. Tasks in "waiting" land here with who they wait on.</span></div>
+        {% endfor %}
+      </div>
     </div>
-  </div>
 
     {% if stale %}
     <div class="box">
@@ -151,8 +180,7 @@
         {% for t in stale %}
         <div class="row">
           <span class="pill ember" style="white-space:nowrap">{{ t.age }}d</span>
-          <a class="name" href="/board/task/{{ t.id }}" style="font-size:13.5px">{{ t.title }}</a>
-          <span class="meta">{{ t.category }} · {{ t.status }}</span>
+          <a class="name" href="/board/task/{{ t.id }}" style="font-size:13px">{{ t.title }}</a>
           <span class="spacer"></span>
           <form method="post" action="/tasks/{{ t.id }}/status">
             <input type="hidden" name="status" value="done">
@@ -168,12 +196,115 @@
   </div>
 </div>
 
-<div class="note" style="margin-top:14px">
-  DB: {% if db_status == "ok" %}<span class="pill green">connected</span>{% elif db_status == "absent" %}<span class="pill ghost">not configured</span>{% else %}<span class="pill ember">{{ db_status }}</span>{% endif %}
-  &nbsp;·&nbsp; TZ: AMERICA/LOS_ANGELES
-  {% if spend %}&nbsp;·&nbsp; <a href="/costs">API TODAY {{ "$%.2f" | format(spend.today) }} · 7D {{ "$%.2f" | format(spend.week) }}</a>{% endif %}
-  &nbsp;·&nbsp; <a href="/pipeline">Pipeline</a> · <a href="/board">Board</a> · <a href="/runs">Runs</a>
-</div>
+<div class="note" style="margin-top:14px">Full report, always — the paper never truncates what the run wrote. ↑ BRIEF on any body item pins it into Act today. · <a href="/pipeline">Pipeline</a> · <a href="/board">Board</a> · <a href="/runs">Runs</a></div>
 
-{# open-group and typed-field persistence handled globally by /static/app.js #}
+{% if briefing %}
+<script id="briefIds" type="application/json">{{ briefing.all_task_ids | tojson }}</script>
+<script>
+  // ↑ BRIEF: every agenda-body element referencing a task gets a promote
+  // control; tasks already on the checklist show a quiet "in brief" mark.
+  (function () {
+    const idsEl = document.getElementById('briefIds');
+    const inBrief = new Set(idsEl ? JSON.parse(idsEl.textContent) : []);
+    const rail = document.getElementById('actTodayList');
+
+    function liveNote(text) {
+      let el = document.getElementById('liveMsg');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'liveMsg'; el.className = 'note'; el.style.margin = '0 0 14px';
+        document.querySelector('.masthead').before(el);
+      }
+      el.textContent = '▸ ' + text;
+    }
+
+    function addRailRow(taskId, title) {
+      if (!rail) return;
+      const row = document.createElement('div');
+      row.className = 'check-item';
+      row.style.cssText = 'display:flex;gap:9px;align-items:baseline;padding:4px 0';
+      const form = document.createElement('form');
+      form.method = 'post'; form.action = '/briefing/check'; form.style.display = 'contents';
+      form.innerHTML = '<input type="hidden" name="task_ids" value="' + taskId + '">' +
+        '<input type="hidden" name="done" value="1">' +
+        '<input type="checkbox" onchange="this.form.submit()" style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer">';
+      const link = document.createElement('a');
+      link.href = '/board/task/' + taskId; link.style.cssText = 'font-size:13.5px;text-decoration:none';
+      link.textContent = title;
+      const spacer = document.createElement('span'); spacer.className = 'spacer';
+      const pin = document.createElement('button');
+      pin.className = 'pin-pill unpin'; pin.dataset.task = taskId; pin.textContent = 'PINNED ✕';
+      pin.title = 'Unpin from Act today';
+      row.append(form, link, spacer, pin);
+      rail.appendChild(row);
+    }
+
+    async function post(taskId) {
+      const body = new FormData();
+      body.append('task_id', taskId);
+      const res = await fetch('/briefing/promote', { method: 'POST', body, headers: { 'X-Fetch': '1' } });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    }
+
+    document.querySelectorAll('.agenda-body li, .agenda-body p').forEach(function (el) {
+      if (el.querySelector('li')) return; // leaf elements only
+      const links = el.querySelectorAll('a[href^="/board/task/"]');
+      if (!links.length) return;
+      const ids = Array.from(links).map(a => parseInt(a.getAttribute('href').split('/').pop(), 10)).filter(Boolean);
+      if (!ids.length) return;
+      const uncovered = ids.filter(id => !inBrief.has(id));
+      if (!uncovered.length) {
+        const mark = document.createElement('span');
+        mark.className = 'promote-in'; mark.textContent = '✓ in brief';
+        el.appendChild(mark);
+        return;
+      }
+      const btn = document.createElement('button');
+      btn.className = 'promote-btn'; btn.textContent = '↑ BRIEF';
+      btn.title = 'Pin this item into Act today';
+      btn.addEventListener('click', async function () {
+        btn.disabled = true;
+        try {
+          const data = await post(uncovered[0]);
+          liveNote(data.msg);
+          if (data.ok && data.pinned) {
+            inBrief.add(data.task_id);
+            addRailRow(data.task_id, data.title);
+            const mark = document.createElement('span');
+            mark.className = 'promote-in'; mark.textContent = '✓ in brief';
+            btn.replaceWith(mark);
+          } else {
+            btn.disabled = false;
+          }
+        } catch (err) {
+          liveNote('Could not pin — ' + err.message);
+          btn.disabled = false;
+        }
+      });
+      el.appendChild(btn);
+    });
+
+    document.addEventListener('click', async function (ev) {
+      const pin = ev.target.closest('button.unpin');
+      if (!pin) return;
+      ev.preventDefault();
+      pin.disabled = true;
+      try {
+        const data = await post(parseInt(pin.dataset.task, 10));
+        liveNote(data.msg);
+        if (data.ok && !data.pinned) {
+          const row = pin.closest('.check-item, details');
+          if (row) row.remove();
+        } else {
+          pin.disabled = false;
+        }
+      } catch (err) {
+        liveNote('Could not unpin — ' + err.message);
+        pin.disabled = false;
+      }
+    });
+  })();
+</script>
+{% endif %}
 {% endblock %}

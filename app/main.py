@@ -396,11 +396,38 @@ def home(request: Request, msg: str | None = None):
     from app.web.board_view import stale_tasks
     from app.web.runs_view import load_todays_briefing, spend_summary
 
+    def _awaiting_count() -> int | None:
+        try:
+            from app.web.inbox_view import awaiting_list
+
+            return len(awaiting_list(limit=500))
+        except Exception:
+            return None
+
+    now_la = datetime.now(ZoneInfo(get_settings().default_tz))
     return render_page(
         request, "home.html", "home", db_status=check_db(), stats=stats,
         priority=priority, waiting=waiting, briefing=load_todays_briefing(),
         stale=stale_tasks(), spend=spend_summary(), msg=msg,
+        awaiting_count=_awaiting_count(), travel=_travel_mode_safe(),
+        today_str=now_la.strftime("%A · %d %B %Y").upper(),
     )
+
+
+@app.post("/briefing/promote")
+def briefing_promote(request: Request, task_id: int = Form(...)):
+    """Pin a body item's task into the Act today checklist (or unpin). The
+    front page posts via fetch and updates in place."""
+    from app.web.briefing_pins import toggle_pin
+
+    try:
+        result = toggle_pin(task_id)
+    except Exception as exc:
+        result = {"ok": False, "pinned": False, "task_id": task_id, "title": "",
+                  "msg": f"Error: {exc}"}
+    if request.headers.get("x-fetch") == "1":
+        return JSONResponse(result)
+    return RedirectResponse(f"/?msg={result['msg']}", status_code=303)
 
 
 @app.post("/briefing/check")

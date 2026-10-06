@@ -149,6 +149,23 @@ def build_runtime_context(session, routine: Routine, trigger: str | None = None)
                 "your best kind guess."
             )
 
+    if routine.key == "daily_agenda":
+        try:
+            from app.web.briefing_pins import open_pins
+
+            pins = open_pins(session)
+        except Exception:
+            pins = []
+        if pins:
+            lines.append(
+                "\n## Arda-promoted Act today items — he pinned these into the "
+                "briefing himself. Each MUST appear on the Act today checklist "
+                "(with its #id) every run until its task is done; never drop or "
+                "demote them."
+            )
+            for task in pins[:20]:
+                lines.append(f"- [{task.id}] {task.title}")
+
     from app.models import DisregardRule
 
     rules = session.scalars(select(DisregardRule).order_by(DisregardRule.id.desc()).limit(20)).all()
