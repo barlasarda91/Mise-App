@@ -11,6 +11,13 @@
 
 {% if msg %}<div class="note" style="margin:0 0 14px">▸ {{ msg }}</div>{% endif %}
 
+<div style="display:flex;justify-content:flex-end;margin:0 0 12px">
+  <form method="post" action="/settings/travel" title="{% if travel_mode %}Runs every 2h, 24/7 — click to return to the weekday 7–17 LA schedule{% else %}Switch runs to every 2h around the clock, weekends included, while abroad{% endif %}">
+    <input type="hidden" name="enabled" value="{{ '0' if travel_mode else '1' }}">
+    <button class="linkish{% if travel_mode %} solid{% endif %}" type="submit"{% if travel_mode %} style="background:var(--ember);border-color:var(--ember)"{% endif %}>{% if travel_mode %}✈ TRAVEL MODE ON{% else %}✈ Travel mode{% endif %}</button>
+  </form>
+</div>
+
 <div class="box">
   <div class="box-hd"><span class="lbl">Scheduled Routines</span><span class="ix">{{ routines | selectattr("enabled") | list | length }} ENABLED</span></div>
   <div>
@@ -119,19 +126,6 @@
     {% else %}
     <div class="kv"><div class="lft"><span class="ks">Nothing disregarded — use ✕ on a briefing item or "Disregard" on a task card. Removing a rule lets that item and its sender surface again.</span></div></div>
     {% endfor %}
-  </div>
-</div>
-
-<div class="box"{% if travel_mode %} style="border-color:var(--ember)"{% endif %}>
-  <div class="box-hd"><span class="lbl">Travel mode</span><span class="ix"{% if travel_mode %} style="color:var(--ember)"{% endif %}>{% if travel_mode %}ON · EVERY 2H · 24/7{% else %}OFF · WEEKDAYS 7–17 LA{% endif %}</span></div>
-  <div>
-    <div class="kv">
-      <div class="lft"><span class="ks">{% if travel_mode %}Both routines run every 2 hours around the clock, weekends included — for when Arda is outside the US and the LA workday window doesn't fit. Quiet hours still skip at $0.{% else %}When travelling internationally, switch the routines to every 2 hours, around the clock, weekends included — so the briefing keeps up with your timezone. Quiet hours still skip at $0.{% endif %}</span></div>
-      <form method="post" action="/settings/travel">
-        <input type="hidden" name="enabled" value="{{ '0' if travel_mode else '1' }}">
-        <button class="linkish {% if not travel_mode %}solid{% endif %}" type="submit">{% if travel_mode %}Back to normal schedule{% else %}Enable travel mode{% endif %}</button>
-      </form>
-    </div>
   </div>
 </div>
 
