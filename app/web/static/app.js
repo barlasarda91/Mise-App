@@ -119,9 +119,18 @@
       }).slice(0, 8);
       if (!items.length) return hide();
       sel = -1; active = input; paint();
+      // A field inside a modal <dialog> needs the dropdown hosted in the
+      // dialog itself: the top layer paints over anything on document.body.
+      var host = input.closest('dialog') || document.body;
+      if (box.parentElement !== host) host.appendChild(box);
       var r = input.getBoundingClientRect();
-      box.style.left = (r.left + window.scrollX) + 'px';
-      box.style.top = (r.bottom + window.scrollY + 2) + 'px';
+      var baseX = window.scrollX, baseY = window.scrollY;
+      if (host !== document.body) {
+        var hr = host.getBoundingClientRect();
+        baseX = -hr.left; baseY = -hr.top;
+      }
+      box.style.left = (r.left + baseX) + 'px';
+      box.style.top = (r.bottom + baseY + 2) + 'px';
       box.style.minWidth = Math.min(r.width, 420) + 'px';
       box.hidden = false;
     }
