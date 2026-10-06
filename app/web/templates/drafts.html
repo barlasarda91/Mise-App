@@ -5,6 +5,37 @@
 
 {% if msg %}<div class="note" style="margin:0 0 14px">▸ {{ msg }}</div>{% endif %}
 
+<div style="display:flex;justify-content:flex-end;margin:0 0 12px">
+  <button class="linkish solid" type="button" onclick="document.getElementById('newDraftDlg').showModal()">+ New draft</button>
+</div>
+
+<dialog id="newDraftDlg" style="border:1px solid var(--ink);background:var(--paper);padding:0;width:min(380px,92vw);box-shadow:0 18px 50px rgba(23,21,15,.45)">
+  <div class="box" style="border:0;margin:0">
+    <div class="box-hd"><span class="lbl">New draft</span><span class="ix" style="display:flex;gap:10px;align-items:center">CLAUDE · VOICE A/B
+      <button class="linkish" type="button" onclick="document.getElementById('newDraftDlg').close()" style="padding:0 6px" title="Close">✕</button></span>
+    </div>
+    <div class="box-bd">
+      <form method="post" action="/drafts/generate" class="stack">
+        <label>Instruction<textarea name="instruction" rows="3" class="submit-on-shift-enter" placeholder="follow up on samples, propose 5 lb/wk terms — Enter for a new line, Shift+Enter generates" required></textarea></label>
+        <label>From mailbox
+          <select name="mailbox"><option value="arda">arda@ (personal voice)</option><option value="hello">hello@ (brand voice)</option></select>
+        </label>
+        <label>Linked lead (optional)
+          <select name="lead_id"><option value="">—</option>
+            {% for l in leads %}<option value="{{ l.id }}">{{ l.name }}</option>{% endfor %}
+          </select>
+        </label>
+        <label>Reply to Gmail thread id (optional)<input name="thread_id" placeholder="paste thread id to reply on-thread"></label>
+        <button class="linkish solid" type="submit">Generate draft</button>
+      </form>
+      <form method="post" action="/drafts/blank" style="margin-top:10px">
+        <input type="hidden" name="mailbox" value="arda">
+        <button class="linkish" type="submit">Blank draft</button>
+      </form>
+    </div>
+  </div>
+</dialog>
+
 <div class="runwrap{% if thread %} withthread{% endif %}">
   <div>
     <div class="box" style="align-self:start">
@@ -16,31 +47,8 @@
           <div style="font-family:var(--font-mono);font-size:10.5px;color:var(--ink-soft);margin-top:4px;letter-spacing:.04em">{{ d.mailbox }}@ · {{ d.status_label | upper }}{% if d.is_reply %} · REPLY{% endif %}</div>
         </a>
         {% else %}
-        <div class="box-bd"><span class="note">No drafts yet.</span></div>
+        <div class="box-bd"><span class="note">No drafts yet — hit “+ New draft” top right.</span></div>
         {% endfor %}
-      </div>
-    </div>
-
-    <div class="box">
-      <div class="box-hd"><span class="lbl">New draft</span><span class="ix">CLAUDE · VOICE A/B</span></div>
-      <div class="box-bd">
-        <form method="post" action="/drafts/generate" class="stack">
-          <label>Instruction<textarea name="instruction" rows="3" class="submit-on-shift-enter" placeholder="follow up on samples, propose 5 lb/wk terms — Enter for a new line, Shift+Enter generates" required></textarea></label>
-          <label>From mailbox
-            <select name="mailbox"><option value="arda">arda@ (personal voice)</option><option value="hello">hello@ (brand voice)</option></select>
-          </label>
-          <label>Linked lead (optional)
-            <select name="lead_id"><option value="">—</option>
-              {% for l in leads %}<option value="{{ l.id }}">{{ l.name }}</option>{% endfor %}
-            </select>
-          </label>
-          <label>Reply to Gmail thread id (optional)<input name="thread_id" placeholder="paste thread id to reply on-thread"></label>
-          <button class="linkish solid" type="submit">Generate draft</button>
-        </form>
-        <form method="post" action="/drafts/blank" style="margin-top:10px">
-          <input type="hidden" name="mailbox" value="arda">
-          <button class="linkish" type="submit">Blank draft</button>
-        </form>
       </div>
     </div>
   </div>
