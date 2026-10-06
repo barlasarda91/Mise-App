@@ -17,6 +17,8 @@
     <div class="box-bd">
       <form method="post" action="/drafts/generate" class="stack">
         <label>Instruction<textarea name="instruction" rows="3" class="submit-on-shift-enter" placeholder="follow up on samples, propose 5 lb/wk terms — Enter for a new line, Shift+Enter generates" required></textarea></label>
+        <label>To (optional — the linked lead's contact fills in otherwise)<input name="to" placeholder="comma-separated"></label>
+        <label>Cc (optional)<input name="cc" placeholder="comma-separated"></label>
         <label>From mailbox
           <select name="mailbox"><option value="arda">arda@ (personal voice)</option><option value="hello">hello@ (brand voice)</option></select>
         </label>

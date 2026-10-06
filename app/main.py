@@ -1037,11 +1037,13 @@ def drafts_generate(
     mailbox: str = Form("arda"),
     lead_id: str = Form(""),
     thread_id: str = Form(""),
+    to: str = Form(""),
+    cc: str = Form(""),
 ):
     from app.web.drafts_view import start_generation
 
     try:
-        msg, draft_id = start_generation(instruction, mailbox, lead_id, thread_id)
+        msg, draft_id = start_generation(instruction, mailbox, lead_id, thread_id, to=to, cc=cc)
     except Exception as exc:
         msg, draft_id = f"Error: {exc}", None
     target = f"/drafts?draft={draft_id}&msg={msg}" if draft_id else f"/drafts?msg={msg}"

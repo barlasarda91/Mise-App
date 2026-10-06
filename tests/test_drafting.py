@@ -692,3 +692,20 @@ def test_create_email_draft_tool_dedups_across_runs(session_factory):
             assert s.query(EmailDraft).count() == 2
     finally:
         clear_run_context()
+
+
+def test_start_generation_takes_to_and_cc(session_factory, monkeypatch):
+    import app.web.drafts_view as dv
+
+    monkeypatch.setattr(dv, "db_session", session_factory)
+    import app.engine.drafter as drafter
+    monkeypatch.setattr(drafter, "spawn_draft_generation", lambda *a, **k: None)
+    msg, draft_id = dv.start_generation(
+        "propose terms", "arda", "", "", to="austin@pineconebakeshop.com",
+        cc="joyce@pineconebakeshop.com, ben@boxxcoffee.com",
+    )
+    assert draft_id is not None
+    with session_factory() as s:
+        draft = s.get(EmailDraft, draft_id)
+        assert draft.to_addrs == ["austin@pineconebakeshop.com"]
+        assert draft.cc_addrs == ["joyce@pineconebakeshop.com", "ben@boxxcoffee.com"]

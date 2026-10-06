@@ -333,7 +333,7 @@ def load_thread(selected: dict | None) -> dict | None:
 
 def start_generation(
     instruction: str, mailbox: str, lead_id: str, thread_id: str,
-    task_id: str = "", to: str = "",
+    task_id: str = "", to: str = "", cc: str = "",
 ) -> tuple[str, int | None]:
     if not instruction.strip():
         return "Tell it what to draft first.", None
@@ -354,6 +354,8 @@ def start_generation(
             lead = s.get(Lead, draft.related_lead_id)
             if lead and lead.contact_email:
                 draft.to_addrs = [lead.contact_email]
+        if cc.strip():
+            draft.cc_addrs = _parse_addrs(cc)
         s.add(draft)
         s.flush()
         draft_id = draft.id
