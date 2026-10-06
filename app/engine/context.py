@@ -38,6 +38,21 @@ def build_runtime_context(session, routine: Routine, trigger: str | None = None)
     elif trigger:
         lines.append(f"Trigger: {trigger}")
 
+    try:
+        from app.models import AppState
+
+        travel = session.get(AppState, "travel_mode")
+        if travel is not None and (travel.value or {}).get("enabled"):
+            lines.append(
+                "TRAVEL MODE: Arda is travelling internationally. Runs happen every "
+                "2 hours around the clock, weekends included — the usual workday and "
+                "weekend rhythm does not apply, he may read and reply at unusual "
+                "hours, and meeting times in the briefing should always state the "
+                "timezone. Delta discipline is unchanged."
+            )
+    except Exception:
+        pass
+
     sync_rows = session.scalars(
         select(SyncState).where(SyncState.routine_id == routine.id).order_by(SyncState.source)
     ).all()

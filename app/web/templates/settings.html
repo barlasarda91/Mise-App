@@ -122,6 +122,19 @@
   </div>
 </div>
 
+<div class="box"{% if travel_mode %} style="border-color:var(--ember)"{% endif %}>
+  <div class="box-hd"><span class="lbl">Travel mode</span><span class="ix"{% if travel_mode %} style="color:var(--ember)"{% endif %}>{% if travel_mode %}ON · EVERY 2H · 24/7{% else %}OFF · WEEKDAYS 7–17 LA{% endif %}</span></div>
+  <div>
+    <div class="kv">
+      <div class="lft"><span class="ks">{% if travel_mode %}Both routines run every 2 hours around the clock, weekends included — for when Arda is outside the US and the LA workday window doesn't fit. Quiet hours still skip at $0.{% else %}When travelling internationally, switch the routines to every 2 hours, around the clock, weekends included — so the briefing keeps up with your timezone. Quiet hours still skip at $0.{% endif %}</span></div>
+      <form method="post" action="/settings/travel">
+        <input type="hidden" name="enabled" value="{{ '0' if travel_mode else '1' }}">
+        <button class="linkish {% if not travel_mode %}solid{% endif %}" type="submit">{% if travel_mode %}Back to normal schedule{% else %}Enable travel mode{% endif %}</button>
+      </form>
+    </div>
+  </div>
+</div>
+
 <div class="box">
   <div class="box-hd"><span class="lbl">Vendors</span><span class="ix">{{ vendors.green | length }} GREEN · {{ vendors.other | length }} OTHER{% if vendors.unconfirmed %} · <span style="color:var(--ember)">{{ vendors.unconfirmed | length }} TO CONFIRM</span>{% endif %}</span></div>
   <div>

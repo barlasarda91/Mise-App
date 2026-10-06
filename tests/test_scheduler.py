@@ -117,3 +117,69 @@ def test_weekday_crons_fire_monday_not_saturday():
         mon = datetime(2026, 9, 14, 6, 0, tzinfo=tz)   # Monday
         assert trig.get_next_fire_time(None, sat).weekday() == 0  # skips to Monday
         assert trig.get_next_fire_time(None, mon).weekday() == 0  # fires Monday 07:00
+
+
+def test_travel_mode_switches_to_every_2h_all_days(session_factory, sched):
+    """Travel mode: every 2 hours, no workday window, no weekend break —
+    minute offsets kept so agenda (:00) and tracker (:30) still interleave."""
+    import app.scheduler as sc
+    from app.models import AppState
+
+    assert sc.travel_crontab("0 7-17 * * mon-fri") == "0 */2 * * *"
+    assert sc.travel_crontab("30 7-16 * * mon-fri") == "30 */2 * * *"
+
+    seed_routines(session_factory)
+    with session_factory() as s:
+        for r in s.query(Routine):
+            r.enabled = True
+    assert sc.travel_mode_enabled(session_factory) is False
+
+    with session_factory() as s:
+        s.add(AppState(key=sc.TRAVEL_MODE_KEY, value={"enabled": True}))
+    assert sc.travel_mode_enabled(session_factory) is True
+
+    sync_jobs(sched, session_factory)
+    for job in sched.get_jobs():
+        t = str(job.trigger)
+        assert "hour='*/2'" in t and "day_of_week='*'" in t, t
+
+    # back to normal: the weekday window returns
+    with session_factory() as s:
+        s.get(AppState, sc.TRAVEL_MODE_KEY).value = {"enabled": False}
+    sync_jobs(sched, session_factory)
+    trackers = {j.id: str(j.trigger) for j in sched.get_jobs()}
+    assert all("day_of_week='mon-fri'" in t for t in trackers.values()), trackers
+
+
+def test_set_travel_mode_persists_and_resyncs(session_factory, sched, monkeypatch):
+    import app.scheduler as sc
+
+    seed_routines(session_factory)
+    with session_factory() as s:
+        for r in s.query(Routine):
+            r.enabled = True
+    monkeypatch.setattr(sc, "get_scheduler", lambda: sched)
+
+    sc.set_travel_mode(True, session_factory)
+    assert sc.travel_mode_enabled(session_factory) is True
+    assert all("hour='*/2'" in str(j.trigger) for j in sched.get_jobs())
+
+    sc.set_travel_mode(False, session_factory)
+    assert sc.travel_mode_enabled(session_factory) is False
+    assert all("hour='7-1" in str(j.trigger) for j in sched.get_jobs())
+
+
+def test_travel_mode_reaches_runtime_context(session_factory):
+    import app.scheduler as sc
+    from app.engine.context import build_runtime_context
+    from app.models import AppState
+
+    with session_factory() as s:
+        routine = Routine(key="daily_agenda", name="A", system_prompt="p")
+        s.add(routine)
+        s.flush()
+        assert "TRAVEL MODE" not in build_runtime_context(s, routine)
+        s.add(AppState(key=sc.TRAVEL_MODE_KEY, value={"enabled": True}))
+        s.flush()
+        context = build_runtime_context(s, routine)
+    assert "TRAVEL MODE" in context and "every 2 hours around the clock" in context

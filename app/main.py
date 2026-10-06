@@ -840,6 +840,33 @@ def _vendor_groups_safe() -> dict:
         return {"green": [], "other": [], "unconfirmed": []}
 
 
+def _travel_mode_safe() -> bool:
+    try:
+        from app.scheduler import travel_mode_enabled
+
+        return travel_mode_enabled()
+    except Exception:
+        return False
+
+
+@app.post("/settings/travel")
+def settings_travel(enabled: str = Form("")):
+    from app.scheduler import set_travel_mode
+
+    try:
+        on = enabled == "1"
+        set_travel_mode(on)
+        message = (
+            "Travel mode ON — both routines now run every 2 hours, around the clock, "
+            "weekends included."
+            if on
+            else "Travel mode OFF — back to the weekday 7:00–17:00 LA schedule."
+        )
+    except Exception as exc:
+        message = f"Error: {exc}"
+    return RedirectResponse(f"/settings?msg={message}", status_code=303)
+
+
 @app.post("/settings/vendors/add")
 def settings_vendor_add(name: str = Form(""), domains: str = Form(""), kind: str = Form("other")):
     from app.web.vendor_view import add_vendor
@@ -1178,6 +1205,7 @@ def settings_page(request: Request, msg: str | None = None):
         disregarded=disregard_rules(),
         mail_index=mail_index_status(),
         vendors=_vendor_groups_safe(),
+        travel_mode=_travel_mode_safe(),
         msg=msg,
     )
 

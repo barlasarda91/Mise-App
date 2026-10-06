@@ -69,6 +69,47 @@ def get_scheduler() -> BackgroundScheduler | None:
 _DOW_NAMES = {"0": "sun", "1": "mon", "2": "tue", "3": "wed", "4": "thu",
               "5": "fri", "6": "sat", "7": "sun"}
 
+TRAVEL_MODE_KEY = "travel_mode"
+
+
+def travel_mode_enabled(session_factory=db_session) -> bool:
+    """International travelling mode: Arda is abroad, so the LA workday
+    window makes no sense — routines run every 2 hours around the clock,
+    weekends included. Toggled in Settings; any read trouble means off."""
+    try:
+        from app.models import AppState
+
+        with session_factory() as s:
+            row = s.get(AppState, TRAVEL_MODE_KEY)
+            return bool(row and (row.value or {}).get("enabled"))
+    except Exception:
+        return False
+
+
+def set_travel_mode(enabled: bool, session_factory=db_session) -> None:
+    from datetime import datetime, timezone
+
+    from app.models import AppState
+
+    with session_factory() as s:
+        row = s.get(AppState, TRAVEL_MODE_KEY)
+        value = {"enabled": enabled, "changed_at": datetime.now(timezone.utc).isoformat()}
+        if row is None:
+            s.add(AppState(key=TRAVEL_MODE_KEY, value=value))
+        else:
+            row.value = value
+    sched = get_scheduler()
+    if sched is not None:
+        sync_jobs(sched, session_factory)  # re-register with the new cadence now
+
+
+def travel_crontab(expr: str) -> str:
+    """A routine's travel-mode schedule: keep its minute offset (agenda :00,
+    tracker :30 — so they still interleave), every 2 hours, every day."""
+    fields = expr.split()
+    minute = fields[0] if fields else "0"
+    return f"{minute} */2 * * *"
+
 
 def standard_crontab(expr: str) -> str:
     """Translate a standard-cron day-of-week field to day names before handing
@@ -95,12 +136,18 @@ def sync_jobs(sched: BackgroundScheduler, session_factory=db_session) -> None:
 
     with session_factory() as s:
         routines = s.scalars(select(Routine)).all()
+    travelling = travel_mode_enabled(session_factory)
     for routine in routines:
         job_id = f"routine:{routine.key}"
         if routine.enabled and routine.schedule_cron:
+            cron = (
+                travel_crontab(routine.schedule_cron)
+                if travelling
+                else standard_crontab(routine.schedule_cron)
+            )
             sched.add_job(
                 run_routine_job,
-                CronTrigger.from_crontab(standard_crontab(routine.schedule_cron), timezone=routine.timezone),
+                CronTrigger.from_crontab(cron, timezone=routine.timezone),
                 args=[routine.id, "scheduled"],
                 id=job_id,
                 name=routine.name,
