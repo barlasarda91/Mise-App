@@ -5,13 +5,15 @@
 
 {% if msg %}<div class="note" style="margin:0 0 14px">▸ {{ msg }}</div>{% endif %}
 
-<div class="lanes lanes6">
+<div class="note" id="liveMsg" hidden style="margin:0 0 14px"></div>
+
+<div class="lanes lanes6" id="pipelineLanes">
   {% for lane in lanes %}
-  <div class="lane">
+  <div class="lane" data-stage="{{ lane.stage }}">
     <div class="lane-hd"><span class="ln">{{ lane.label }}</span><span class="ct">{{ "%02d" | format(lane.total if lane.closed else lane.cards | length) }}</span></div>
     {% if lane.closed %}
     {% for c in lane.cards %}
-    <a class="card" href="/pipeline/lead/{{ c.id }}">
+    <a class="card" draggable="true" data-lead="{{ c.id }}" href="/pipeline/lead/{{ c.id }}">
       <div class="cn">{{ c.name }}</div>
       <div class="cmeta">
         {% if c.source %}<span>{{ c.source }}</span>{% endif %}
@@ -28,7 +30,7 @@
     {% endif %}
     {% else %}
     {% for c in lane.cards %}
-    <a class="card" href="/pipeline/lead/{{ c.id }}">
+    <a class="card" draggable="true" data-lead="{{ c.id }}" href="/pipeline/lead/{{ c.id }}">
       <div class="cn">{{ c.name }}</div>
       <div class="cmeta">
         {% if c.source %}<span>{{ c.source }}</span>{% endif %}
@@ -46,7 +48,82 @@
   </div>
   {% endfor %}
 </div>
-<div class="note">Idle days count from <b>last confirmed action</b>. Cadence: New daily · Contacted 3d · Sampled 3/7/every-5 · Negotiating 7d. Won/Lost show the 10 most recent closes. Click a card for the activity log and manual entry.</div>
+<div class="note">Idle days count from <b>last confirmed action</b>. Cadence: New daily · Contacted 3d · Sampled 3/7/every-5 · Negotiating 7d. Won/Lost show the 10 most recent closes. Drag a card to another lane to change stage, or click it for the activity log and manual entry.</div>
+
+<script>
+  // Drag a lead card onto another lane to change its stage — same backend
+  // as the lead page's Update stage (fetch + JSON, no reload). Closing as
+  // lost asks for the required loss reason; cancel aborts the move.
+  (function () {
+    var lanes = document.querySelectorAll('#pipelineLanes .lane');
+    var dragged = null;
+
+    function note(text) {
+      var el = document.getElementById('liveMsg');
+      el.textContent = '▸ ' + text;
+      el.hidden = false;
+    }
+    function recount(lane, delta) {
+      var ct = lane.querySelector('.lane-hd .ct');
+      if (!ct) return;
+      var n = Math.max(0, (parseInt(ct.textContent, 10) || 0) + delta);
+      ct.textContent = String(n).padStart(2, '0');
+    }
+
+    document.querySelectorAll('#pipelineLanes .card[data-lead]').forEach(function (card) {
+      card.addEventListener('dragstart', function (ev) {
+        dragged = card;
+        card.style.opacity = '0.45';
+        ev.dataTransfer.effectAllowed = 'move';
+        ev.dataTransfer.setData('text/plain', card.dataset.lead);
+      });
+      card.addEventListener('dragend', function () {
+        card.style.opacity = '';
+        lanes.forEach(function (l) { l.style.outline = ''; });
+        dragged = null;
+      });
+    });
+
+    lanes.forEach(function (lane) {
+      lane.addEventListener('dragover', function (ev) {
+        if (!dragged || dragged.parentElement === lane) return;
+        ev.preventDefault();
+        ev.dataTransfer.dropEffect = 'move';
+        lane.style.outline = '2px solid var(--ember)';
+      });
+      lane.addEventListener('dragleave', function () { lane.style.outline = ''; });
+      lane.addEventListener('drop', async function (ev) {
+        ev.preventDefault();
+        lane.style.outline = '';
+        if (!dragged || dragged.parentElement === lane) return;
+        var card = dragged;
+        var from = card.parentElement;
+        var stage = lane.dataset.stage;
+        var body = new FormData();
+        body.append('stage', stage);
+        if (stage === 'closed_lost') {
+          var reason = window.prompt('Loss reason (required to close as lost):', '');
+          if (!reason || !reason.trim()) { note('Move cancelled — closing as lost needs a reason.'); return; }
+          body.append('loss_reason', reason.trim());
+        }
+        try {
+          var res = await fetch('/leads/' + card.dataset.lead + '/stage', {
+            method: 'POST', body: body, headers: { 'X-Fetch': '1' },
+          });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          var data = await res.json();
+          note(data.msg);
+          if (!data.ok) return;
+          var hd = lane.querySelector('.lane-hd');
+          hd.after(card);  // newest at the top of the target lane
+          recount(from, -1); recount(lane, +1);
+        } catch (err) {
+          note('Could not move the lead — ' + err.message);
+        }
+      });
+    });
+  })();
+</script>
 
 {% if discarded %}
 <details style="margin-top:14px;max-width:640px">
