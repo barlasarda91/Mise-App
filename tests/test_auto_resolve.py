@@ -109,3 +109,29 @@ def test_money_candidates_reach_agenda_context(session_factory):
         t_ctx = build_runtime_context(s, tracker)
     assert "NOT auto-completed" in a_ctx and "Pay Aliso rent" in a_ctx
     assert "NOT auto-completed" not in t_ctx
+
+
+def test_agenda_context_lists_full_board_outside_invoice_tracking(session_factory):
+    """Content-level dedup is the model's judgment call — the application's
+    job is to show it the whole board. The agenda's context lists every open
+    task outside invoice_tracking; the tracker keeps the small caps."""
+    from app.engine.context import MAX_TASKS_PER_CATEGORY, build_runtime_context
+    from app.models import Routine
+
+    with session_factory() as s:
+        for i in range(30):
+            s.add(Task(category=TaskCategory.GOVERNANCE, title=f"Distinct matter number {i}"))
+        for i in range(20):
+            s.add(Task(category=TaskCategory.INVOICE_TRACKING, title=f"Chase invoice {i}"))
+        agenda = Routine(key="daily_agenda", name="A", system_prompt="p")
+        tracker = Routine(key="lead_tracker", name="T", system_prompt="p")
+        s.add_all([agenda, tracker])
+        s.flush()
+        a_ctx = build_runtime_context(s, agenda)
+        t_ctx = build_runtime_context(s, tracker)
+
+    assert "COMPLETE list outside invoice_tracking" in a_ctx
+    assert all(f"Distinct matter number {i}" in a_ctx for i in range(30))  # uncapped
+    assert "plus 8 more invoice_tracking" in a_ctx  # 20 - 12 still capped
+    # tracker unchanged: capped at 12 with a "plus N more" line
+    assert f"plus {30 - MAX_TASKS_PER_CATEGORY} more governance" in t_ctx

@@ -624,7 +624,7 @@ def test_context_tasks_grouped_by_category_with_fair_caps(session_factory):
     assert "on board 0d" in context  # undated tasks carry their age instead
     assert f"### invoice_tracking ({MAX_TASKS_PER_CATEGORY + 3})" in context
     assert f"plus 3 more invoice_tracking" in context
-    assert "every category below is briefing material" in context
+    assert "COMPLETE list outside invoice_tracking" in context  # agenda header
 
 
 def test_batch_tasks_store_and_merge_constituents(session_factory):

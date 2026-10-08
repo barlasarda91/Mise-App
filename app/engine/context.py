@@ -16,6 +16,8 @@ from app.settings import get_settings
 
 MAX_LEADS = 40
 MAX_TASKS_PER_CATEGORY = 12
+# Agenda-only: effectively the whole board — content-level dedup needs it all.
+AGENDA_FULL_LIST_CAP = 250
 
 # First-ever-run gather window: with no last_run_at for a source, routines
 # scan the past 90 days (~3 months) of backlog instead of "everything".
@@ -195,11 +197,23 @@ def build_runtime_context(session, routine: Routine, trigger: str | None = None)
     # Grouped by category with a per-category cap so a crowded tab (say, a
     # wave of invoice tasks) can never push another tab — governance reply
     # tasks especially — out of the model's view entirely.
+    # For the AGENDA the list is COMPLETE outside invoice_tracking: it judges
+    # whether a new email is a fresh issue or a follow-up BY CONTENT, and it
+    # can't judge against tasks it can't see. invoice_tracking stays capped —
+    # those are mechanically deduped by invoice id and number in the hundreds.
     tasks = session.scalars(select(Task).where(Task.status != TaskStatus.DONE)).all()
-    lines.append(
-        f"\n## Incomplete board tasks ({len(tasks)}) — every category below is "
-        "briefing material, not just the dated ones"
-    )
+    if routine.key == "daily_agenda":
+        lines.append(
+            f"\n## Incomplete board tasks ({len(tasks)}) — COMPLETE list outside "
+            "invoice_tracking: before any create_task, check it for the same "
+            "matter (same issue reported by anyone = update the existing task, "
+            "never a new one), and consolidate duplicates you spot"
+        )
+    else:
+        lines.append(
+            f"\n## Incomplete board tasks ({len(tasks)}) — every category below is "
+            "briefing material, not just the dated ones"
+        )
     from app.models import TaskCategory
 
     by_category: dict = {}
@@ -210,8 +224,11 @@ def build_runtime_context(session, routine: Routine, trigger: str | None = None)
         if not group:
             continue
         group.sort(key=lambda t: (t.due_date is None, t.due_date or today, t.id))
+        cap = MAX_TASKS_PER_CATEGORY
+        if routine.key == "daily_agenda" and category != TaskCategory.INVOICE_TRACKING:
+            cap = AGENDA_FULL_LIST_CAP
         lines.append(f"### {category.value} ({len(group)})")
-        for task in group[:MAX_TASKS_PER_CATEGORY]:
+        for task in group[:cap]:
             due = f" · due {task.due_date}" if task.due_date else ""
             overdue = " · OVERDUE" if task.due_date and task.due_date < today else ""
             age = ""
@@ -222,9 +239,9 @@ def build_runtime_context(session, routine: Routine, trigger: str | None = None)
                 days_on_board = max(0, (today - created.astimezone(tz).date()).days)
                 age = f" · on board {days_on_board}d"
             lines.append(f"- [{task.id}] {task.title} · {task.status.value}{due}{overdue}{age}")
-        if len(group) > MAX_TASKS_PER_CATEGORY:
+        if len(group) > cap:
             lines.append(
-                f"- …plus {len(group) - MAX_TASKS_PER_CATEGORY} more {category.value} "
+                f"- …plus {len(group) - cap} more {category.value} "
                 "tasks (list_tasks for the rest)"
             )
 
