@@ -9,6 +9,8 @@ send email.
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
+import re
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -418,6 +420,37 @@ def _open_tasks_for_contact(session, contact_email: str) -> list[Task]:
     return out
 
 
+_AMOUNT_RE = re.compile(r"\$\s?([\d,]+(?:\.\d{1,2})?)")
+
+
+def _title_amounts(text: str) -> set[str]:
+    """Distinctive dollar amounts in a title/description, normalized to digit
+    strings. Amounts under 4 digits ($300, $85) are too generic to treat as
+    an identity signal; $3,377.78 or $16,185.60 practically are one."""
+    out = set()
+    for raw in _AMOUNT_RE.findall(text or ""):
+        digits = raw.replace(",", "").replace(".", "")
+        if len(digits) >= 4:
+            out.add(digits)
+    return out
+
+
+def _open_tasks_with_amounts(session, amounts: set[str]) -> list[Task]:
+    """Open tasks (any category, any sender) whose title or description
+    carries one of the same distinctive amounts — the cross-sender dedup
+    signal: one issue (a specific bill, a specific back-payment) gets
+    reported by the employee, the bookkeeper AND the provider, each from a
+    different address, but always with the same figure."""
+    if not amounts:
+        return []
+    out = []
+    for task in session.scalars(select(Task).where(Task.status != TaskStatus.DONE)):
+        hay = f"{task.title} {task.description or ''}"
+        if _title_amounts(hay) & amounts:
+            out.append(task)
+    return out
+
+
 def _create_task_impl(session, category, title, dedup_key, description, due_date, assignee, source_ref,
                       distinct_from_existing=False):
     rule = _disregard_rule_for(session, dedup_key, source_ref)
@@ -455,22 +488,32 @@ def _create_task_impl(session, category, title, dedup_key, description, due_date
     # either update the existing task or assert this is a genuinely distinct
     # issue (distinct_from_existing=true).
     contact = ((source_ref or {}).get("contact_email") or "").strip()
-    if contact and not distinct_from_existing:
-        open_same_contact = _open_tasks_for_contact(session, contact)
-        if open_same_contact:
+    if not distinct_from_existing:
+        matches: dict[int, Task] = {}
+        if contact:
+            for task in _open_tasks_for_contact(session, contact):
+                matches[task.id] = task
+        # Same distinctive dollar figure = same issue, whoever the sender is:
+        # the CalSavers back-pay reads "$3,377.78" whether Khoa, the payroll
+        # provider, or a bookkeeper summary reports it.
+        amounts = _title_amounts(f"{title} {description or ''}")
+        for task in _open_tasks_with_amounts(session, amounts):
+            matches.setdefault(task.id, task)
+        if matches:
             return {
                 "outcome": "possible_duplicate",
                 "open_tasks_for_contact": [
                     {"task_id": t.id, "title": t.title, "status": t.status.value}
-                    for t in open_same_contact[:8]
+                    for t in list(matches.values())[:8]
                 ],
                 "note": (
-                    f"{contact} already has open task(s) above. If this email is a "
-                    "follow-up on one of those issues, do NOT create a task — "
-                    "reference the existing (#id) in the briefing and use "
-                    "update_task if its status/due changed. Only if this is a "
-                    "genuinely different issue, call create_task again with "
-                    "distinct_from_existing=true."
+                    "Open task(s) above share this item's counterparty or a "
+                    "distinctive dollar amount — one issue stays ONE task even when "
+                    "updates arrive from different senders (employee, provider, "
+                    "bookkeeper). If this is the same matter, do NOT create a task: "
+                    "reference the existing (#id) in the briefing and update_task "
+                    "its title/due to the latest state. Only for a genuinely "
+                    "different matter, re-call with distinct_from_existing=true."
                 ),
             }
 

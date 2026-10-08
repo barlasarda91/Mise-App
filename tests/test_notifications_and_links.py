@@ -768,3 +768,52 @@ def test_follow_up_same_contact_clusters_into_one_task(session_factory):
             assert again["outcome"] == "already_exists"
     finally:
         clear_run_context()
+
+
+def test_same_amount_clusters_across_different_senders(session_factory):
+    """The CalSavers case: one back-payment reported by the employee (freemail),
+    the payroll provider, and a notice address — different senders, same
+    distinctive amount — must not become three tasks."""
+    from app.engine.toolkit import clear_run_context, set_run_context
+    from app.models import Task
+    from app.routines.tools import _create_task, _title_amounts
+
+    assert _title_amounts("CalSavers $3,377.78 back-pay") == {"337778"}
+    assert _title_amounts("pay $300 deposit and $85 fee") == set()  # too generic
+
+    set_run_context(run_id=None, routine_id=None, started_at=None)
+    try:
+        with session_factory() as s:
+            first = _create_task(
+                s, "payments", "Khoa Trinh — $3,377.78 CalSavers back-pay still not received",
+                "task:cs-1", gmail_msg_id="cs-1", contact_email="khoa.trinh@gmail.com",
+            )
+            assert first["outcome"] == "created"
+            s.commit()
+
+            # different sender (provider), same amount -> clustered
+            dup = _create_task(
+                s, "payments", "CalSavers $3,377.78 payment PENDING APPROVAL in TLR",
+                "task:cs-2", gmail_msg_id="cs-2", contact_email="payroll@tlraccounting.com",
+            )
+            assert dup["outcome"] == "possible_duplicate"
+            assert dup["open_tasks_for_contact"][0]["task_id"] == first["task_id"]
+            assert "dollar amount" in dup["note"]
+
+            # a different gmail sender with no shared amount is untouched
+            other = _create_task(
+                s, "governance", "Reply to Maya about tasting",
+                "task:m-1", gmail_msg_id="m-1", contact_email="maya.r@gmail.com",
+            )
+            assert other["outcome"] == "created"
+
+            # explicit override still works for a genuinely distinct matter
+            forced = _create_task(
+                s, "payments", "Q4 CalSavers contribution $3,377.78 (next quarter)",
+                "task:cs-3", gmail_msg_id="cs-3", contact_email="payroll@tlraccounting.com",
+                distinct_from_existing=True,
+            )
+            assert forced["outcome"] == "created"
+            assert s.query(Task).count() == 3
+    finally:
+        clear_run_context()
