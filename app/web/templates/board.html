@@ -103,6 +103,51 @@
     tab.dataset.open = open;
     tab.textContent = tab.dataset.label + (open ? ' · ' + open : '');
   }
+  // Drag a task card onto another lane: sets the card's status select and
+  // submits through the same fetch path as the Move button — no reload.
+  (function () {
+    var dragged = null;
+    document.querySelectorAll('.catboard .card').forEach(function (card) {
+      card.setAttribute('draggable', 'true');
+      card.addEventListener('dragstart', function (ev) {
+        dragged = card;
+        card.style.opacity = '0.45';
+        ev.dataTransfer.effectAllowed = 'move';
+        ev.dataTransfer.setData('text/plain', 'task');
+      });
+      card.addEventListener('dragend', function () {
+        card.style.opacity = '';
+        document.querySelectorAll('.catboard .lane').forEach(function (l) { l.style.outline = ''; });
+        dragged = null;
+      });
+    });
+    document.querySelectorAll('.catboard .lane').forEach(function (lane) {
+      lane.addEventListener('dragover', function (ev) {
+        if (!dragged || dragged.parentElement === lane) return;
+        ev.preventDefault();
+        ev.dataTransfer.dropEffect = 'move';
+        lane.style.outline = '2px solid var(--ember)';
+      });
+      lane.addEventListener('dragleave', function () { lane.style.outline = ''; });
+      lane.addEventListener('drop', function (ev) {
+        ev.preventDefault();
+        lane.style.outline = '';
+        if (!dragged || dragged.parentElement === lane) return;
+        var form = dragged.querySelector('form.cardmove');
+        if (!form) return;
+        var status = lane.dataset.status;
+        form.querySelector('select[name=status]').value = status;
+        if (status === 'waiting') {
+          var input = form.querySelector('input[name=waiting_on]');
+          var who = window.prompt('Waiting on (who/what — optional):', input.value || '');
+          if (who === null) { liveNote('Move cancelled.'); return; }
+          input.value = who.trim();
+        }
+        if (form.requestSubmit) form.requestSubmit(); else form.submit();
+      });
+    });
+  })();
+
   document.addEventListener('submit', async (e) => {
     const form = e.target.closest('form.cardmove');
     if (!form || form.dataset.fallback) return;

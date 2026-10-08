@@ -151,6 +151,22 @@ def build_runtime_context(session, routine: Routine, trigger: str | None = None)
 
     if routine.key == "daily_agenda":
         try:
+            from app.routines.task_sync import replied_money_tasks
+
+            money_candidates = replied_money_tasks(session)
+        except Exception:
+            money_candidates = []
+        if money_candidates:
+            lines.append(
+                "\n## Money tasks whose source thread Boxx has answered — a reply "
+                "isn't payment, so these were NOT auto-completed: verify the outcome "
+                "(sent mail, QuickBooks) and complete_task the ones actually settled; "
+                "briefly note the still-open ones in the briefing."
+            )
+            for task in money_candidates[:15]:
+                lines.append(f"- [{task.id}] {task.title} · {task.category.value}")
+
+        try:
             from app.web.briefing_pins import open_pins
 
             pins = open_pins(session)

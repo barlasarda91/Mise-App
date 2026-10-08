@@ -92,6 +92,17 @@ def execute_run(
                             index_recent(mailbox)
             except Exception:
                 log.warning("mail index upkeep failed — run continues", exc_info=True)
+            # Board hygiene (zero tokens): email-derived tasks whose source
+            # thread Arda already answered complete themselves before the
+            # model looks at the board.
+            try:
+                from app.routines.task_sync import auto_resolve_replied_tasks
+
+                resolved = auto_resolve_replied_tasks(s)
+                if resolved:
+                    log.info("auto-resolved %d replied task(s): %s", len(resolved), "; ".join(resolved[:5]))
+            except Exception:
+                log.warning("auto-resolve sweep failed — run continues", exc_info=True)
             model = resolve_model(routine.model)
             system_prompt = routine.system_prompt
             context_text = build_runtime_context(s, routine, trigger=trigger.value)

@@ -114,3 +114,86 @@ def sync_lead_tasks(session, lead: Lead, today: date) -> list[str]:
             )
             completed.append(task.title)
     return completed
+
+
+# Money tasks: a reply on the source thread doesn't prove payment — these are
+# never auto-completed, only surfaced to the agenda for judgment.
+MONEY_CATEGORIES = (TaskCategory.PAYMENTS, TaskCategory.INVOICE_TRACKING)
+
+
+def _replied_source_thread(session, task: Task):
+    """The newest message on the task's source email thread, when that newest
+    message is an outbound Boxx reply sent after the task was created —
+    the strong signal the hanging item was handled. None otherwise."""
+    from datetime import timezone
+
+    from app.models import MailMessage
+
+    ref = task.source_ref or {}
+    msg_id = ref.get("gmail_msg_id")
+    if not msg_id:
+        return None
+    src = session.scalar(select(MailMessage).where(MailMessage.gmail_msg_id == msg_id))
+    if src is None or not src.thread_id:
+        return None
+    newest = session.scalar(
+        select(MailMessage)
+        .where(
+            MailMessage.mailbox == src.mailbox,
+            MailMessage.thread_id == src.thread_id,
+            MailMessage.sent_at.isnot(None),
+        )
+        .order_by(MailMessage.sent_at.desc())
+    )
+    if newest is None or not newest.is_outbound:
+        return None  # no reply, or the counterparty spoke last — still open
+    created = task.created_at
+    if created is not None and created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    sent = newest.sent_at if newest.sent_at.tzinfo else newest.sent_at.replace(tzinfo=timezone.utc)
+    if created is not None and sent <= created:
+        return None
+    return newest
+
+
+def auto_resolve_replied_tasks(session) -> list[str]:
+    """Zero-token board hygiene, run before each executed run: an open
+    email-derived task whose source thread's NEWEST message is a Boxx reply
+    sent after the task existed gets completed automatically — Arda handled
+    it from Gmail and the board shouldn't keep nagging. Money tasks
+    (payments / invoice_tracking) are exempt: replying isn't paying."""
+    from datetime import datetime, timezone
+
+    resolved = []
+    open_tasks = session.scalars(select(Task).where(Task.status != TaskStatus.DONE)).all()
+    for task in open_tasks:
+        if task.category in MONEY_CATEGORIES:
+            continue
+        reply = _replied_source_thread(session, task)
+        if reply is None:
+            continue
+        task.status = TaskStatus.DONE
+        task.completed_at = datetime.now(timezone.utc)
+        when = reply.sent_at.date().isoformat() if reply.sent_at else "recently"
+        session.add(
+            TaskActivity(
+                task_id=task.id,
+                type="auto_resolved",
+                detail=f"Boxx replied on the source thread ({when}) and nothing newer arrived — auto-completed",
+                actor="Mise",
+            )
+        )
+        resolved.append(f"[{task.id}] {task.title}")
+    return resolved
+
+
+def replied_money_tasks(session) -> list[Task]:
+    """Open payments / invoice_tracking tasks whose source thread was replied
+    to — candidates the agenda should verify and complete, never auto-done."""
+    out = []
+    for task in session.scalars(select(Task).where(Task.status != TaskStatus.DONE)):
+        if task.category not in MONEY_CATEGORIES:
+            continue
+        if _replied_source_thread(session, task) is not None:
+            out.append(task)
+    return out
