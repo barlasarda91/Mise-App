@@ -115,6 +115,9 @@ class TaskRule(Base):
     title_guidance: Mapped[str | None] = mapped_column(String(300))
     due_offset_days: Mapped[int | None] = mapped_column()
     assignee: Mapped[str | None] = mapped_column(String(100))
+    # Playbook rules: one trigger spawns SEVERAL tasks. Each step is
+    # {"title": str, "due_offset_days": int | None}; empty/None = single-task rule.
+    steps: Mapped[list | None] = mapped_column(PortableJSON)
     enabled: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

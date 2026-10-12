@@ -52,6 +52,13 @@ async def lifespan(app: FastAPI):
             log.info("seeded %d known green bean importers", seeded)
     except Exception as exc:
         log.warning("vendor seed skipped: %s", exc)
+    try:
+        from app.web.rules_view import seed_coffee_launch_rule
+
+        if seed_coffee_launch_rule():
+            log.info("seeded the new-coffee launch playbook rule")
+    except Exception as exc:
+        log.warning("task rule seed skipped: %s", exc)
     # Backfill: attach open, unlinked board tasks to leads by confident name
     # match (new tasks link at creation time).
     try:
@@ -911,11 +918,12 @@ def settings_rule_add(
     title_guidance: str = Form(""),
     due_offset_days: str = Form(""),
     assignee: str = Form(""),
+    steps: str = Form(""),
 ):
     from app.web.rules_view import add_rule
 
     try:
-        message = add_rule(trigger, category, title_guidance, due_offset_days, assignee)
+        message = add_rule(trigger, category, title_guidance, due_offset_days, assignee, steps)
     except Exception as exc:
         message = f"Error: {exc}"
     return RedirectResponse(f"/settings?msg={message}", status_code=303)

@@ -85,3 +85,49 @@ def test_no_rules_no_section(session_factory):
         s.add(agenda)
         s.flush()
         assert "custom task rules" not in build_runtime_context(s, agenda)
+
+def test_parse_steps():
+    steps = rvw.parse_steps(
+        "- Write Product Page\n\n* Design Labels +3d\nLaunch coffee on webpage +200d\nbad offset +xd")
+    assert steps[0] == {"title": "Write Product Page", "due_offset_days": None}
+    assert steps[1] == {"title": "Design Labels", "due_offset_days": 3}
+    assert steps[2]["due_offset_days"] == 90  # clamped
+    assert steps[3]["title"] == "bad offset +xd"  # unparseable suffix kept as text
+
+
+def test_playbook_rule_add_and_context(session_factory):
+    from app.engine.context import build_runtime_context
+
+    msg = rvw.add_rule("a NEW green coffee purchase is confirmed", "governance",
+                       steps="Write Product Page\nDesign Labels\nLaunch coffee on webpage +7d")
+    assert "Playbook (3 tasks per occurrence)" in msg
+    r = rvw.rules_list()[0]
+    assert r["steps"] == ["Write Product Page", "Design Labels", "Launch coffee on webpage"]
+    assert "Launch coffee on webpage +7d" in r["steps_text"]
+
+    with session_factory() as s:
+        agenda = Routine(key="daily_agenda", name="A", system_prompt="p")
+        s.add(agenda)
+        s.flush()
+        ctx = build_runtime_context(s, agenda)
+    assert "PLAYBOOK: create ALL of these `governance` tasks" in ctx
+    assert "1) Write Product Page; 2) Design Labels; 3) Launch coffee on webpage (due +7d)" in ctx
+    assert "distinct_from_existing=true" in ctx
+    assert f"rule{r['id']}:<slug" in ctx
+    assert "do not re-create it" in ctx
+
+
+def test_coffee_launch_seed(session_factory):
+    assert rvw.seed_coffee_launch_rule(session_factory) == 1
+    assert rvw.seed_coffee_launch_rule(session_factory) == 0  # never re-seeds
+    rules = rvw.rules_list()
+    assert len(rules) == 1
+    assert rules[0]["steps"] == rvw.COFFEE_LAUNCH_STEPS
+    assert "NOT bought before" in rules[0]["trigger"]
+    assert "reorder" in rules[0]["trigger"]
+
+    # A removed rule stays removed across redeploys: the AppState flag, not
+    # table emptiness, gates the seed.
+    rvw.remove_rule(rules[0]["id"])
+    assert rvw.seed_coffee_launch_rule(session_factory) == 0
+    assert rvw.rules_list() == []

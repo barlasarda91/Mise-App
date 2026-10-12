@@ -137,6 +137,7 @@
       <div class="lft" style="min-width:0">
         <span class="kt"{% if not r.enabled %} style="color:var(--ink-soft);text-decoration:line-through"{% endif %}>When {{ r.trigger }}</span>
         <span class="ks" style="margin-left:8px">→ {{ r.category }}{% if r.title_guidance %} · "{{ r.title_guidance }}"{% endif %}{% if r.due_offset_days is not none %} · due +{{ r.due_offset_days }}d{% endif %}{% if r.assignee %} · {{ r.assignee }}{% endif %}</span>
+        {% if r.steps %}<span class="ks" style="display:block;margin-top:2px">Playbook — one set per occurrence: {% for s in r.steps %}{{ loop.index }}. {{ s }}{% if not loop.last %} · {% endif %}{% endfor %}</span>{% endif %}
       </div>
       <div style="display:flex;gap:8px">
         <form method="post" action="/settings/rules/{{ r.id }}/toggle"><button class="linkish" type="submit">{{ "Pause" if r.enabled else "Enable" }}</button></form>
@@ -160,6 +161,7 @@
         <input type="text" name="title_guidance" placeholder="title guidance (optional)" style="flex:1;min-width:150px">
         <input type="text" name="due_offset_days" placeholder="due +N d" style="width:70px">
         <input type="text" name="assignee" placeholder="assignee" style="width:90px">
+        <textarea name="steps" rows="2" placeholder="Playbook steps — optional: one task title per line (append +Nd for a due offset). Filled in, ONE trigger creates the whole set." style="flex-basis:100%;min-height:40px"></textarea>
         <button class="linkish solid" type="submit">Add rule</button>
       </form>
     </div>
