@@ -186,6 +186,13 @@ def build_runtime_context(session, routine: Routine, trigger: str | None = None)
 
     from app.models import DisregardRule
 
+    try:
+        from app.web.rules_view import context_lines as _rule_lines
+
+        lines.extend(_rule_lines(session))
+    except Exception:
+        pass
+
     rules = session.scalars(select(DisregardRule).order_by(DisregardRule.id.desc()).limit(20)).all()
     if rules:
         lines.append("\n## Disregarded by Arda — never surface, never create tasks for these")

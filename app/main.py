@@ -895,6 +895,54 @@ def settings_travel(enabled: str = Form("")):
     return RedirectResponse(f"/settings?msg={message}", status_code=303)
 
 
+def _task_rules_safe() -> list:
+    try:
+        from app.web.rules_view import rules_list
+
+        return rules_list()
+    except Exception:
+        return []
+
+
+@app.post("/settings/rules/add")
+def settings_rule_add(
+    trigger: str = Form(""),
+    category: str = Form("governance"),
+    title_guidance: str = Form(""),
+    due_offset_days: str = Form(""),
+    assignee: str = Form(""),
+):
+    from app.web.rules_view import add_rule
+
+    try:
+        message = add_rule(trigger, category, title_guidance, due_offset_days, assignee)
+    except Exception as exc:
+        message = f"Error: {exc}"
+    return RedirectResponse(f"/settings?msg={message}", status_code=303)
+
+
+@app.post("/settings/rules/{rule_id}/toggle")
+def settings_rule_toggle(rule_id: int):
+    from app.web.rules_view import toggle_rule
+
+    try:
+        message = toggle_rule(rule_id)
+    except Exception as exc:
+        message = f"Error: {exc}"
+    return RedirectResponse(f"/settings?msg={message}", status_code=303)
+
+
+@app.post("/settings/rules/{rule_id}/remove")
+def settings_rule_remove(rule_id: int):
+    from app.web.rules_view import remove_rule
+
+    try:
+        message = remove_rule(rule_id)
+    except Exception as exc:
+        message = f"Error: {exc}"
+    return RedirectResponse(f"/settings?msg={message}", status_code=303)
+
+
 @app.post("/settings/vendors/add")
 def settings_vendor_add(name: str = Form(""), domains: str = Form(""), kind: str = Form("other")):
     from app.web.vendor_view import add_vendor
@@ -1236,6 +1284,7 @@ def settings_page(request: Request, msg: str | None = None):
         mail_index=mail_index_status(),
         vendors=_vendor_groups_safe(),
         travel_mode=_travel_mode_safe(),
+        task_rules=_task_rules_safe(),
         msg=msg,
     )
 

@@ -130,6 +130,44 @@
 </div>
 
 <div class="box">
+  <div class="box-hd"><span class="lbl">Task rules</span><span class="ix">{{ task_rules | selectattr("enabled") | list | length }} ACTIVE · WHEN X → CREATE TASK</span></div>
+  <div>
+    {% for r in task_rules %}
+    <div class="kv">
+      <div class="lft" style="min-width:0">
+        <span class="kt"{% if not r.enabled %} style="color:var(--ink-soft);text-decoration:line-through"{% endif %}>When {{ r.trigger }}</span>
+        <span class="ks" style="margin-left:8px">→ {{ r.category }}{% if r.title_guidance %} · "{{ r.title_guidance }}"{% endif %}{% if r.due_offset_days is not none %} · due +{{ r.due_offset_days }}d{% endif %}{% if r.assignee %} · {{ r.assignee }}{% endif %}</span>
+      </div>
+      <div style="display:flex;gap:8px">
+        <form method="post" action="/settings/rules/{{ r.id }}/toggle"><button class="linkish" type="submit">{{ "Pause" if r.enabled else "Enable" }}</button></form>
+        <form method="post" action="/settings/rules/{{ r.id }}/remove"><button class="linkish" type="submit" style="color:var(--ember)">Remove</button></form>
+      </div>
+    </div>
+    {% else %}
+    <div class="kv"><div class="lft"><span class="ks">No rules yet. Example: When a catering or event inquiry arrives → governance task "Prepare event quote — {sender}", due +2 days.</span></div></div>
+    {% endfor %}
+    <div class="kv">
+      <form method="post" action="/settings/rules/add" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;width:100%">
+        <input type="text" name="trigger" placeholder="When… (describe what the runs should watch for)" style="flex:2;min-width:220px" required>
+        <select name="category">
+          <option value="payments">Payments</option>
+          <option value="governance" selected>Governance</option>
+          <option value="wholesale_leads">Wholesale leads</option>
+          <option value="consultation">Consultation</option>
+          <option value="pop_ups">Pop-ups</option>
+          <option value="invoice_tracking">Invoice tracking</option>
+        </select>
+        <input type="text" name="title_guidance" placeholder="title guidance (optional)" style="flex:1;min-width:150px">
+        <input type="text" name="due_offset_days" placeholder="due +N d" style="width:70px">
+        <input type="text" name="assignee" placeholder="assignee" style="width:90px">
+        <button class="linkish solid" type="submit">Add rule</button>
+      </form>
+    </div>
+  </div>
+</div>
+<div class="note" style="margin:10px 0 14px">Standing automations: every run reads these and creates the task when it perceives the condition in that run's mail/calendar — judged by content, deduped like any other task. Pause keeps a rule without applying it.</div>
+
+<div class="box">
   <div class="box-hd"><span class="lbl">Vendors</span><span class="ix">{{ vendors.green | length }} GREEN · {{ vendors.other | length }} OTHER{% if vendors.unconfirmed %} · <span style="color:var(--ember)">{{ vendors.unconfirmed | length }} TO CONFIRM</span>{% endif %}</span></div>
   <div>
     {% if vendors.unconfirmed %}

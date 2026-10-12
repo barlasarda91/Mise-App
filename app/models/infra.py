@@ -100,3 +100,22 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(100), unique=True)
     password_hash: Mapped[str] = mapped_column(String(200))
+
+
+class TaskRule(Base):
+    """Arda's standing automation: when a run PERCEIVES the trigger condition
+    (a content judgment the model makes while reading mail/calendar), it
+    creates a task per this template. The inverse of DisregardRule."""
+
+    __tablename__ = "task_rules"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    trigger: Mapped[str] = mapped_column(String(500))  # plain-language condition
+    category: Mapped[str] = mapped_column(String(40), default="governance")
+    title_guidance: Mapped[str | None] = mapped_column(String(300))
+    due_offset_days: Mapped[int | None] = mapped_column()
+    assignee: Mapped[str | None] = mapped_column(String(100))
+    enabled: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
