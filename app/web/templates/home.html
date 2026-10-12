@@ -39,7 +39,7 @@
 <div class="masthead">
   <span class="ed" style="margin-left:0">{{ today_str }}</span>
   <span class="ed">
-    {% if briefing %}EDITION <a href="/runs?run={{ briefing.run_id }}" style="color:inherit">{{ briefing.code }} · RAN {{ briefing.time }}</a>{% else %}NO EDITION YET TODAY{% endif %}
+    {% if briefing %}{% if briefing.stale_day %}<span style="color:var(--ember)">LAST EDITION · {{ briefing.stale_day }}</span> · <a href="/runs?run={{ briefing.run_id }}" style="color:inherit">{{ briefing.code }}</a>{% else %}EDITION <a href="/runs?run={{ briefing.run_id }}" style="color:inherit">{{ briefing.code }} · RAN {{ briefing.time }}</a>{% endif %}{% else %}NO EDITION YET{% endif %}
     {% if travel %} · <span style="color:var(--ember)">TRAVEL MODE</span>{% endif %}
   </span>
 </div>
@@ -55,6 +55,11 @@
 <div class="newsgrid">
   <div class="news-main">
     {% if briefing %}
+      {% if briefing.stale_day %}
+      <div style="border:1px solid var(--ember);background:var(--panel);padding:8px 12px;margin:0 0 14px;font-family:var(--font-mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ember)">
+        No completed run yet today — showing the last successful edition ({{ briefing.stale_day }} · {{ briefing.code }}). Checkboxes still work; details below may be out of date.
+      </div>
+      {% endif %}
       {% if briefing.standfirst %}<div class="standfirst">{{ briefing.standfirst }}</div>{% endif %}
       {% if briefing.html %}<div class="md agenda-body" style="font-size:14px">{{ briefing.html | safe }}</div>{% endif %}
       {% if briefing.latest %}

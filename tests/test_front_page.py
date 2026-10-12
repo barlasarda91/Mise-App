@@ -157,3 +157,61 @@ def test_run_health_flags_trailing_failures_only(session_factory):
         routine = s.scalars(rv.select(Routine).filter_by(key="daily_agenda")).first()
         run_at(s, routine, 5, RS.COMPLETED)
     assert rv.run_health() == []
+
+
+def test_briefing_falls_back_to_last_successful_edition(session_factory):
+    """Failing (or not-yet-run) days still show the latest available brief,
+    dated as stale, instead of an empty front page."""
+    from app.models.enums import RunStatus as RS
+
+    tz = ZoneInfo(get_settings().default_tz)
+    now = datetime.now(tz)
+    with session_factory() as s:
+        routine = Routine(key="daily_agenda", name="Daily Agenda", system_prompt="p")
+        s.add(routine)
+        s.flush()
+
+        def run_at(dt, status, report=None):
+            run = Run(routine_id=routine.id, status=status,
+                      trigger=RunTrigger.SCHEDULED, started_at=dt)
+            s.add(run)
+            s.flush()
+            if report:
+                s.add(RunMessage(run_id=run.id, role=MessageRole.ASSISTANT,
+                                 content=[{"type": "text", "text": report}]))
+            return run
+
+        two_days_ago = now - timedelta(days=2)
+        run_at(two_days_ago.replace(hour=7, minute=0),
+               RS.COMPLETED, "STANDFIRST: Old morning.\n## Act today\n- [ ] Pay Aliso (#1)")
+        run_at(two_days_ago.replace(hour=15, minute=0),
+               RS.COMPLETED, "Afternoon update from that day.")
+        # today: only failures
+        run_at(now.replace(hour=0, minute=0), RS.FAILED)
+        s.add(Task(id=1, category=TaskCategory.PAYMENTS, title="Pay Aliso"))
+
+    briefing = rv.load_todays_briefing()
+    assert briefing is not None
+    assert briefing["stale_day"] == two_days_ago.strftime("%a %d %b").upper()
+    assert briefing["standfirst"] == "Old morning."
+    assert briefing["checklist"][0]["task_ids"] == [1]
+    assert briefing["latest"] and "Afternoon update" in briefing["latest"]["html"]
+
+
+def test_briefing_today_is_not_marked_stale(session_factory):
+    from app.models.enums import RunStatus as RS
+
+    tz = ZoneInfo(get_settings().default_tz)
+    now = datetime.now(tz)
+    with session_factory() as s:
+        routine = Routine(key="daily_agenda", name="Daily Agenda", system_prompt="p")
+        s.add(routine)
+        s.flush()
+        run = Run(routine_id=routine.id, status=RS.COMPLETED,
+                  trigger=RunTrigger.SCHEDULED, started_at=now.replace(hour=7))
+        s.add(run)
+        s.flush()
+        s.add(RunMessage(run_id=run.id, role=MessageRole.ASSISTANT,
+                         content=[{"type": "text", "text": "Fresh brief."}]))
+    briefing = rv.load_todays_briefing()
+    assert briefing is not None and briefing["stale_day"] is None

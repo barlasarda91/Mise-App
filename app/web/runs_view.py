@@ -241,8 +241,21 @@ def load_todays_briefing(routine_key: str = "daily_agenda") -> dict | None:
                 .order_by(Run.started_at, Run.id)
             ).all()
             todays = [r for r in runs if _aware(r.started_at) and _aware(r.started_at) >= day_start]
+            stale_day = None
             if not todays:
-                return None
+                # Nothing completed today (failing runs, or the morning hasn't
+                # happened yet): fall back to the newest day that HAS a
+                # successful edition, clearly dated — a stale briefing beats
+                # an empty front page.
+                dated = [r for r in runs if _aware(r.started_at)]
+                if not dated:
+                    return None
+                last_local_day = _aware(dated[-1].started_at).astimezone(tz).date()
+                todays = [
+                    r for r in dated
+                    if _aware(r.started_at).astimezone(tz).date() == last_local_day
+                ]
+                stale_day = last_local_day.strftime("%a %d %b").upper()
 
             def shape(run, with_checklist=False):
                 messages = s.scalars(
@@ -292,6 +305,7 @@ def load_todays_briefing(routine_key: str = "daily_agenda") -> dict | None:
             briefing = shape(todays[0], with_checklist=True)
             if briefing is None:
                 return None
+            briefing["stale_day"] = stale_day
             latest = (
                 shape(todays[-1], with_checklist=True)
                 if todays[-1].id != todays[0].id
