@@ -59,6 +59,14 @@ async def lifespan(app: FastAPI):
             log.info("seeded the new-coffee launch playbook rule")
     except Exception as exc:
         log.warning("task rule seed skipped: %s", exc)
+    try:
+        from app.tools.mail_index import reclassify_outbound
+
+        fixed = reclassify_outbound()
+        if fixed:
+            log.info("mail index: reclassified %d colleague rows as inbound", fixed)
+    except Exception as exc:
+        log.warning("mail index outbound reclassify skipped: %s", exc)
     # Backfill: attach open, unlinked board tasks to leads by confident name
     # match (new tasks link at creation time).
     try:

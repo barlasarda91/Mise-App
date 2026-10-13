@@ -239,12 +239,46 @@ def count_messages(mailbox: FromMailbox, query: str) -> int:
     return int(resp.get("resultSizeEstimate", 0))
 
 
+def list_attachments(payload: dict) -> list[dict]:
+    """Walk a message payload's (nested) parts for real attachments."""
+    out: list[dict] = []
+
+    def walk(part: dict) -> None:
+        body = part.get("body") or {}
+        if part.get("filename") and body.get("attachmentId"):
+            out.append({
+                "filename": part["filename"],
+                "mime_type": part.get("mimeType") or "",
+                "attachment_id": body["attachmentId"],
+                "size": int(body.get("size") or 0),
+            })
+        for sub in part.get("parts") or []:
+            walk(sub)
+
+    walk(payload or {})
+    return out
+
+
+def fetch_attachment(mailbox: FromMailbox, msg_id: str, attachment_id: str) -> bytes:
+    import base64
+
+    svc = gmail_service(mailbox_address(mailbox))
+    att = (
+        svc.users().messages().attachments()
+        .get(userId="me", messageId=msg_id, id=attachment_id)
+        .execute()
+    )
+    return base64.urlsafe_b64decode(att.get("data") or "")
+
+
 def get_message(mailbox: FromMailbox, msg_id: str) -> dict:
-    """Full message: header summary + extracted plain-text body."""
+    """Full message: header summary + extracted plain-text body + attachment
+    metadata (filename/mime/id/size — contents fetched separately)."""
     svc = gmail_service(mailbox_address(mailbox))
     message = svc.users().messages().get(userId="me", id=msg_id, format="full").execute()
     summary = _summarize(message)
     summary["body"] = extract_body(message.get("payload") or {})
+    summary["attachments"] = list_attachments(message.get("payload") or {})
     return summary
 
 

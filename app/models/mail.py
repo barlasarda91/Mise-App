@@ -33,7 +33,7 @@ class MailMessage(Base):
     subject: Mapped[str | None] = mapped_column(String(500))
     snippet: Mapped[str | None] = mapped_column(String(300))
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    is_outbound: Mapped[bool] = mapped_column(default=False)  # sent by a boxxcoffee.com address
+    is_outbound: Mapped[bool] = mapped_column(default=False)  # sent by one of OUR two mailboxes
     is_bulk: Mapped[bool] = mapped_column(default=False)  # List-Unsubscribe / Precedence: bulk
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

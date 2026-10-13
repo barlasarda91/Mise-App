@@ -24,8 +24,21 @@ log = logging.getLogger(__name__)
 
 BACKFILL_DAYS = 90
 BACKFILL_STATE_KEY = "mail_index:backfill"
+RECLASSIFY_STATE_KEY = "mail_index:outbound_v2"
 MAX_BACKFILL_PAGES = 60  # x100 messages per mailbox — a hard stop, not a target
-OWN_DOMAIN = "boxxcoffee.com"
+
+
+def own_addresses() -> set[str]:
+    """The two connected mailboxes — the ONLY senders that count as Boxx's
+    own outbound mail. Colleagues on the same domain (emrebarlas@, travishe@)
+    are correspondents like anyone else: their mail must reach the awaiting
+    panel and must never count as 'Boxx already replied'."""
+    settings = get_settings()
+    return {
+        a.lower()
+        for a in (settings.gmail_arda_address, settings.gmail_hello_address)
+        if a
+    }
 
 
 def _parse_when(value: str) -> datetime | None:
@@ -61,11 +74,37 @@ def upsert_summary(session, mailbox: str, summary: dict) -> bool:
             subject=(summary.get("subject") or "")[:500] or None,
             snippet=(summary.get("snippet") or "")[:300] or None,
             sent_at=_parse_when(summary.get("date", "")),
-            is_outbound=(addr or "").lower().endswith("@" + OWN_DOMAIN),
+            is_outbound=(addr or "").lower() in own_addresses(),
             is_bulk=bool(summary.get("bulk")),
         )
     )
     return True
+
+
+def reclassify_outbound() -> int:
+    """One-time repair of rows indexed under the old domain-based rule, which
+    marked colleagues' mail (any @boxxcoffee.com sender) as Boxx's own.
+    Idempotent via an AppState flag; returns the number of rows corrected."""
+    from sqlalchemy import update
+
+    own = own_addresses()
+    if not own:
+        return 0
+    with db_session() as s:
+        if s.get(AppState, RECLASSIFY_STATE_KEY) is not None:
+            return 0
+        fixed = s.execute(
+            update(MailMessage)
+            .where(MailMessage.is_outbound.is_(True), MailMessage.from_addr.notin_(own))
+            .values(is_outbound=False)
+        ).rowcount or 0
+        fixed += s.execute(
+            update(MailMessage)
+            .where(MailMessage.is_outbound.is_(False), MailMessage.from_addr.in_(own))
+            .values(is_outbound=True)
+        ).rowcount or 0
+        s.add(AppState(key=RECLASSIFY_STATE_KEY, value={"fixed": fixed}))
+        return fixed
 
 
 def _set_backfill_state(value: dict) -> None:

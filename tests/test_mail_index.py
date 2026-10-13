@@ -189,3 +189,66 @@ def test_awaiting_reply_respects_done_marks(session_factory):
         s.commit()
         waiting = mi.awaiting_reply(s)
     assert [t["gmail_msg_id"] for t in waiting] == ["g3"]
+
+
+def test_colleague_mail_is_inbound_not_outbound(session_factory):
+    """Regression: Emre's to-do email to Arda was classified as Boxx's own
+    sent mail (any @boxxcoffee.com sender counted as outbound), so it never
+    reached the awaiting panel. Only the two connected mailboxes count."""
+    with session_factory() as s:
+        mi.upsert_summary(s, "arda", _summary(
+            "e1", "Emre Barlas <emrebarlas@boxxcoffee.com>", _days_ago(2),
+            thread="t-emre", subject="Weekly to do list"))
+        mi.upsert_summary(s, "arda", _summary(
+            "o1", "Arda <ardabarlas@boxxcoffee.com>", _days_ago(30),
+            thread="t-old", to="emrebarlas@boxxcoffee.com", subject="re: roast plan"))
+        s.commit()
+        rows = {r.gmail_msg_id: r for r in s.query(MailMessage)}
+        assert rows["e1"].is_outbound is False  # colleague = correspondent
+        assert rows["o1"].is_outbound is True   # our own mailbox
+
+        # and his hanging thread now shows in the awaiting panel (Boxx has
+        # written to him before, so the correspondent test passes)
+        waiting = mi.awaiting_reply(s)
+        assert any(t["from_addr"] == "emrebarlas@boxxcoffee.com" for t in waiting)
+
+
+def test_reclassify_outbound_repairs_old_rows(session_factory, monkeypatch):
+    monkeypatch.setattr(mi, "db_session", session_factory)
+    with session_factory() as s:
+        # rows written under the old domain rule
+        s.add(MailMessage(mailbox="arda", gmail_msg_id="old1", thread_id="t1",
+                          from_addr="emrebarlas@boxxcoffee.com", is_outbound=True))
+        s.add(MailMessage(mailbox="arda", gmail_msg_id="old2", thread_id="t2",
+                          from_addr="travishe@boxxcoffee.com", is_outbound=True))
+        s.add(MailMessage(mailbox="arda", gmail_msg_id="old3", thread_id="t3",
+                          from_addr="ardabarlas@boxxcoffee.com", is_outbound=True))
+        s.add(MailMessage(mailbox="hello", gmail_msg_id="old4", thread_id="t4",
+                          from_addr="customer@gmail.com", is_outbound=False))
+    assert mi.reclassify_outbound() == 2  # the two colleagues flip to inbound
+    assert mi.reclassify_outbound() == 0  # one-time: flagged in app_state
+    with session_factory() as s:
+        rows = {r.gmail_msg_id: r.is_outbound for r in s.query(MailMessage)}
+        assert rows == {"old1": False, "old2": False, "old3": True, "old4": False}
+
+
+def test_colleague_reply_no_longer_auto_resolves_tasks(session_factory):
+    """A colleague sending mail on a tracked thread must not count as 'Boxx
+    already replied' — before the fix it silently completed open tasks."""
+    from app.models import Task
+    from app.models.enums import TaskCategory, TaskStatus
+    from app.routines.task_sync import auto_resolve_replied_tasks
+
+    with session_factory() as s:
+        task = Task(title="Review weekly plan", category=TaskCategory.GOVERNANCE,
+                    source_ref={"gmail_msg_id": "e1"})
+        s.add(task)
+        mi.upsert_summary(s, "arda", _summary(
+            "e1", "Emre Barlas <emrebarlas@boxxcoffee.com>", _days_ago(3), thread="t-emre"))
+        mi.upsert_summary(s, "arda", _summary(
+            "e2", "Emre Barlas <emrebarlas@boxxcoffee.com>", _days_ago(1), thread="t-emre"))
+        s.commit()
+        resolved = auto_resolve_replied_tasks(s)
+        s.commit()
+        assert resolved == []
+        assert s.get(Task, task.id).status != TaskStatus.DONE

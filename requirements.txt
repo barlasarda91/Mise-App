@@ -13,3 +13,4 @@ anthropic>=1.0
 APScheduler>=3.10,<4
 Markdown>=3.6
 requests>=2.32
+pypdf>=4.0
