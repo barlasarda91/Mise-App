@@ -15,13 +15,17 @@ from sqlalchemy import func, select, update
 from app.db import db_session
 from app.engine.anthropic_client import get_client, resolve_model
 from app.engine.context import build_runtime_context
-from app.engine.toolkit import clear_run_context, dispatch, set_run_context, tool_specs
+from app.engine.toolkit import clear_run_context, dispatch, routine_tool_specs, set_run_context
 from app.models import MessageRole, Routine, Run, RunMessage, RunStatus, RunTrigger
 import app.routines.tools  # noqa: F401  (registers the routine tools)
+import app.routines.discovery  # noqa: F401  (registers the lead discovery tools)
 
 log = logging.getLogger(__name__)
 
 MAX_ITERATIONS = 30
+# Research-heavy routines get more loop room (each pause_turn of a long
+# server-side web search also counts as an iteration).
+ITERATION_LIMITS = {"lead_discovery": 45}
 MAX_TOKENS = 16000
 
 
@@ -119,6 +123,7 @@ def execute_run(
 
             if intraday and _gs().intraday_model:
                 model = resolve_model(_gs().intraday_model)
+            routine_key = routine.key
             run = Run(routine_id=routine_id, trigger=trigger, status=RunStatus.RUNNING)
             s.add(run)
             s.flush()
@@ -158,7 +163,7 @@ def execute_run(
         # top-level breakpoint; longer-TTL breakpoints must come first.
         system=[{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral", "ttl": "1h"}}],
         thinking={"type": "adaptive"},
-        tools=tool_specs(),
+        tools=routine_tool_specs(routine_key),
         # Server-side refusal-fallback routing (Claude API default for Opus 5):
         # a safety decline re-runs the request on a fallback model in-call.
         betas=["server-side-fallback-2026-07-01"],
@@ -179,7 +184,7 @@ def execute_run(
     cost = 0.0
 
     try:
-        for _ in range(MAX_ITERATIONS):
+        for _ in range(ITERATION_LIMITS.get(routine_key, MAX_ITERATIONS)):
             response = client.beta.messages.create(**request_base, messages=messages)
 
             usage = getattr(response, "usage", None)

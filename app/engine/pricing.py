@@ -31,13 +31,19 @@ def rates_for(model: str) -> tuple[float, float]:
     return FALLBACK_RATES
 
 
+# Server-side web search bills per search on top of tokens ($10 / 1,000).
+WEB_SEARCH_USD = 0.01
+
+
 def usage_cost(model: str, usage) -> float:
     """Dollar cost of one API response's usage object."""
     in_rate, out_rate = rates_for(model)
     get = lambda name: getattr(usage, name, 0) or 0  # noqa: E731
+    server = getattr(usage, "server_tool_use", None)
+    searches = (getattr(server, "web_search_requests", 0) or 0) if server is not None else 0
     return (
         get("input_tokens") * in_rate
         + get("cache_read_input_tokens") * in_rate * 0.1
         + get("cache_creation_input_tokens") * in_rate * 1.25
         + get("output_tokens") * out_rate
-    ) / 1_000_000
+    ) / 1_000_000 + searches * WEB_SEARCH_USD

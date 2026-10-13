@@ -12,6 +12,9 @@ from app.models.enums import (
     MutationKind,
     OPEN_LEAD_STAGES,
     ProjectedUnit,
+    ProspectRegion,
+    ProspectSegment,
+    ProspectStatus,
     RunStatus,
     RunTrigger,
     SyncSource,
@@ -23,6 +26,7 @@ from app.models.enums import (
 from app.models.infra import AppState, DisregardRule, ExternalMutation, MutedSender, TaskRule, User, Vendor
 from app.models.lead import Lead, LeadActivity
 from app.models.mail import AwaitingDismissal, MailMessage
+from app.models.prospect import Prospect
 from app.models.routine import Routine, Run, RunMessage, SyncState
 from app.models.task import Project, Task, TaskActivity
 
@@ -53,6 +57,10 @@ __all__ = [
     "OPEN_LEAD_STAGES",
     "Project",
     "ProjectedUnit",
+    "Prospect",
+    "ProspectRegion",
+    "ProspectSegment",
+    "ProspectStatus",
     "Routine",
     "Run",
     "RunMessage",

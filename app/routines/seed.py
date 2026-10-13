@@ -1,4 +1,4 @@
-"""Seed the two standing routines (spec §7) and keep their system prompts in
+"""Seed the standing routines (spec §7) and keep their system prompts in
 sync with the versioned prompt files.
 
 Prompts live in app/routines/prompts/<key>.md; on startup a routine whose
@@ -39,6 +39,14 @@ ROUTINE_DEFAULTS = [
         # gmail_hello added 2026-09-10: non-wholesale business mail (filming,
         # collabs, press) lands there and no routine was watching it.
         "connectors": ["gmail_arda", "gmail_hello", "calendar", "quickbooks"],
+    },
+    {
+        "key": "lead_discovery",
+        "name": "Lead Discovery",
+        # Once a day, every day, before the tracker's first run — the day's
+        # finds are in the Prospects queue by the time Arda opens Mise.
+        "schedule_cron": "30 7 * * *",
+        "connectors": ["web_search", "google_places"],
     },
 ]
 

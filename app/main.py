@@ -94,6 +94,7 @@ NAV = [
     {"view": "calendar", "ix": "C", "label": "Calendar", "path": "/calendar"},
     {"view": "runs", "ix": "R", "label": "Runs", "path": "/runs"},
     {"view": "pipeline", "ix": "P", "label": "Pipeline", "path": "/pipeline"},
+    {"view": "prospects", "ix": "L", "label": "Prospects", "path": "/prospects"},
     {"view": "board", "ix": "B", "label": "Board", "path": "/board"},
     {"view": "drafts", "ix": "D", "label": "Drafts", "path": "/drafts"},
     {"view": "settings", "ix": "S", "label": "Settings", "path": "/settings"},
@@ -182,6 +183,12 @@ def _nav_badges() -> dict:
         from app.web.pipeline_view import overdue_count
 
         badges["pipeline"] = overdue_count()
+    except Exception:
+        pass
+    try:
+        from app.web.prospects_view import review_count
+
+        badges["prospects"] = review_count()
     except Exception:
         pass
     try:
@@ -808,6 +815,29 @@ def lead_create_reminder(lead_id: int, remind_on: str = Form(...), note: str = F
     except Exception as exc:
         msg = f"Error: {exc}"
     return RedirectResponse(f"/pipeline/lead/{lead_id}?msg={msg}", status_code=303)
+
+
+@app.get("/prospects", response_class=HTMLResponse)
+def prospects(request: Request, msg: str | None = None):
+    from app.web.prospects_view import load_queue
+
+    return render_page(request, "prospects.html", "prospects", queue=load_queue(), msg=msg)
+
+
+PROSPECT_ACTIONS = {"approve", "reject", "mute", "unmute"}
+
+
+@app.post("/prospects/{prospect_id}/{action}")
+def prospect_decide(prospect_id: int, action: str):
+    from app.web import prospects_view
+
+    if action not in PROSPECT_ACTIONS:
+        return RedirectResponse("/prospects?msg=Unknown action.", status_code=303)
+    try:
+        msg = getattr(prospects_view, action)(prospect_id)
+    except Exception as exc:
+        msg = f"Error: {exc}"
+    return RedirectResponse(f"/prospects?msg={msg}", status_code=303)
 
 
 @app.get("/board", response_class=HTMLResponse)

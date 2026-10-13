@@ -71,6 +71,11 @@ _DOW_NAMES = {"0": "sun", "1": "mon", "2": "tue", "3": "wed", "4": "thu",
 
 TRAVEL_MODE_KEY = "travel_mode"
 
+# Routines whose schedule ignores travel mode: discovery reads the web, not
+# Arda's inbox, so his timezone changes nothing — and every-2-hours would
+# multiply its cost twelvefold.
+TRAVEL_EXEMPT = {"lead_discovery"}
+
 
 def travel_mode_enabled(session_factory=db_session) -> bool:
     """International travelling mode: Arda is abroad, so the LA workday
@@ -142,7 +147,7 @@ def sync_jobs(sched: BackgroundScheduler, session_factory=db_session) -> None:
         if routine.enabled and routine.schedule_cron:
             cron = (
                 travel_crontab(routine.schedule_cron)
-                if travelling
+                if travelling and routine.key not in TRAVEL_EXEMPT
                 else standard_crontab(routine.schedule_cron)
             )
             sched.add_job(
