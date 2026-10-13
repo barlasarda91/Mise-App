@@ -883,7 +883,14 @@ def _create_email_draft(
             thread_note = None
 
     ctx = get_run_context()
-    dedup_key = f"draft:{purpose}:{lead_id or task_id or 'none'}:{ctx.get('run_id')}"
+    # Rule-driven drafts carry an occurrence-scoped purpose (rule7:order-1234),
+    # so their ledger key is cross-run: run N+1 perceiving the same order never
+    # drafts again, even after Arda sent or discarded run N's draft. Everything
+    # else stays run-scoped and relies on the open-draft check below.
+    if re.match(r"^rule\d+:", purpose or ""):
+        dedup_key = f"draft:{purpose}"
+    else:
+        dedup_key = f"draft:{purpose}:{lead_id or task_id or 'none'}:{ctx.get('run_id')}"
     ledger = session.scalar(select(ExternalMutation).where(ExternalMutation.dedup_key == dedup_key))
     if ledger and ledger.external_id:
         return {"outcome": "already_exists", "draft_id": int(ledger.external_id)}

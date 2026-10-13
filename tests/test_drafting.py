@@ -709,3 +709,48 @@ def test_start_generation_takes_to_and_cc(session_factory, monkeypatch):
         draft = s.get(EmailDraft, draft_id)
         assert draft.to_addrs == ["austin@pineconebakeshop.com"]
         assert draft.cc_addrs == ["joyce@pineconebakeshop.com", "ben@boxxcoffee.com"]
+
+
+def test_rule_draft_dedups_across_runs_even_after_send(session_factory):
+    """A rule-driven draft (purpose `ruleN:<occurrence>`) is occurrence-scoped:
+    the same Moccamaster order perceived by run after run yields exactly one
+    draft EVER — even after Arda sent or discarded it, unlike reply drafts."""
+    args = dict(
+        mailbox="hello", to=["Orders@moccamaster.com"], cc=None,
+        subject="Boxx order #4512 — KBGV Select x1", body="Order details…",
+        purpose="rule2:order-4512", lead_id=None, task_id=None,
+        gmail_thread_id=None,
+    )
+    set_run_context(run_id=201, routine_id=1, started_at=datetime(2026, 10, 13, tzinfo=timezone.utc))
+    try:
+        with session_factory() as s:
+            first = json.loads(dispatch("create_email_draft", dict(args), s)[0])
+        assert first["outcome"] == "created"
+    finally:
+        clear_run_context()
+
+    set_run_context(run_id=202, routine_id=1, started_at=datetime(2026, 10, 13, tzinfo=timezone.utc))
+    try:
+        # next run, same order: blocked by the cross-run ledger key
+        with session_factory() as s:
+            second = json.loads(dispatch("create_email_draft", dict(args), s)[0])
+        assert second["outcome"] == "already_exists"
+        assert second["draft_id"] == first["draft_id"]
+
+        # even after the draft is sent, the same occurrence never re-drafts
+        with session_factory() as s:
+            d = s.get(EmailDraft, first["draft_id"])
+            d.sent_at = datetime(2026, 10, 13, 12, 0, tzinfo=timezone.utc)
+        with session_factory() as s:
+            third = json.loads(dispatch("create_email_draft", dict(args), s)[0])
+        assert third["outcome"] == "already_exists"
+
+        # a DIFFERENT order is a different occurrence: new draft
+        other = dict(args, purpose="rule2:order-4513", subject="Boxx order #4513")
+        with session_factory() as s:
+            fourth = json.loads(dispatch("create_email_draft", dict(other), s)[0])
+        assert fourth["outcome"] == "created"
+        with session_factory() as s:
+            assert s.query(EmailDraft).count() == 2
+    finally:
+        clear_run_context()

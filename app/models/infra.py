@@ -115,6 +115,10 @@ class TaskRule(Base):
     title_guidance: Mapped[str | None] = mapped_column(String(300))
     due_offset_days: Mapped[int | None] = mapped_column()
     assignee: Mapped[str | None] = mapped_column(String(100))
+    # Draft rules: instead of a task, the trigger prepares an email draft
+    # (never sent — Drafts review) addressed to this Arda-fixed recipient.
+    draft_to: Mapped[str | None] = mapped_column(String(300))
+    draft_mailbox: Mapped[str | None] = mapped_column(String(10))  # arda | hello
     # Playbook rules: one trigger spawns SEVERAL tasks. Each step is
     # {"title": str, "due_offset_days": int | None}; empty/None = single-task rule.
     steps: Mapped[list | None] = mapped_column(PortableJSON)

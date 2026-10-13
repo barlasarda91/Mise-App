@@ -919,11 +919,14 @@ def settings_rule_add(
     due_offset_days: str = Form(""),
     assignee: str = Form(""),
     steps: str = Form(""),
+    draft_to: str = Form(""),
+    draft_mailbox: str = Form("hello"),
 ):
     from app.web.rules_view import add_rule
 
     try:
-        message = add_rule(trigger, category, title_guidance, due_offset_days, assignee, steps)
+        message = add_rule(trigger, category, title_guidance, due_offset_days,
+                           assignee, steps, draft_to, draft_mailbox)
     except Exception as exc:
         message = f"Error: {exc}"
     return RedirectResponse(f"/settings?msg={message}", status_code=303)

@@ -136,7 +136,8 @@
     <div class="kv">
       <div class="lft" style="min-width:0">
         <span class="kt"{% if not r.enabled %} style="color:var(--ink-soft);text-decoration:line-through"{% endif %}>When {{ r.trigger }}</span>
-        <span class="ks" style="margin-left:8px">→ {{ r.category }}{% if r.title_guidance %} · "{{ r.title_guidance }}"{% endif %}{% if r.due_offset_days is not none %} · due +{{ r.due_offset_days }}d{% endif %}{% if r.assignee %} · {{ r.assignee }}{% endif %}</span>
+        {% if r.draft_to %}<span class="ks" style="margin-left:8px">→ prepare a draft from {{ r.draft_mailbox or "hello" }}@ to <strong>{{ r.draft_to }}</strong> (lands in Drafts for review — never auto-sent)</span>
+        {% else %}<span class="ks" style="margin-left:8px">→ {{ r.category }}{% if r.title_guidance %} · "{{ r.title_guidance }}"{% endif %}{% if r.due_offset_days is not none %} · due +{{ r.due_offset_days }}d{% endif %}{% if r.assignee %} · {{ r.assignee }}{% endif %}</span>{% endif %}
         {% if r.steps %}<span class="ks" style="display:block;margin-top:2px">Playbook — one set per occurrence: {% for s in r.steps %}{{ loop.index }}. {{ s }}{% if not loop.last %} · {% endif %}{% endfor %}</span>{% endif %}
       </div>
       <div style="display:flex;gap:8px">
@@ -162,6 +163,10 @@
         <input type="text" name="due_offset_days" placeholder="due +N d" style="width:70px">
         <input type="text" name="assignee" placeholder="assignee" style="width:90px">
         <textarea name="steps" rows="2" placeholder="Playbook steps — optional: one task title per line (append +Nd for a due offset). Filled in, ONE trigger creates the whole set." style="flex-basis:100%;min-height:40px"></textarea>
+        <span class="ks" style="flex-basis:100%;display:flex;gap:8px;align-items:center">OR prepare a draft instead of tasks:
+          <input type="text" name="draft_to" placeholder="draft recipient email (fixed — mail content can never change it)" style="flex:1;min-width:220px">
+          from <select name="draft_mailbox"><option value="hello" selected>hello@</option><option value="arda">arda@</option></select>
+        </span>
         <button class="linkish solid" type="submit">Add rule</button>
       </form>
     </div>
