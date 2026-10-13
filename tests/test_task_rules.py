@@ -86,12 +86,20 @@ def test_no_rules_no_section(session_factory):
         s.flush()
         assert "custom task rules" not in build_runtime_context(s, agenda)
 
+
 def test_parse_steps():
     steps = rvw.parse_steps(
-        "- Write Product Page\n\n* Design Labels +3d\nLaunch coffee on webpage +200d\nbad offset +xd")
-    assert steps[0] == {"title": "Write Product Page", "due_offset_days": None}
-    assert steps[1] == {"title": "Design Labels", "due_offset_days": 3}
-    assert steps[2]["due_offset_days"] == 90  # clamped
+        "- Write Product Page +3d\n"
+        "  Ask for detailed process info\n"
+        "  > Ask for photos\n\n"
+        "* Design Labels +200d\n"
+        "Launch coffee on webpage (sticky)\n"
+        "bad offset +xd")
+    assert steps[0]["title"] == "Write Product Page" and steps[0]["due_offset_days"] == 3
+    assert steps[0]["notes"] == "- Ask for detailed process info\n- Ask for photos"
+    assert steps[1] == {"title": "Design Labels", "due_offset_days": 90}  # clamped
+    assert steps[2] == {"title": "Launch coffee on webpage", "due_offset_days": None,
+                        "sticky": True}
     assert steps[3]["title"] == "bad offset +xd"  # unparseable suffix kept as text
 
 
@@ -99,11 +107,13 @@ def test_playbook_rule_add_and_context(session_factory):
     from app.engine.context import build_runtime_context
 
     msg = rvw.add_rule("a NEW green coffee purchase is confirmed", "governance",
-                       steps="Write Product Page\nDesign Labels\nLaunch coffee on webpage +7d")
+                       steps="Write Product Page +3d\n  Ask for coffee details\n"
+                             "Design Labels +4d\nLaunch coffee on webpage (sticky)")
     assert "Playbook (3 tasks per occurrence)" in msg
     r = rvw.rules_list()[0]
-    assert r["steps"] == ["Write Product Page", "Design Labels", "Launch coffee on webpage"]
-    assert "Launch coffee on webpage +7d" in r["steps_text"]
+    assert r["steps"] == ["Write Product Page +3d (1 sub-tasks)", "Design Labels +4d",
+                          "Launch coffee on webpage · sticky until done"]
+    assert "Launch coffee on webpage (sticky)" in r["steps_text"]
 
     with session_factory() as s:
         agenda = Routine(key="daily_agenda", name="A", system_prompt="p")
@@ -111,7 +121,11 @@ def test_playbook_rule_add_and_context(session_factory):
         s.flush()
         ctx = build_runtime_context(s, agenda)
     assert "PLAYBOOK: create ALL of these `governance` tasks" in ctx
-    assert "1) Write Product Page; 2) Design Labels; 3) Launch coffee on webpage (due +7d)" in ctx
+    assert "1) Write Product Page (due 3 days after the trigger date)" in ctx
+    assert "task description must carry these sub-tasks: Ask for coffee details" in ctx
+    assert "3) Launch coffee on webpage (no due date — STICKY, see below)" in ctx
+    assert 'STICKY step(s) — "Launch coffee on webpage": give them no due date' in ctx
+    assert "EVERY briefing until completed; never drop or demote them" in ctx
     assert "distinct_from_existing=true" in ctx
     assert f"rule{r['id']}:<slug" in ctx
     assert "do not re-create it" in ctx
@@ -122,7 +136,9 @@ def test_coffee_launch_seed(session_factory):
     assert rvw.seed_coffee_launch_rule(session_factory) == 0  # never re-seeds
     rules = rvw.rules_list()
     assert len(rules) == 1
-    assert rules[0]["steps"] == rvw.COFFEE_LAUNCH_STEPS
+    with session_factory() as s:
+        rule = s.scalars(rvw.select(TaskRule)).one()
+        assert rule.steps == rvw.COFFEE_LAUNCH_SET
     assert "NOT bought before" in rules[0]["trigger"]
     assert "reorder" in rules[0]["trigger"]
 
@@ -131,3 +147,33 @@ def test_coffee_launch_seed(session_factory):
     rvw.remove_rule(rules[0]["id"])
     assert rvw.seed_coffee_launch_rule(session_factory) == 0
     assert rvw.rules_list() == []
+
+
+def test_coffee_launch_seed_v1_upgrade(session_factory):
+    from app.models import AppState
+
+    v1_steps = [{"title": t, "due_offset_days": None} for t in rvw.COFFEE_LAUNCH_STEPS]
+    with session_factory() as s:
+        s.add(AppState(key="task_rules:seeded", value={"version": 1}))
+        s.add(TaskRule(trigger=rvw.COFFEE_LAUNCH_TRIGGER, category="governance",
+                       steps=list(v1_steps)))
+    assert rvw.seed_coffee_launch_rule(session_factory) == 1
+    with session_factory() as s:
+        rule = s.scalars(rvw.select(TaskRule)).one()
+        assert rule.steps == rvw.COFFEE_LAUNCH_SET
+    # idempotent: version is now current
+    assert rvw.seed_coffee_launch_rule(session_factory) == 0
+
+
+def test_coffee_launch_seed_v1_edited_rule_untouched(session_factory):
+    from app.models import AppState
+
+    edited = [{"title": "My own step", "due_offset_days": 5}]
+    with session_factory() as s:
+        s.add(AppState(key="task_rules:seeded", value={"version": 1}))
+        s.add(TaskRule(trigger=rvw.COFFEE_LAUNCH_TRIGGER, category="governance",
+                       steps=list(edited)))
+    assert rvw.seed_coffee_launch_rule(session_factory) == 0
+    with session_factory() as s:
+        rule = s.scalars(rvw.select(TaskRule)).one()
+        assert rule.steps == edited  # Arda's edits win over a seed upgrade
