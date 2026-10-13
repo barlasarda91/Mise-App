@@ -26,6 +26,10 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str | None = None
 
+    # Google Places API (New) key for lead discovery. Optional: without it
+    # the discovery routine researches on Claude web search alone.
+    google_places_api_key: str | None = None
+
     # QuickBooks Online (Intuit OAuth2 — separate from the Google SA).
     # QBO_REFRESH_TOKEN is a bootstrap seed only: Intuit rotates refresh
     # tokens on use, and the live token persists in app_state (spec §5).

@@ -223,7 +223,7 @@ def test_seed_syncs_schedule_and_prompt(session_factory):
     from app.models import Routine
     from app.routines.seed import ROUTINE_DEFAULTS, seed_routines
 
-    assert seed_routines(session_factory) == 2  # created fresh
+    assert seed_routines(session_factory) == len(ROUTINE_DEFAULTS)  # created fresh
     with session_factory() as s:
         tracker = s.scalars(select(Routine).where(Routine.key == "lead_tracker")).one()
         tracker.schedule_cron = "30 8 * * *"  # pre-hourly value

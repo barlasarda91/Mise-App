@@ -25,7 +25,7 @@ TOOL_RESULT_PREVIEW_CHARS = 3000
 MAX_TASK_REF = 10_000_000
 
 # Mockup vernacular: R-041 for the tracker, A-118 for the agenda.
-CODE_PREFIXES = {"lead_tracker": "R", "daily_agenda": "A"}
+CODE_PREFIXES = {"lead_tracker": "R", "daily_agenda": "A", "lead_discovery": "L"}
 
 
 # Allow http(s)/mailto/single-slash-relative only; /(?!/) rejects
@@ -76,7 +76,8 @@ def build_transcript(messages) -> list[dict]:
                     entry["blocks"].append(
                         {"kind": "text", "text": block["text"], "html": render_markdown(block["text"])}
                     )
-                elif btype == "tool_use":
+                elif btype in ("tool_use", "server_tool_use"):
+                    # server_tool_use = Anthropic-run web_search / web_fetch
                     args = json.dumps(block.get("input") or {}, ensure_ascii=False)
                     entry["blocks"].append(
                         {"kind": "tool_use", "name": block.get("name", "?"), "args": args}

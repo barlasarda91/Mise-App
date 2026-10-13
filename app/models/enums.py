@@ -127,3 +127,27 @@ class MutationKind(str, enum.Enum):
     CALENDAR_EVENT = "calendar_event"
     GMAIL_DRAFT = "gmail_draft"
     TASK = "task"
+
+
+class ProspectSegment(str, enum.Enum):
+    """The three account shapes Boxx wants to grow with, plus restaurants."""
+
+    MULTI_ROASTER = "multi_roaster"  # specialty shops rotating guest roasters
+    ALL_DAY_CAFE = "all_day_cafe"  # volume cafes with food, open all day
+    VOLUME_DINER = "volume_diner"  # classic high-cover diners and delis
+    RESTAURANT = "restaurant"  # restaurants with a real coffee service
+
+
+class ProspectRegion(str, enum.Enum):
+    LOS_ANGELES = "los_angeles"
+    SAN_DIEGO = "san_diego"
+    SAN_GABRIEL_VALLEY = "san_gabriel_valley"
+    RIVERSIDE = "riverside"  # expansion territory
+    SANTA_BARBARA = "santa_barbara"  # expansion territory
+
+
+class ProspectStatus(str, enum.Enum):
+    NEW = "new"  # awaiting Arda's review on the Prospects page
+    APPROVED = "approved"  # promoted to a Pipeline lead
+    REJECTED = "rejected"  # never surfaced again
+    MUTED = "muted"  # hidden until muted_until, then fair game again
