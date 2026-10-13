@@ -245,3 +245,33 @@ def test_seed_v3_fresh_and_upgrade(session_factory):
     rvw.remove_rule(mocca_id)
     assert rvw.seed_coffee_launch_rule(session_factory) == 0
     assert not any(r["draft_to"] for r in rvw.rules_list())
+
+
+def test_seed_v4_trains_moccamaster_trigger(session_factory):
+    from app.models import AppState
+
+    # Prod state after the v3 deploy: both rules present, flag at 3.
+    with session_factory() as s:
+        s.add(AppState(key="task_rules:seeded", value={"version": 3}))
+        s.add(TaskRule(trigger=rvw.COFFEE_LAUNCH_TRIGGER, category="governance",
+                       steps=list(rvw.COFFEE_LAUNCH_SET)))
+        s.add(TaskRule(trigger=rvw.MOCCAMASTER_TRIGGER_V3, category="governance",
+                       draft_to=rvw.MOCCAMASTER_DRAFT_TO, draft_mailbox="hello"))
+    assert rvw.seed_coffee_launch_rule(session_factory) == 1
+    mocca = [r for r in rvw.rules_list() if r["draft_to"]][0]
+    assert "t.shopifyemail.com" in mocca["trigger"]
+    assert "forwarded into the hello mailbox" in mocca["trigger"]
+    assert rvw.seed_coffee_launch_rule(session_factory) == 0
+
+
+def test_seed_v4_leaves_edited_trigger_alone(session_factory):
+    from app.models import AppState
+
+    with session_factory() as s:
+        s.add(AppState(key="task_rules:seeded", value={"version": 3}))
+        s.add(TaskRule(trigger="Arda's own rewritten Moccamaster trigger",
+                       category="governance", draft_to=rvw.MOCCAMASTER_DRAFT_TO,
+                       draft_mailbox="hello"))
+    assert rvw.seed_coffee_launch_rule(session_factory) == 0
+    mocca = [r for r in rvw.rules_list() if r["draft_to"]][0]
+    assert mocca["trigger"] == "Arda's own rewritten Moccamaster trigger"

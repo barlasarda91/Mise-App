@@ -183,9 +183,18 @@ COFFEE_LAUNCH_STEPS = [s["title"] for s in COFFEE_LAUNCH_SET]
 
 # Seed #2 (v3): hello@ receives webshop orders; a Moccamaster order gets
 # forwarded to the distributor as a prepared draft Arda reviews and sends.
-MOCCAMASTER_TRIGGER = (
+# v4 trains the trigger on the real Shopify notification format.
+MOCCAMASTER_TRIGGER_V3 = (
     "a retail/webshop order that includes a Moccamaster (any Moccamaster "
     "machine, carafe, or part) arrives in the hello mailbox"
+)
+MOCCAMASTER_TRIGGER = (
+    "a Shopify order notification arrives in the hello mailbox — sender "
+    "store+33923498028@t.shopifyemail.com (any @t.shopifyemail.com address "
+    "counts), subject like '[Boxx Coffee Roasters] Order #NNNN placed by "
+    "<customer>' — whose Order summary includes a Moccamaster (any "
+    "Moccamaster machine, carafe, or part). An order record forwarded into "
+    "the hello mailbox containing a Moccamaster counts too"
 )
 MOCCAMASTER_DRAFT_TO = "Orders@moccamaster.com"
 MOCCAMASTER_GUIDANCE = (
@@ -195,7 +204,7 @@ MOCCAMASTER_GUIDANCE = (
     "order number as the reference. Order content only — never include "
     "payment details or anything beyond what fulfillment needs."
 )
-SEED_VERSION = 3
+SEED_VERSION = 4
 
 
 def seed_coffee_launch_rule(session_factory=db_session) -> int:
@@ -238,10 +247,19 @@ def seed_coffee_launch_rule(session_factory=db_session) -> int:
                 rule.steps = COFFEE_LAUNCH_SET
                 added += 1
         if version < 3:
-            exists = s.scalar(select(TaskRule.id).where(
-                TaskRule.trigger == MOCCAMASTER_TRIGGER)) is not None
+            exists = s.scalar(select(TaskRule.id).where(TaskRule.trigger.in_(
+                [MOCCAMASTER_TRIGGER, MOCCAMASTER_TRIGGER_V3]))) is not None
             if not exists:
                 s.add(_moccamaster_rule())
+                added += 1
+        if version < 4:
+            # v3 shipped a vaguer trigger; train it on the real Shopify
+            # notification format — only while Arda hasn't edited it.
+            rule = s.scalar(select(TaskRule).where(
+                TaskRule.trigger == MOCCAMASTER_TRIGGER_V3,
+                TaskRule.draft_to == MOCCAMASTER_DRAFT_TO))
+            if rule is not None:
+                rule.trigger = MOCCAMASTER_TRIGGER
                 added += 1
         return added
 
