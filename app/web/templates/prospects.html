@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Prospects{% endblock %}
+{% block heading %}Prospects{% endblock %}
+{% block content %}
+
+{% if msg %}<div class="note" style="margin:0 0 14px">▸ {{ msg }}</div>{% endif %}
+
+<div class="note" style="margin:0 0 14px">Found by the Lead Discovery routine (daily, 7:30 AM). <b>Approve</b> moves a prospect to the Pipeline at New with a first-outreach task. <b>Mute</b> hides it for 60 days. <b>Reject</b> means it's never suggested again. Rejecting or muting discards its unsent draft.</div>
+
+{% macro prospect_card(p, actions) %}
+<div class="box">
+  <div class="box-hd">
+    <span class="lbl">{{ p.name }}</span>
+    <span class="ix">{{ p.segment | upper }} · {{ (p.city or p.region) | upper }} · FIT {{ p.fit }}/5</span>
+  </div>
+  <div class="box-bd" style="font-size:14px">
+    <p style="margin:0 0 8px">{{ p.why }}</p>
+    <p style="margin:0 0 8px"><b>Angle:</b> {{ p.angle }}</p>
+    {% if p.current_coffee %}<p style="margin:0 0 8px"><b>Serving now:</b> {{ p.current_coffee }}</p>{% endif %}
+    {% if p.matched_lead_id %}<p class="note" style="margin:0 0 8px">Previously in the Pipeline: <a href="/pipeline/lead/{{ p.matched_lead_id }}">lead #{{ p.matched_lead_id }}</a></p>{% endif %}
+
+    <div class="kv"><span class="ks">Contact</span><span>{{ p.contact or "—" }}{% if p.contact_email %} · {{ p.contact_email }}{% endif %}</span></div>
+    <div class="kv"><span class="ks">Where</span><span>{{ p.address or p.city or p.region }}</span></div>
+    {% if p.phone %}<div class="kv"><span class="ks">Phone</span><span>{{ p.phone }}</span></div>{% endif %}
+    {% if p.review_count %}<div class="kv"><span class="ks">Reviews</span><span>{{ p.rating or "—" }} ★ · {{ p.review_count }}</span></div>{% endif %}
+    <div class="kv"><span class="ks">Links</span><span style="display:flex;gap:10px;flex-wrap:wrap">
+      {% if p.website %}<a href="{{ p.website }}" target="_blank" rel="noopener noreferrer">website</a>{% endif %}
+      {% if p.instagram_url %}<a href="{{ p.instagram_url }}" target="_blank" rel="noopener noreferrer">{{ p.instagram }}</a>{% elif p.instagram %}{{ p.instagram }}{% endif %}
+      {% for u in p.sources[:6] %}<a href="{{ u }}" target="_blank" rel="noopener noreferrer">src {{ loop.index }}</a>{% endfor %}
+    </span></div>
+
+    <div class="kv"><span class="ks">Outreach</span><span>
+      {% if p.draft_id %}<a href="/drafts?draft={{ p.draft_id }}">email draft from {{ p.mailbox }}@ →</a> <span class="pill ghost">{{ p.draft_state }}</span>
+      {% else %}{{ p.channel }}{% endif %}
+    </span></div>
+    {% if p.dm_script %}
+    <details style="margin-top:8px"><summary class="note" style="cursor:pointer">DM script</summary><pre style="white-space:pre-wrap;font-family:inherit;margin:6px 0 0">{{ p.dm_script }}</pre></details>
+    {% endif %}
+    {% if p.walk_in_note %}
+    <details style="margin-top:8px"><summary class="note" style="cursor:pointer">Walk-in note</summary><pre style="white-space:pre-wrap;font-family:inherit;margin:6px 0 0">{{ p.walk_in_note }}</pre></details>
+    {% endif %}
+
+    {% if actions %}
+    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+      {% for action, label, solid in actions %}
+      <form method="post" action="/prospects/{{ p.id }}/{{ action }}"><button class="linkish{% if solid %} solid{% endif %}" type="submit"{% if action == "reject" %} style="color:var(--ember)"{% endif %}>{{ label }}</button></form>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endmacro %}
+
+<h2 class="note" style="font-size:12px;margin:18px 0 10px">AWAITING REVIEW · {{ "%02d" | format(queue.review | length) }}</h2>
+{% if queue.review %}
+<div class="grid2">
+  {% for p in queue.review %}
+  <div>{{ prospect_card(p, [("approve", "Approve → Pipeline", true), ("mute", "Mute 60 days", false), ("reject", "Reject", false)]) }}</div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="note">Nothing waiting. New prospects arrive after each Lead Discovery run. Enable it, or press Run now, in Settings.</div>
+{% endif %}
+
+{% if queue.muted %}
+<h2 class="note" style="font-size:12px;margin:24px 0 10px">MUTED · {{ "%02d" | format(queue.muted | length) }}</h2>
+{% for p in queue.muted %}
+<div class="row"><span class="name" style="font-size:13.5px">{{ p.name }}</span><span class="meta">{{ p.segment }} · {{ p.city or p.region }}</span><span class="spacer"></span><span class="pill ghost">until {{ p.muted_until }}</span>
+  <form method="post" action="/prospects/{{ p.id }}/unmute"><button class="linkish" type="submit">Unmute</button></form></div>
+{% endfor %}
+{% endif %}
+
+{% if queue.decided %}
+<h2 class="note" style="font-size:12px;margin:24px 0 10px">RECENTLY DECIDED</h2>
+{% for p in queue.decided %}
+<div class="row"><span class="name" style="font-size:13.5px">{{ p.name }}</span><span class="meta">{{ p.segment }} · {{ p.city or p.region }}</span><span class="spacer"></span>
+  {% if p.status == "approved" and p.lead_id %}<a class="pill green" href="/pipeline/lead/{{ p.lead_id }}">in pipeline →</a>
+  {% else %}<span class="pill ghost">{{ p.status }}</span>{% endif %}</div>
+{% endfor %}
+{% endif %}
+
+{% endblock %}

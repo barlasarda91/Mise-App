@@ -55,6 +55,15 @@ def build_runtime_context(session, routine: Routine, trigger: str | None = None)
     except Exception:
         pass
 
+    if routine.key == "lead_discovery":
+        # Discovery reads the web, not the mailboxes: no gather cursors, and
+        # the board is irrelevant to it — just its assignment and the
+        # do-not-resurface lists.
+        from app.routines.discovery import context_lines as discovery_lines
+
+        lines.extend(discovery_lines(session, today))
+        return "\n".join(lines)
+
     sync_rows = session.scalars(
         select(SyncState).where(SyncState.routine_id == routine.id).order_by(SyncState.source)
     ).all()

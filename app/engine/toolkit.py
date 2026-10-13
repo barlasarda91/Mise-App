@@ -30,9 +30,20 @@ class ToolDef:
     # too complex"). Handlers default their optional params and validate
     # inputs themselves; dispatch returns errors the model can correct.
     strict: bool = False
+    # None = shared: offered to every routine without its own toolset.
+    # A tuple scopes the tool to those routine keys only.
+    routines: tuple[str, ...] | None = None
 
 
 _REGISTRY: dict[str, ToolDef] = {}
+
+# Routines that get an explicit, narrow toolset instead of the shared one
+# (e.g. lead discovery never needs Gmail search or the task board).
+ROUTINE_TOOLSETS: dict[str, list[str]] = {}
+
+# Anthropic server-side tools (web search/fetch) per routine — executed by
+# the API itself, so they never pass through dispatch().
+SERVER_TOOLS: dict[str, list[dict]] = {}
 
 # Ambient run context so handlers know which run/routine is executing
 # (e.g. mark_gather_complete needs the run's start time and routine id).
@@ -69,6 +80,17 @@ def tool_specs(names: list[str] | None = None) -> list[dict]:
             spec["strict"] = True
         out.append(spec)
     return out
+
+
+def routine_tool_specs(routine_key: str | None) -> list[dict]:
+    """The tools a routine's runs are offered: its own toolset when it
+    declares one, else every shared tool; server tools come last so the
+    prefix stays byte-stable."""
+    if routine_key in ROUTINE_TOOLSETS:
+        specs = tool_specs(ROUTINE_TOOLSETS[routine_key])
+    else:
+        specs = tool_specs([t.name for t in _REGISTRY.values() if t.routines is None])
+    return specs + [dict(t) for t in SERVER_TOOLS.get(routine_key, [])]
 
 
 MAX_RESULT_CHARS = 24000  # safety net (cost roadmap 1c): no tool result floods the loop

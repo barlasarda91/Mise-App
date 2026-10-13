@@ -56,6 +56,27 @@ UX reference: [`docs/boxx-routines-hub-mockups.html`](docs/boxx-routines-hub-moc
   stripping, markdown href allowlist, security headers, redirect
   validation), code review applied, spec conformance verified. ✅
 
+- Lead Discovery routine + Prospects page: a daily (7:30 AM LA) wholesale
+  rep agent that finds multi-roaster specialty shops, all-day volume cafes
+  and volume diners across LA, San Diego, SGV, Riverside and Santa Barbara
+  (rotation weights the Riverside/SB expansion areas 2x), researches them
+  with Claude web search/fetch plus Google Places, and writes the first
+  touch: an email draft (arda@ for specialty shops, hello@ for volume
+  accounts) or, with no published email, a DM script and walk-in note.
+  Prospects land in a review queue: Approve → Pipeline lead at New with a
+  first-outreach task; Mute → hidden 60 days; Reject → never again.
+  Roaster-owned cafes are excluded; ~3 prospects/run, hard cap 5. Prompt:
+  `app/routines/prompts/lead_discovery.md`. Seeded disabled — enable it in
+  Settings. ✅
+
+## Lead discovery provisioning
+
+Optional but recommended: enable **Places API (New)** on a GCP project,
+create an API key restricted to it, and set `GOOGLE_PLACES_API_KEY` on
+Railway. Without it the routine runs on web search alone and says so in its
+report. Web searches bill at $10 per 1,000 on the Anthropic account and show
+up in each run's cost.
+
 ## Known deviations from the spec (deliberate)
 
 - Routine prompts/schedules/models are edited via the versioned files in

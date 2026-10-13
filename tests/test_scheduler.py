@@ -44,7 +44,7 @@ def test_seed_routines_idempotent(session_factory):
     assert seed_routines(session_factory) == 0  # second call adds nothing
     with session_factory() as s:
         routines = s.query(Routine).all()
-        assert {r.key for r in routines} == {"lead_tracker", "daily_agenda"}
+        assert {r.key for r in routines} == {"lead_tracker", "daily_agenda", "lead_discovery"}
         assert all(not r.enabled for r in routines)  # seeded off
         assert all(r.model == "opus" for r in routines)
 
@@ -141,13 +141,17 @@ def test_travel_mode_switches_to_every_2h_all_days(session_factory, sched):
     sync_jobs(sched, session_factory)
     for job in sched.get_jobs():
         t = str(job.trigger)
+        if job.id == "routine:lead_discovery":
+            # web research, not Arda's inbox: travel doesn't change its day
+            assert "hour='7'" in t and "minute='30'" in t, t
+            continue
         assert "hour='*/2'" in t and "day_of_week='*'" in t, t
 
     # back to normal: the weekday window returns
     with session_factory() as s:
         s.get(AppState, sc.TRAVEL_MODE_KEY).value = {"enabled": False}
     sync_jobs(sched, session_factory)
-    trackers = {j.id: str(j.trigger) for j in sched.get_jobs()}
+    trackers = {j.id: str(j.trigger) for j in sched.get_jobs() if j.id != "routine:lead_discovery"}
     assert all("day_of_week='mon-fri'" in t for t in trackers.values()), trackers
 
 
@@ -160,13 +164,17 @@ def test_set_travel_mode_persists_and_resyncs(session_factory, sched, monkeypatc
             r.enabled = True
     monkeypatch.setattr(sc, "get_scheduler", lambda: sched)
 
+    def mail_jobs():
+        return [j for j in sched.get_jobs() if j.id != "routine:lead_discovery"]
+
     sc.set_travel_mode(True, session_factory)
     assert sc.travel_mode_enabled(session_factory) is True
-    assert all("hour='*/2'" in str(j.trigger) for j in sched.get_jobs())
+    assert all("hour='*/2'" in str(j.trigger) for j in mail_jobs())
+    assert "hour='7'" in str(sched.get_job("routine:lead_discovery").trigger)
 
     sc.set_travel_mode(False, session_factory)
     assert sc.travel_mode_enabled(session_factory) is False
-    assert all("hour='7-1" in str(j.trigger) for j in sched.get_jobs())
+    assert all("hour='7-1" in str(j.trigger) for j in mail_jobs())
 
 
 def test_travel_mode_reaches_runtime_context(session_factory):
