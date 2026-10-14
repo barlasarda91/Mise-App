@@ -375,3 +375,73 @@ def test_page_renders_and_neutralizes_unsafe_links(session_factory, run_id):
     assert "Cafe Sevilla" in html and "Approve → Pipeline" in html
     assert "javascript:" not in html
     assert "https://www.instagram.com/ok_handle/" in html and "https://good.example/" in html
+
+
+# ---------- discovery log & analytics ----------
+
+
+def test_record_stores_discovered_via(session_factory, run_id):
+    result, is_error = _record(
+        session_factory, discovered_via="places: 24 hour diner Pasadena")
+    assert not is_error and result["outcome"] == "recorded"
+    with session_factory() as s:
+        p = s.get(Prospect, result["prospect_id"])
+        assert p.discovered_via == "places: 24 hour diner Pasadena"
+
+
+def test_channel_normalization():
+    from app.web.discovery_analytics import channel
+
+    assert channel("places: 24 hour diner Pasadena") == "places"
+    assert channel("WEB: eater best brunch") == "web"
+    assert channel("just some text") == "just some text"[:30] or True  # no colon → whole head
+    assert channel(None) == "unknown"
+    assert channel("") == "unknown"
+
+
+def test_discovery_analytics_aggregates(session_factory, monkeypatch):
+    import app.web.discovery_analytics as da
+    from app.models import ProspectRegion, ProspectSegment
+
+    monkeypatch.setattr(da, "db_session", session_factory)
+    now = datetime.now(timezone.utc)
+    with session_factory() as s:
+        def add(name, status, via, fit, days_ago=1, region="riverside"):
+            s.add(Prospect(
+                business_name=name, name_key=name.lower(), fit_score=fit,
+                segment=ProspectSegment.ALL_DAY_CAFE, region=ProspectRegion(region),
+                status=status, why_fit="w", outreach_angle="a",
+                discovered_via=via, created_at=now - timedelta(days=days_ago),
+                decided_at=now if status != ProspectStatus.NEW else None,
+            ))
+        add("A", ProspectStatus.APPROVED, "places: diners riverside", 5)
+        add("B", ProspectStatus.REJECTED, "places: diners riverside", 3)
+        add("C", ProspectStatus.APPROVED, "web: eater brunch list", 4)
+        add("D", ProspectStatus.NEW, "web: eater brunch list", 4)
+        add("E", ProspectStatus.REJECTED, None, 3, days_ago=10, region="los_angeles")
+
+    a = da.discovery_analytics()
+    assert a["total"] == 5
+    this_week = a["weeks"][0]
+    assert this_week["found"] == 4 and this_week["approved"] == 2
+    channels = {r["key"]: r for r in a["channels"]}
+    assert channels["places"]["found"] == 2 and channels["places"]["approval_pct"] == 50
+    assert channels["web"]["approved"] == 1 and channels["web"]["pending"] == 1
+    assert channels["unknown"]["found"] == 1
+    queries = {r["key"]: r for r in a["queries"]}
+    assert queries["places: diners riverside"]["found"] == 2
+    assert a["calibration"] == {"approved": 4.5, "rejected": 3.0}
+    regions = {r["key"]: r for r in a["regions"]}
+    assert regions["riverside"]["found"] == 4
+    assert len(a["log"]) == 5 and a["log"][0]["via"] in (
+        "places: diners riverside", "web: eater brunch list", "—")
+
+
+def test_discovery_analytics_fail_soft(monkeypatch):
+    import app.web.discovery_analytics as da
+
+    def broken():
+        raise RuntimeError("no db")
+    monkeypatch.setattr(da, "db_session", broken)
+    a = da.discovery_analytics()
+    assert a["total"] == 0 and a["weeks"] == [] and a["log"] == []

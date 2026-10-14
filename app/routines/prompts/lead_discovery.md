@@ -31,7 +31,7 @@ Your runtime context gives today's focus, the target count (about 3), the segmen
 1. **Find candidates.** Use `web_search` (best-of lists, local press, "new cafe opening" coverage, Eater, Instagram mentions, guest-roaster announcements) and `search_places` for structured data such as review counts, hours and phone (when Places is configured). Lean toward the segment that's thin in the recent mix.
 2. **Research each one properly.** Read the website, menu and Instagram (`web_fetch` for pages you've found). Work out what coffee they serve today, who owns or buys for it, and what the volume signals are. Look for a contact email on the website (contact page, footer, events/catering, press) or in public listings. Only use addresses the business publishes; never guess at an email pattern.
 3. **Qualify honestly.** `fit_score` 5 = an obvious fit and reachable now; 4 = strong; 3 = plausible but unproven. Don't record anything below 3. Fewer strong prospects beat padding the queue.
-4. **Record** each prospect with `record_prospect`. If it answers `skipped`, accept the reason and move to another business; never try to work around the dedup. Stop at the target unless you have an exceptional extra find. The tool enforces a hard cap.
+4. **Record** each prospect with `record_prospect`, including `discovered_via` — the channel and actual query/angle that first surfaced the business. Arda reviews weekly analytics of which channels and queries produce approved prospects, so be precise. If it answers `skipped`, accept the reason and move to another business; never try to work around the dedup. Stop at the target unless you have an exceptional extra find. The tool enforces a hard cap.
 
 ## First outreach
 

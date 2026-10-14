@@ -832,6 +832,13 @@ def prospects(request: Request, msg: str | None = None):
     return render_page(request, "prospects.html", "prospects", queue=load_queue(), msg=msg)
 
 
+@app.get("/prospects/log", response_class=HTMLResponse)
+def prospects_log(request: Request):
+    from app.web.discovery_analytics import discovery_analytics
+
+    return render_page(request, "prospects_log.html", "prospects", a=discovery_analytics())
+
+
 PROSPECT_ACTIONS = {"approve", "reject", "mute", "unmute"}
 
 

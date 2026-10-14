@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Discovery log{% endblock %}
+{% block heading %}Discovery log &amp; analytics{% endblock %}
+{% block content %}
+
+<div class="note" style="margin:0 0 14px"><a href="/prospects">← Prospects queue</a> · Every prospect the Lead Discovery routine has ever surfaced ({{ a.total }}), with where it came from and what Arda decided — the weekly tuning view.</div>
+
+{% macro pct(row) %}{% if row.approval_pct is not none %}{{ row.approval_pct }}%{% else %}—{% endif %}{% endmacro %}
+
+<style>
+  .an-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .an-table th { text-align:left; padding:4px 8px; border-bottom:1px solid var(--line, #ccc); font-weight:600; }
+  .an-table td { padding:4px 8px; border-bottom:1px solid color-mix(in srgb, var(--line, #ccc) 40%, transparent); }
+  .an-table td.num, .an-table th.num { text-align:right; font-variant-numeric: tabular-nums; }
+</style>
+
+<div class="box">
+  <div class="box-hd"><span class="lbl">By week</span><span class="ix">LAST {{ a.weeks | length }} WEEKS · APPROVAL % OF DECIDED</span></div>
+  <div class="box-bd">
+    <table class="an-table">
+      <tr><th>Week of</th><th class="num">Found</th><th class="num">Approved</th><th class="num">Rejected</th><th class="num">Muted</th><th class="num">Pending</th><th class="num">Approval</th><th class="num">Avg fit</th></tr>
+      {% for w in a.weeks %}
+      <tr><td>{{ w.start.strftime("%b %d") }}</td><td class="num">{{ w.found }}</td><td class="num">{{ w.approved }}</td><td class="num">{{ w.rejected }}</td><td class="num">{{ w.muted }}</td><td class="num">{{ w.pending }}</td><td class="num">{{ pct(w) }}</td><td class="num">{{ w.avg_fit or "—" }}</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+
+<div class="box">
+  <div class="box-hd"><span class="lbl">Where they come from</span><span class="ix">CHANNEL · REGION · SEGMENT</span></div>
+  <div class="box-bd">
+    {% for section, rows in [("Channel", a.channels), ("Region", a.regions), ("Segment", a.segments)] %}
+    <table class="an-table" style="margin-bottom:14px">
+      <tr><th>{{ section }}</th><th class="num">Found</th><th class="num">Approved</th><th class="num">Rejected</th><th class="num">Approval</th><th class="num">Avg fit</th></tr>
+      {% for r in rows %}
+      <tr><td>{{ r.key }}</td><td class="num">{{ r.found }}</td><td class="num">{{ r.approved }}</td><td class="num">{{ r.rejected }}</td><td class="num">{{ pct(r) }}</td><td class="num">{{ r.avg_fit or "—" }}</td></tr>
+      {% endfor %}
+    </table>
+    {% endfor %}
+    {% if a.calibration %}
+    <div class="note">Fit calibration — average model fit score of prospects Arda <b>approved: {{ a.calibration.approved or "—" }}</b> vs <b>rejected: {{ a.calibration.rejected or "—" }}</b>. A small or inverted gap means the scoring needs retuning.</div>
+    {% endif %}
+  </div>
+</div>
+
+{% if a.queries %}
+<div class="box">
+  <div class="box-hd"><span class="lbl">Top queries</span><span class="ix">EXACT discovered_via STRINGS</span></div>
+  <div class="box-bd">
+    <table class="an-table">
+      <tr><th>Query / angle</th><th class="num">Found</th><th class="num">Approved</th><th class="num">Approval</th></tr>
+      {% for q in a.queries %}
+      <tr><td>{{ q.key }}</td><td class="num">{{ q.found }}</td><td class="num">{{ q.approved }}</td><td class="num">{{ pct(q) }}</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="box">
+  <div class="box-hd"><span class="lbl">Full log</span><span class="ix">NEWEST FIRST{% if a.total > a.log | length %} · SHOWING {{ a.log | length }} OF {{ a.total }}{% endif %}</span></div>
+  <div class="box-bd" style="overflow-x:auto">
+    <table class="an-table">
+      <tr><th>Found</th><th>Business</th><th>Segment</th><th>Region</th><th class="num">Fit</th><th>Discovered via</th><th>Status</th><th>Decided</th></tr>
+      {% for p in a.log %}
+      <tr>
+        <td>{{ p.found or "—" }}</td>
+        <td>{{ p.name }}{% if p.lead_id %} · <a href="/pipeline/lead/{{ p.lead_id }}">lead #{{ p.lead_id }}</a>{% endif %}</td>
+        <td>{{ p.segment }}</td><td>{{ p.city or p.region }}</td>
+        <td class="num">{{ p.fit }}</td><td>{{ p.via }}</td>
+        <td>{{ p.status }}</td><td>{{ p.decided or "—" }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8">Nothing discovered yet — the routine runs daily at 7:30 AM.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+
+{% endblock %}

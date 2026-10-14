@@ -48,6 +48,10 @@ class Prospect(TimestampMixin, Base):
     dm_script: Mapped[str | None] = mapped_column(Text)
     walk_in_note: Mapped[str | None] = mapped_column(Text)
     sources: Mapped[list | None] = mapped_column(PortableJSON)
+    # How the routine found it ("places: 24 hour diner Pasadena", "web: eater
+    # best brunch riverside", "instagram: guest roaster post") — the per-channel
+    # tuning signal for discovery analytics. None on rows from before 0018.
+    discovered_via: Mapped[str | None] = mapped_column(String(200))
 
     draft_id: Mapped[int | None] = mapped_column(
         ForeignKey("email_drafts.id", ondelete="SET NULL")

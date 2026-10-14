@@ -158,6 +158,7 @@ def _record_prospect(
     contact_name=None,
     contact_role=None,
     contact_email=None,
+    discovered_via=None,
     email_subject=None,
     email_body=None,
     dm_script=None,
@@ -250,6 +251,7 @@ def _record_prospect(
     prospect.dm_script = dm_script
     prospect.walk_in_note = walk_in_note
     prospect.sources = list(sources)[:12]
+    prospect.discovered_via = (discovered_via or "").strip()[:200] or None
     prospect.matched_lead_id = matched_closed.id if matched_closed else None
     prospect.lead_id = None
     prospect.draft_id = None
@@ -344,6 +346,15 @@ register(
                     "items": {"type": "string"},
                     "description": "URLs your findings came from (site, menu, IG, press, Maps).",
                 },
+                "discovered_via": {
+                    "type": "string",
+                    "description": (
+                        "How you FIRST surfaced this business, as 'channel: detail' — e.g. "
+                        "'places: 24 hour diner Pasadena', 'web: eater best brunch riverside', "
+                        "'instagram: guest roaster announcement', 'press: LA Times new openings'. "
+                        "Arda tunes the discovery strategy on these, so name the actual query/angle."
+                    ),
+                },
                 "city": {"type": "string"},
                 "address": {"type": "string"},
                 "website": {"type": "string"},
@@ -372,7 +383,7 @@ register(
             },
             "required": [
                 "business_name", "segment", "region", "fit_score", "why_fit",
-                "outreach_angle", "sources",
+                "outreach_angle", "sources", "discovered_via",
             ],
             "additionalProperties": False,
         },
