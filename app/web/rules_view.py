@@ -8,11 +8,16 @@ A rule with STEPS is a playbook: one perceived occurrence spawns the whole
 set of tasks (e.g. a new green coffee purchase → the five launch tasks).
 """
 
+import re
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
 from sqlalchemy import select
 
 from app.db import db_session
 from app.models import TaskRule
 from app.models.enums import TaskCategory
+from app.settings import get_settings
 
 MAX_RULES = 30
 MAX_STEPS = 12
@@ -262,6 +267,67 @@ def seed_coffee_launch_rule(session_factory=db_session) -> int:
                 rule.trigger = MOCCAMASTER_TRIGGER
                 added += 1
         return added
+
+
+def deploy_coffee_launch(coffee: str) -> str:
+    """Arda bought a coffee and wants the launch workflow NOW — the Today
+    page button. Creates the full task set from the coffee playbook rule
+    (honoring his Settings edits; falling back to the shipped set if the
+    rule is gone), with the SAME dedup keys the runs use, so a run later
+    perceiving the same purchase can never duplicate the set. The sticky
+    step is auto-pinned into Act today."""
+    from app.routines.tools import _create_task_impl
+    from app.web.briefing_pins import _store, pinned_ids
+
+    coffee = " ".join((coffee or "").split())[:80]
+    if len(coffee) < 2:
+        return "Name the coffee first."
+    slug = re.sub(r"[^a-z0-9]+", "-", coffee.lower()).strip("-") or "coffee"
+    today = datetime.now(ZoneInfo(get_settings().default_tz)).date()
+
+    with db_session() as s:
+        playbooks = [
+            r for r in s.scalars(select(TaskRule).order_by(TaskRule.id))
+            if r.steps and not r.draft_to
+        ]
+        rule = next((r for r in playbooks if "coffee" in r.trigger.lower()),
+                    playbooks[0] if playbooks else None)
+        if rule is not None:
+            steps, category = rule.steps, rule.category
+            assignee, key_prefix = rule.assignee, f"rule{rule.id}"
+        else:
+            steps, category = COFFEE_LAUNCH_SET, TaskCategory.GOVERNANCE.value
+            assignee, key_prefix = None, "coffee"
+
+        created, existing = 0, 0
+        for n, step in enumerate(steps, 1):
+            offset = step.get("due_offset_days")
+            result = _create_task_impl(
+                s,
+                category=category,
+                title=f"{step.get('title', '')} — {coffee}",
+                dedup_key=f"{key_prefix}:{slug}:{n}",
+                description=(step.get("notes") or None),
+                due_date=(today + timedelta(days=offset)).isoformat()
+                if offset is not None else None,
+                assignee=assignee,
+                source_ref=None,
+                distinct_from_existing=True,
+            )
+            task_id = result.get("task_id")
+            if result.get("outcome") == "already_exists":
+                existing += 1
+            elif task_id:
+                created += 1
+            if step.get("sticky") and task_id:
+                ids = pinned_ids(s)
+                if task_id not in ids:
+                    _store(s, ids + [task_id])
+
+    if created == 0 and existing:
+        return f"The launch set for {coffee} is already on the board ({existing} tasks)."
+    note = f" ({existing} already existed)" if existing else ""
+    return f"Deployed {created} launch tasks for {coffee}{note} — they're on the Board, launch step pinned to Act today."
 
 
 def context_lines(session) -> list[str]:

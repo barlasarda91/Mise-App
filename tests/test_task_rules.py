@@ -275,3 +275,65 @@ def test_seed_v4_leaves_edited_trigger_alone(session_factory):
     assert rvw.seed_coffee_launch_rule(session_factory) == 0
     mocca = [r for r in rvw.rules_list() if r["draft_to"]][0]
     assert mocca["trigger"] == "Arda's own rewritten Moccamaster trigger"
+
+
+def test_deploy_coffee_launch_creates_full_set(session_factory):
+    from app.models import Task
+    from app.models.enums import TaskStatus
+
+    rvw.seed_coffee_launch_rule(session_factory)
+    msg = rvw.deploy_coffee_launch("Kirinyaga AA")
+    assert "Deployed 5 launch tasks for Kirinyaga AA" in msg
+    with session_factory() as s:
+        tasks = {t.title: t for t in s.query(Task).all()}
+        assert len(tasks) == 5
+        wp = tasks["Write Product Page — Kirinyaga AA"]
+        assert wp.due_date is not None  # +3d
+        assert "Ask for detailed process info" in (wp.description or "")
+        launch = tasks["Launch coffee on webpage — Kirinyaga AA"]
+        assert launch.due_date is None  # sticky: no due date
+        from app.web.briefing_pins import pinned_ids
+        assert launch.id in pinned_ids(s)  # sticky step auto-pinned
+        assert all(t.status != TaskStatus.DONE for t in tasks.values())
+
+    # second click: idempotent, nothing new
+    msg2 = rvw.deploy_coffee_launch("Kirinyaga AA")
+    assert "already on the board" in msg2
+    with session_factory() as s:
+        assert s.query(Task).count() == 5
+
+    # a different coffee is a different set
+    rvw.deploy_coffee_launch("Huila Pink Bourbon")
+    with session_factory() as s:
+        assert s.query(Task).count() == 10
+
+
+def test_deploy_coffee_launch_shares_dedup_with_runs(session_factory):
+    """A run perceiving the purchase and the button use the same keys: the
+    set exists once no matter which path fired first."""
+    from app.models import Task
+    from app.routines.tools import _create_task_impl
+
+    rvw.seed_coffee_launch_rule(session_factory)
+    with session_factory() as s:
+        rule_id = [r["id"] for r in rvw.rules_list() if not r["draft_to"]][0]
+        # a run already created step 1 for this coffee
+        _create_task_impl(s, category="governance",
+                          title="Write Product Page — Gesha Village",
+                          dedup_key=f"rule{rule_id}:gesha-village:1",
+                          description=None, due_date=None, assignee=None,
+                          source_ref=None, distinct_from_existing=True)
+    msg = rvw.deploy_coffee_launch("Gesha Village")
+    assert "Deployed 4 launch tasks" in msg and "1 already existed" in msg
+    with session_factory() as s:
+        assert s.query(Task).count() == 5
+
+
+def test_deploy_coffee_launch_without_rule_falls_back(session_factory):
+    from app.models import Task
+
+    assert "Name the coffee" in rvw.deploy_coffee_launch(" ")
+    msg = rvw.deploy_coffee_launch("La Palma")  # no rule seeded at all
+    assert "Deployed 5 launch tasks" in msg
+    with session_factory() as s:
+        assert s.query(Task).count() == 5

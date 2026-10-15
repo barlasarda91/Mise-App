@@ -832,6 +832,17 @@ def prospects(request: Request, msg: str | None = None):
     return render_page(request, "prospects.html", "prospects", queue=load_queue(), msg=msg)
 
 
+@app.post("/coffee/launch")
+def coffee_launch(coffee: str = Form("")):
+    from app.web.rules_view import deploy_coffee_launch
+
+    try:
+        message = deploy_coffee_launch(coffee)
+    except Exception as exc:
+        message = f"Error: {exc}"
+    return RedirectResponse(f"/?msg={message}", status_code=303)
+
+
 @app.get("/prospects/log", response_class=HTMLResponse)
 def prospects_log(request: Request):
     from app.web.discovery_analytics import discovery_analytics
