@@ -215,3 +215,70 @@ def test_briefing_today_is_not_marked_stale(session_factory):
                          content=[{"type": "text", "text": "Fresh brief."}]))
     briefing = rv.load_todays_briefing()
     assert briefing is not None and briefing["stale_day"] is None
+
+
+def _seed_launch_set(s, coffee, slug, rule_id=4, done_steps=()):
+    from app.models import ExternalMutation
+    from app.models.enums import MutationKind
+
+    steps = ["Write Product Page", "Design Labels", "Prepare Coffee page on website",
+             "Prepare Coffee Newsletter on Klaviyo", "Launch coffee on webpage"]
+    ids = []
+    for n, step in enumerate(steps, 1):
+        task = Task(category=TaskCategory.GOVERNANCE, title=f"{step} — {coffee}",
+                    status=TaskStatus.DONE if n in done_steps else TaskStatus.TODO)
+        s.add(task)
+        s.flush()
+        s.add(ExternalMutation(kind=MutationKind.TASK,
+                               dedup_key=f"rule{rule_id}:{slug}:{n}",
+                               external_id=str(task.id)))
+        ids.append(task.id)
+    return ids
+
+
+def test_launch_set_renders_as_one_expandable_cluster(session_factory):
+    with session_factory() as s:
+        ids = _seed_launch_set(s, "Rwanda - Inzovu Community", "rwanda-inzovu-community",
+                               done_steps=(1,))
+        # the model's brief referenced the sticky launch task on its own line
+        _seed_run(s, "STANDFIRST: quiet day.\n## Act today\n- [ ] Launch coffee on webpage "
+                     f"— Rwanda - Inzovu Community (#{ids[4]}) · sticky\n")
+        # and the launch step is pinned (the button pins it)
+        bp.toggle_pin(ids[4])
+
+    briefing = rv.load_todays_briefing()
+    clusters = [i for i in briefing["checklist"] if "Launch checklist" in i["text"]]
+    assert len(clusters) == 1
+    cluster = clusters[0]
+    assert "Rwanda - Inzovu Community" in cluster["text"]
+    assert cluster["task_ids"] == ids           # all five, in step order
+    assert cluster["done_count"] == 1           # step 1 checked off
+    assert cluster["done"] is False
+    assert cluster["promoted"] is True          # pinned member tags the cluster
+    titles = [t["title"] for t in cluster["tasks"]]
+    assert titles[0].startswith("Write Product Page")
+    assert titles[-1].startswith("Launch coffee on webpage")
+    # the model's standalone sticky line was absorbed — no duplicate row
+    solo = [i for i in briefing["checklist"]
+            if i["task_ids"] == [ids[4]]]
+    assert solo == []
+
+
+def test_finished_launch_set_disappears(session_factory):
+    with session_factory() as s:
+        _seed_launch_set(s, "Kirinyaga AA", "kirinyaga-aa", done_steps=(1, 2, 3, 4, 5))
+        _seed_run(s, "STANDFIRST: quiet day.\n## Act today\n- [ ] Something else\n")
+    briefing = rv.load_todays_briefing()
+    assert not any("Launch checklist" in i["text"] for i in briefing["checklist"])
+
+
+def test_two_coffees_two_clusters(session_factory):
+    with session_factory() as s:
+        _seed_launch_set(s, "Aricha Adorsi", "aricha-adorsi")
+        _seed_launch_set(s, "Huila Pink", "huila-pink", rule_id=4)
+        _seed_run(s, "STANDFIRST: quiet day.\n## Act today\n- [ ] Something else\n")
+    briefing = rv.load_todays_briefing()
+    clusters = [i for i in briefing["checklist"] if "Launch checklist" in i["text"]]
+    assert len(clusters) == 2
+    names = " ".join(c["text"] for c in clusters)
+    assert "Aricha Adorsi" in names and "Huila Pink" in names

@@ -218,6 +218,57 @@ def _with_task_state(session, items: list[dict]) -> list[dict]:
     return out
 
 
+_CLUSTER_KEY = re.compile(r"^(rule\d+|coffee):(.+):(\d+)$")
+
+
+def _launch_cluster_items(session) -> list[dict]:
+    """Playbook task sets (the coffee launch workflow) as single expandable
+    checklist items: one row per coffee, its steps checked off one by one.
+    Sets are found through their ledger keys (rule{N}:{slug}:{step}), which
+    both the button and run-created paths share. A set disappears once every
+    step is done."""
+    from app.models import ExternalMutation, MutationKind, Task, TaskStatus
+
+    rows = session.scalars(
+        select(ExternalMutation).where(
+            ExternalMutation.kind == MutationKind.TASK,
+            ExternalMutation.external_id.isnot(None),
+            ExternalMutation.dedup_key.like("rule%")
+            | ExternalMutation.dedup_key.like("coffee:%"),
+        )
+    ).all()
+    groups: dict[str, list[tuple[int, int]]] = {}
+    for row in rows:
+        match = _CLUSTER_KEY.match(row.dedup_key or "")
+        if not match:
+            continue
+        try:
+            task_id = int(row.external_id)
+        except (TypeError, ValueError):
+            continue
+        groups.setdefault(f"{match.group(1)}:{match.group(2)}", []).append(
+            (int(match.group(3)), task_id)
+        )
+
+    items = []
+    for key, members in sorted(groups.items()):
+        if len(members) < 2:
+            continue  # a single task is not a set — render it normally
+        members.sort()
+        ids = [tid for _, tid in members]
+        tasks = {t.id: t for t in session.scalars(select(Task).where(Task.id.in_(ids)))}
+        live = [tasks[tid] for _, tid in members if tid in tasks]
+        if not live or all(t.status == TaskStatus.DONE for t in live):
+            continue
+        name = next(
+            (t.title.rsplit(" — ", 1)[1] for t in live if " — " in t.title), None
+        ) or key.split(":", 1)[1].replace("-", " ")
+        items.append(
+            {"text": f"☕ **Launch checklist — {name}**", "task_ids": [t.id for t in live]}
+        )
+    return items
+
+
 def load_todays_briefing(routine_key: str = "daily_agenda") -> dict | None:
     """Today's written agenda for the dashboard: the day's first completed
     agenda run (the morning briefing) with its "act today" checklist lifted
@@ -323,6 +374,22 @@ def load_todays_briefing(routine_key: str = "daily_agenda") -> dict | None:
                     briefing["checklist"].append(item)
                     seen |= ids
             briefing["latest"] = latest
+
+            # Playbook sets render as ONE expandable cluster each; a brief
+            # line or pin referencing only set members is absorbed by it.
+            try:
+                clusters = _launch_cluster_items(s)
+            except Exception:
+                log.exception("launch clusters failed — rendering without them")
+                clusters = []
+            if clusters:
+                cluster_ids = {tid for c in clusters for tid in c["task_ids"]}
+                briefing["checklist"] = [
+                    item
+                    for item in briefing["checklist"]
+                    if not (item["task_ids"] and set(item["task_ids"]) <= cluster_ids)
+                ]
+                briefing["checklist"].extend(_with_task_state(s, clusters))
 
             # Arda-promoted pins: body items he lifted into Act today. They
             # join the checklist (tagged) until their task is done; pins on
