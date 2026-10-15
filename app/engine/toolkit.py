@@ -8,6 +8,7 @@ INVARIANT: nothing here (or registered later) may send email — drafts only.
 """
 
 import json
+from contextlib import nullcontext
 from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import date
@@ -103,7 +104,12 @@ def dispatch(name: str, tool_input: dict, session: Session) -> tuple[str, bool]:
     if tool is None:
         return f"Error: unknown tool '{name}'", True
     try:
-        result = tool.handler(session, **tool_input)
+        # Savepoint per call: a DB error (oversize value, constraint) rolls
+        # back this tool's writes only and comes back to the model as an
+        # error result — without it the shared session stays failed and the
+        # turn's commit kills the whole run (PendingRollbackError).
+        with session.begin_nested() if session is not None else nullcontext():
+            result = tool.handler(session, **tool_input)
         content = json.dumps(result, default=str, ensure_ascii=False)
         if len(content) > MAX_RESULT_CHARS:
             content = (

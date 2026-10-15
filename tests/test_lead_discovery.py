@@ -450,3 +450,45 @@ def test_discovery_analytics_fail_soft(monkeypatch):
     monkeypatch.setattr(da, "db_session", broken)
     a = da.discovery_analytics()
     assert a["total"] == 0 and a["weeks"] == [] and a["log"] == []
+
+
+# ---------- oversize model output (run 695 regression) ----------
+
+
+def test_oversize_text_fields_are_trimmed_to_their_columns(session_factory, run_id):
+    role = ("owner / management (page lists owners Pat and Erin House; hani@ is the "
+            "address published on their Facebook page)")
+    assert len(role) > 100
+    rec, err = _record(session_factory, contact_role=role, city="R" * 150, discovered_via="v" * 400)
+    assert not err and rec["outcome"] == "recorded"
+    with session_factory() as s:
+        p = s.get(Prospect, rec["prospect_id"])
+        assert len(p.contact_role) == 100 and p.contact_role.endswith("…")
+        assert p.contact_role.startswith("owner / management")
+        assert len(p.city) == 100 and len(p.discovered_via) == 200
+
+
+def test_tool_db_error_fails_that_call_only(session_factory, run_id, monkeypatch):
+    """A flush error inside one tool must come back as an error result and
+    leave the shared session usable — earlier and later calls in the same
+    turn still commit (it used to poison the session and fail the run)."""
+    import app.engine.toolkit as tk
+
+    def broken(session):
+        session.add(Prospect(business_name="half a row"))  # NOT NULL columns missing
+        session.flush()
+
+    monkeypatch.setitem(
+        tk._REGISTRY, "broken_tool",
+        tk.ToolDef(name="broken_tool", description="", input_schema={}, handler=broken),
+    )
+    with session_factory() as s:
+        ok_before, err1 = dispatch("record_prospect", _prospect(), s)
+        content, err2 = dispatch("broken_tool", {}, s)
+        ok_after, err3 = dispatch(
+            "record_prospect", _prospect(business_name="Second Spot", contact_email="b@x.example"), s
+        )
+    assert not err1 and err2 and "IntegrityError" in content and not err3
+    with session_factory() as s:
+        names = {p.business_name for p in s.scalars(select(Prospect))}
+    assert names == {"Cafe Sevilla", "Second Spot"}

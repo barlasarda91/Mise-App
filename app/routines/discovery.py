@@ -137,6 +137,17 @@ def _lead_match(session: Session, key: str, email: str | None) -> Lead | None:
     return None
 
 
+def _fit_to_columns(prospect: Prospect) -> None:
+    """Trim every length-capped text field to its column. Model-written values
+    run long (a contact_role carrying a whole sentence of context) and Postgres
+    rejects the entire row over one oversize field."""
+    for column in Prospect.__table__.columns:
+        limit = getattr(column.type, "length", None)
+        value = getattr(prospect, column.key, None)
+        if limit and isinstance(value, str) and len(value) > limit:
+            setattr(prospect, column.key, value[: limit - 1].rstrip() + "…")
+
+
 def _record_prospect(
     session: Session,
     business_name: str,
@@ -251,7 +262,8 @@ def _record_prospect(
     prospect.dm_script = dm_script
     prospect.walk_in_note = walk_in_note
     prospect.sources = list(sources)[:12]
-    prospect.discovered_via = (discovered_via or "").strip()[:200] or None
+    prospect.discovered_via = (discovered_via or "").strip() or None
+    _fit_to_columns(prospect)
     prospect.matched_lead_id = matched_closed.id if matched_closed else None
     prospect.lead_id = None
     prospect.draft_id = None
@@ -368,7 +380,10 @@ register(
                     "description": "Who/what they serve now (roaster names, rotating guests, commodity) — or 'unknown'.",
                 },
                 "contact_name": {"type": "string"},
-                "contact_role": {"type": "string", "description": "owner, coffee buyer, GM, …"},
+                "contact_role": {
+                    "type": "string",
+                    "description": "A few words: owner, coffee buyer, GM. Context about who they are goes in why_fit.",
+                },
                 "contact_email": {"type": "string"},
                 "email_subject": {"type": "string"},
                 "email_body": {"type": "string"},
