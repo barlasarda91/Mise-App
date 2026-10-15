@@ -214,3 +214,50 @@ def test_qbo_status_not_configured(monkeypatch):
     monkeypatch.setattr(qbo.get_settings(), "qbo_client_id", None, raising=False)
     status = qbo.qbo_status()
     assert status["status"] == "not_configured"
+
+
+def test_old_done_tasks_leave_board_but_reach_archive(session_factory, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    import app.web.board_view as bv
+    from app.models import TaskCategory
+
+    monkeypatch.setattr(bv, "db_session", session_factory)
+    now = datetime.now(timezone.utc)
+    with session_factory() as s:
+        s.add(Task(category=TaskCategory.GOVERNANCE, title="Fresh done",
+                   status=TaskStatus.DONE, completed_at=now - timedelta(days=2)))
+        s.add(Task(category=TaskCategory.GOVERNANCE, title="Old done",
+                   status=TaskStatus.DONE, completed_at=now - timedelta(days=20)))
+        s.add(Task(category=TaskCategory.GOVERNANCE, title="Ancient done",
+                   status=TaskStatus.DONE, completed_at=now - timedelta(days=45)))
+        s.add(Task(category=TaskCategory.GOVERNANCE, title="Still open",
+                   status=TaskStatus.TODO))
+
+    boards = bv.load_boards()
+    gov = next(b for b in boards if b["key"] == "governance")
+    done_lane = next(l for l in gov["lanes"] if l["status"] == "done")
+    assert [c["title"] for c in done_lane["cards"]] == ["Fresh done"]
+
+    archive = bv.load_archive()
+    assert archive["total"] == 2
+    archived = [t["title"] for m in archive["months"] for t in m["tasks"]]
+    assert archived == ["Old done", "Ancient done"]  # newest first
+    todo_lane = next(l for l in gov["lanes"] if l["status"] == "todo")
+    assert [c["title"] for c in todo_lane["cards"]] == ["Still open"]
+
+
+def test_done_without_completed_at_falls_back_to_updated(session_factory, monkeypatch):
+    import app.web.board_view as bv
+    from app.models import TaskCategory
+
+    monkeypatch.setattr(bv, "db_session", session_factory)
+    with session_factory() as s:
+        # legacy row, no completed_at: recently updated → stays on the Board
+        s.add(Task(category=TaskCategory.PAYMENTS, title="Legacy done",
+                   status=TaskStatus.DONE))
+    boards = bv.load_boards()
+    pay = next(b for b in boards if b["key"] == "payments")
+    done_lane = next(l for l in pay["lanes"] if l["status"] == "done")
+    assert [c["title"] for c in done_lane["cards"]] == ["Legacy done"]
+    assert bv.load_archive()["total"] == 0

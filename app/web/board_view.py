@@ -1,6 +1,6 @@
 """Board page: five standing categories, kanban by status (spec §8.1)."""
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
@@ -55,21 +55,42 @@ def _card(task: Task, today: date) -> dict:
     }
 
 
+# Done cards linger this long, then clear from the Board into the Archive
+# view. Nothing is deleted: archived tasks stay in the DB for dedup, context
+# and analytics — this is purely about what the Board shows.
+ARCHIVE_AFTER_DAYS = 7
+
+
+def _finished_on(task: Task) -> datetime:
+    when = task.completed_at or task.updated_at or task.created_at
+    if when is None:
+        return datetime.now(timezone.utc)
+    return when if when.tzinfo else when.replace(tzinfo=timezone.utc)
+
+
+def _archive_cutoff() -> datetime:
+    return datetime.now(timezone.utc) - timedelta(days=ARCHIVE_AFTER_DAYS)
+
+
 def load_boards() -> list[dict]:
     today = _today()
+    cutoff = _archive_cutoff()
     try:
         with db_session() as s:
             tasks = s.scalars(select(Task).order_by(Task.due_date.is_(None), Task.due_date, Task.id)).all()
     except Exception:
         tasks = []
     boards = []
+    archived_total = 0
     for category, label in CATEGORIES:
         cat_tasks = [t for t in tasks if t.category == category]
         lanes = []
         for status, status_label in STATUSES:
             lane_tasks = [t for t in cat_tasks if t.status == status]
             if status == TaskStatus.DONE:
-                lane_tasks = lane_tasks[-8:]  # recent done only; history stays in DB
+                recent = [t for t in lane_tasks if _finished_on(t) >= cutoff]
+                archived_total += len(lane_tasks) - len(recent)
+                lane_tasks = recent[-8:]
             lanes.append(
                 {
                     "status": status.value,
@@ -86,6 +107,37 @@ def load_boards() -> list[dict]:
             }
         )
     return boards
+
+
+def load_archive(limit: int = 500) -> dict:
+    """Done tasks older than ARCHIVE_AFTER_DAYS — the Board's memory shelf,
+    grouped by the month they were finished, newest first."""
+    cutoff = _archive_cutoff()
+    try:
+        with db_session() as s:
+            done = s.scalars(select(Task).where(Task.status == TaskStatus.DONE)).all()
+    except Exception:
+        done = []
+    old = sorted(
+        (t for t in done if _finished_on(t) < cutoff),
+        key=_finished_on, reverse=True,
+    )
+    months: list[dict] = []
+    for task in old[:limit]:
+        finished = _finished_on(task).astimezone(ZoneInfo(get_settings().default_tz))
+        label = finished.strftime("%B %Y").upper()
+        if not months or months[-1]["label"] != label:
+            months.append({"label": label, "tasks": []})
+        months[-1]["tasks"].append(
+            {
+                "id": task.id,
+                "title": task.title,
+                "category": task.category.value,
+                "finished": finished.strftime("%b %d"),
+                "assignee": task.assignee,
+            }
+        )
+    return {"months": months, "total": len(old)}
 
 
 def todo_count() -> int:

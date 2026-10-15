@@ -870,11 +870,24 @@ def prospect_decide(prospect_id: int, action: str):
 def board(request: Request, msg: str | None = None, tab: str | None = None):
     from app.web.board_view import load_boards
 
+    from app.web.board_view import ARCHIVE_AFTER_DAYS
+
     boards = load_boards()
     keys = [b["key"] for b in boards]
     active_tab = tab if tab in keys else (keys[0] if keys else None)
     return render_page(
-        request, "board.html", "board", boards=boards, active_tab=active_tab, msg=msg
+        request, "board.html", "board", boards=boards, active_tab=active_tab, msg=msg,
+        archive_days=ARCHIVE_AFTER_DAYS,
+    )
+
+
+@app.get("/board/archive", response_class=HTMLResponse)
+def board_archive(request: Request):
+    from app.web.board_view import ARCHIVE_AFTER_DAYS, load_archive
+
+    return render_page(
+        request, "board_archive.html", "board",
+        archive=load_archive(), archive_days=ARCHIVE_AFTER_DAYS,
     )
 
 

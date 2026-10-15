@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Board archive{% endblock %}
+{% block heading %}Board archive{% endblock %}
+{% block content %}
+
+<div class="note" style="margin:0 0 14px"><a href="/board">← Board</a> · Done tasks older than {{ archive_days }} days ({{ archive.total }}) — cleared from the Board's view, kept here for memory. Routines still see them for dedup and context.</div>
+
+{% for month in archive.months %}
+<h2 class="note" style="font-size:12px;margin:18px 0 8px">{{ month.label }}</h2>
+{% for t in month.tasks %}
+<div class="row">
+  <a class="name" href="/board/task/{{ t.id }}" style="font-size:13.5px;text-decoration:none">{{ t.title }}</a>
+  <span class="meta">{{ t.category | upper }}</span>
+  <span class="spacer"></span>
+  {% if t.assignee %}<span class="pill ghost">{{ t.assignee }}</span>{% endif %}
+  <span class="pill ghost">✓ {{ t.finished }}</span>
+</div>
+{% endfor %}
+{% else %}
+<div class="note">Nothing archived yet — done tasks land here {{ archive_days }} days after completion.</div>
+{% endfor %}
+
+{% endblock %}
