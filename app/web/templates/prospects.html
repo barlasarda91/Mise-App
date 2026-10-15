@@ -5,7 +5,7 @@
 
 {% if msg %}<div class="note" style="margin:0 0 14px">▸ {{ msg }}</div>{% endif %}
 
-<div class="note" style="margin:0 0 14px">Found by the Lead Discovery routine (daily, 7:30 AM). <b>Approve</b> moves a prospect to the Pipeline at New with a first-outreach task. <b>Mute</b> hides it for 60 days. <b>Reject</b> means it's never suggested again. Rejecting or muting discards its unsent draft. · <a href="/prospects/log">Discovery log &amp; analytics →</a></div>
+<div class="note" style="margin:0 0 14px">Found by the Lead Discovery routine (daily, 7:30 AM). <b>Approve</b> approves the <i>lead only</i> — it moves to the Pipeline at New, while the first-touch email stays unsent in Drafts until you review and send it yourself. <b>Mute</b> hides it for 60 days. <b>Reject</b> means it's never suggested again. Rejecting or muting discards its unsent draft. · <a href="/prospects/log">Discovery log &amp; analytics →</a></div>
 
 {% macro prospect_card(p, actions) %}
 <div class="box">

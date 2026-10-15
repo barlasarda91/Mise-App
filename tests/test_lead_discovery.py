@@ -315,8 +315,13 @@ def test_approve_creates_lead_task_and_links_draft(session_factory, run_id):
         assert lead.stage == LeadStage.NEW and lead.lead_source == "discovery"
         assert lead.contact_email == "owner@sevilla.example"
         assert s.get(EmailDraft, p.draft_id).related_lead_id == lead.id  # send → Contacted
-        task = s.scalar(select(Task).where(Task.title.like("Send first-touch email%")))
+        # Approve approves the LEAD only: the task asks for a REVIEW of the
+        # still-unsent draft, never a send.
+        task = s.scalar(select(Task).where(Task.title.like("Review first-touch draft%")))
         assert task.category == TaskCategory.WHOLESALE_LEADS and task.source_ref["lead_id"] == lead.id
+        assert "UNSENT" in task.description
+        assert "did not approve the email" in task.description
+        assert s.get(EmailDraft, p.draft_id).sent_at is None  # nothing was sent
     assert "already" in pv.approve(rec["prospect_id"])  # idempotent
 
 

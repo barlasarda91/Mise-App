@@ -181,8 +181,14 @@ def approve(prospect_id: int) -> str:
             draft.related_lead_id = lead.id
 
         if p.contact_email and draft is not None and draft.status != DraftStatus.DISCARDED:
-            title = f"Send first-touch email to {p.business_name}"
-            description = f"Draft #{draft.id} is ready in Drafts. Angle: {p.outreach_angle}"
+            # Approving is a decision about the LEAD, never the email: the
+            # first-touch draft stays unsent in Drafts for its own review.
+            title = f"Review first-touch draft to {p.business_name}"
+            description = (
+                f"Draft #{draft.id} is waiting UNSENT in Drafts — approving the "
+                f"prospect did not approve the email. Review/edit it there and "
+                f"send only if it's right. Angle: {p.outreach_angle}"
+            )
         else:
             title = f"First outreach to {p.business_name} — DM / walk-in"
             parts = [f"Angle: {p.outreach_angle}"]
