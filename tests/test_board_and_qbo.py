@@ -261,3 +261,45 @@ def test_done_without_completed_at_falls_back_to_updated(session_factory, monkey
     done_lane = next(l for l in pay["lanes"] if l["status"] == "done")
     assert [c["title"] for c in done_lane["cards"]] == ["Legacy done"]
     assert bv.load_archive()["total"] == 0
+
+
+def test_six_week_tasks_ask_do_or_kill(session_factory, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    import app.web.board_view as bv
+    from app.models import TaskCategory
+
+    monkeypatch.setattr(bv, "db_session", session_factory)
+    now = datetime.now(timezone.utc)
+    with session_factory() as s:
+        s.add(Task(category=TaskCategory.GOVERNANCE, title="Five weeks old",
+                   created_at=now - timedelta(days=35)))
+        s.add(Task(category=TaskCategory.GOVERNANCE, title="Seven weeks old",
+                   created_at=now - timedelta(days=49)))
+        s.add(Task(category=TaskCategory.GOVERNANCE, title="Old but scheduled",
+                   created_at=now - timedelta(days=49),
+                   due_date=(now + timedelta(days=5)).date()))
+        s.add(Task(category=TaskCategory.GOVERNANCE, title="Old but acked",
+                   created_at=now - timedelta(days=49),
+                   source_ref={"stale_ack": (now - timedelta(days=3)).date().isoformat()}))
+
+    rows = {t["title"]: t for t in bv.stale_tasks(min_age_days=30)}
+    assert rows["Five weeks old"]["ask"] is False       # not six weeks yet
+    assert rows["Seven weeks old"]["ask"] is True       # do it or kill it
+    assert rows["Old but scheduled"]["ask"] is False    # future due date = planned
+    assert rows["Old but acked"]["ask"] is False        # answered this cycle
+
+    # Kill closes the task as deliberately dropped
+    task_id = rows["Seven weeks old"]["id"]
+    assert "Killed" in bv.stale_decide(task_id, "kill")
+    with session_factory() as s:
+        task = s.get(Task, task_id)
+        assert task.status == TaskStatus.DONE and task.completed_at is not None
+
+    # Keep snoozes the question for another six weeks
+    acked_id = rows["Five weeks old"]["id"]
+    assert "ask again in 42 days" in bv.stale_decide(acked_id, "keep")
+    with session_factory() as s:
+        task = s.get(Task, acked_id)
+        assert task.status != TaskStatus.DONE
+        assert task.source_ref["stale_ack"] is not None

@@ -204,14 +204,24 @@
           <span class="pill ember" style="white-space:nowrap">{{ t.age }}d</span>
           <a class="name" href="/board/task/{{ t.id }}" style="font-size:13px">{{ t.title }}</a>
           <span class="spacer"></span>
+          {% if t.ask %}
+          <span class="note" style="white-space:nowrap">six weeks — do it or kill it?</span>
+          <form method="post" action="/tasks/{{ t.id }}/stale/keep">
+            <button class="linkish" type="submit" title="Keep it — ask me again in six weeks">Doing it</button>
+          </form>
+          <form method="post" action="/tasks/{{ t.id }}/stale/kill" onsubmit="return confirm('Kill {{ t.title | e }}? It closes as deliberately dropped and moves to the archive.')">
+            <button class="linkish" type="submit" style="color:var(--ember)" title="Drop it — closes the task">Kill</button>
+          </form>
+          {% else %}
           <form method="post" action="/tasks/{{ t.id }}/status">
             <input type="hidden" name="status" value="done">
             <input type="hidden" name="next" value="/">
             <button class="linkish" type="submit" title="Mark done">✓</button>
           </form>
+          {% endif %}
         </div>
         {% endfor %}
-        <div class="box-bd"><span class="note">Oldest open tasks, any lane — resolve, or open one to re-scope or park it.</span></div>
+        <div class="box-bd"><span class="note">Oldest open tasks, any lane — resolve, or open one to re-scope or park it. At six weeks each asks: do it or kill it.</span></div>
       </div>
     </div>
     {% endif %}

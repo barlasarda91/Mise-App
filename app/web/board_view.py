@@ -109,6 +109,46 @@ def load_boards() -> list[dict]:
     return boards
 
 
+# An open task this old (six weeks) gets a do-or-kill question on the Today
+# page's long-unresolved list. "Doing it" snoozes the question for another
+# cycle; "Kill" closes the task as deliberately dropped (archived like any
+# done task, so memory keeps it).
+KILL_ASK_AFTER_DAYS = 42
+
+
+def _kill_ask(task: Task, age_days: int, today: date) -> bool:
+    if age_days < KILL_ASK_AFTER_DAYS:
+        return False
+    if task.due_date and task.due_date >= today:
+        return False  # scheduled for the future — planned, not abandoned
+    ack = (task.source_ref or {}).get("stale_ack")
+    if ack:
+        try:
+            if date.fromisoformat(ack) > today - timedelta(days=KILL_ASK_AFTER_DAYS):
+                return False  # Arda said "still doing it" this cycle
+        except ValueError:
+            pass
+    return True
+
+
+def stale_decide(task_id: int, decision: str) -> str:
+    with db_session() as s:
+        task = s.get(Task, task_id)
+        if task is None:
+            return "Task not found."
+        if decision == "kill":
+            task.status = TaskStatus.DONE
+            task.completed_at = datetime.now(ZoneInfo(get_settings().default_tz))
+            s.add(TaskActivity(task_id=task.id, type="status_change",
+                               detail="killed — six weeks on the board, Arda chose to drop it",
+                               actor="Arda"))
+            return f"Killed: {task.title}."
+        task.source_ref = {**(task.source_ref or {}), "stale_ack": _today().isoformat()}
+        s.add(TaskActivity(task_id=task.id, type="note",
+                           detail="stale check: Arda is still doing this", actor="Arda"))
+        return f"Kept: {task.title} — I'll ask again in {KILL_ASK_AFTER_DAYS} days."
+
+
 def load_archive(limit: int = 500) -> dict:
     """Done tasks older than ARCHIVE_AFTER_DAYS — the Board's memory shelf,
     grouped by the month they were finished, newest first."""
@@ -188,6 +228,7 @@ def stale_tasks(min_age_days: int = STALE_AFTER_DAYS, limit: int = 8) -> list[di
                 "id": task.id,
                 "title": task.title,
                 "age": age,
+                "ask": _kill_ask(task, age, now.date()),
                 "category": labels.get(task.category.value, task.category.value),
                 "status": task.status.value,
             }

@@ -437,6 +437,20 @@ def home(request: Request, msg: str | None = None):
     )
 
 
+@app.post("/tasks/{task_id}/stale/{decision}")
+def task_stale_decide(task_id: int, decision: str):
+    """Six-weeks-on-the-board question: still doing it, or kill it."""
+    from app.web.board_view import stale_decide
+
+    if decision not in ("keep", "kill"):
+        return RedirectResponse("/", status_code=303)
+    try:
+        message = stale_decide(task_id, decision)
+    except Exception as exc:
+        message = f"Error: {exc}"
+    return RedirectResponse(f"/?msg={message}", status_code=303)
+
+
 @app.post("/briefing/promote")
 def briefing_promote(request: Request, task_id: int = Form(...)):
     """Pin a body item's task into the Act today checklist (or unpin). The
