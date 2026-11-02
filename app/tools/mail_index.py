@@ -49,10 +49,33 @@ def _parse_when(value: str) -> datetime | None:
         return None
 
 
+def _effective_sender(summary: dict) -> tuple[str, str, bool]:
+    """(from_name, from_addr, is_outbound) for one summary. A website form
+    notification is sent FROM our own address back into our inbox (BCC) with
+    the customer in Reply-To/To — semantically it is INBOUND lead mail, so it
+    is re-attributed to the customer. An actual reply we sent carries the
+    same From and often the same subject, but has no INBOX label."""
+    name, addr = parseaddr(summary.get("from", ""))
+    addr = (addr or "").lower()
+    own = own_addresses()
+    if addr in own and "INBOX" in (summary.get("label_ids") or []):
+        from email.utils import getaddresses
+
+        candidates = getaddresses(
+            [summary.get("reply_to") or "", summary.get("to") or ""]
+        )
+        for cand_name, cand_addr in candidates:
+            cand_addr = (cand_addr or "").lower()
+            if cand_addr and cand_addr not in own:
+                return (cand_name or name or ""), cand_addr, False
+    return (name or ""), addr, addr in own
+
+
 def upsert_summary(session, mailbox: str, summary: dict) -> bool:
     """Insert one header summary; returns True when it was new. Re-seeing an
-    indexed message refreshes its bulk flag, so re-running the sweep backfills
-    rows indexed before the flag existed."""
+    indexed message refreshes its bulk flag and sender attribution, so
+    re-running a sweep repairs rows indexed under older rules."""
+    name, addr, is_outbound = _effective_sender(summary)
     existing = session.scalar(
         select(MailMessage).where(
             MailMessage.mailbox == mailbox, MailMessage.gmail_msg_id == summary["id"]
@@ -61,20 +84,23 @@ def upsert_summary(session, mailbox: str, summary: dict) -> bool:
     if existing is not None:
         if "bulk" in summary and existing.is_bulk != bool(summary["bulk"]):
             existing.is_bulk = bool(summary["bulk"])
+        if "label_ids" in summary and existing.is_outbound != is_outbound:
+            existing.is_outbound = is_outbound
+            existing.from_addr = addr[:320] or None
+            existing.from_name = name[:200] or None
         return False
-    name, addr = parseaddr(summary.get("from", ""))
     session.add(
         MailMessage(
             mailbox=mailbox,
             gmail_msg_id=summary["id"],
             thread_id=summary.get("thread_id"),
-            from_addr=(addr or "").lower()[:320] or None,
-            from_name=(name or "")[:200] or None,
+            from_addr=addr[:320] or None,
+            from_name=name[:200] or None,
             to_addrs=(summary.get("to") or "")[:1000] or None,
             subject=(summary.get("subject") or "")[:500] or None,
             snippet=(summary.get("snippet") or "")[:300] or None,
             sent_at=_parse_when(summary.get("date", "")),
-            is_outbound=(addr or "").lower() in own_addresses(),
+            is_outbound=is_outbound,
             is_bulk=bool(summary.get("bulk")),
         )
     )
@@ -105,6 +131,42 @@ def reclassify_outbound() -> int:
         ).rowcount or 0
         s.add(AppState(key=RECLASSIFY_STATE_KEY, value={"fixed": fixed}))
         return fixed
+
+
+FORM_REPAIR_STATE_KEY = "mail_index:forms_v1"
+
+
+def repair_form_inquiries() -> int:
+    """One-time: re-sweep inbox mail sent from our own addresses (website
+    form notifications, BCC'd to ourselves) so upsert_summary re-attributes
+    them to the customer. Idempotent via an AppState flag."""
+    from app.tools import gmail
+
+    with db_session() as s:
+        if s.get(AppState, FORM_REPAIR_STATE_KEY) is not None:
+            return 0
+    fixed = 0
+    for mailbox in (FromMailbox.ARDA, FromMailbox.HELLO):
+        try:
+            token = None
+            for _ in range(5):
+                summaries, token = gmail.search_page(
+                    mailbox,
+                    f"in:inbox from:{gmail.mailbox_address(mailbox)} newer_than:{BACKFILL_DAYS}d",
+                    page_token=token,
+                )
+                with db_session() as s:
+                    for summary in summaries:
+                        if not upsert_summary(s, mailbox.value, summary):
+                            fixed += 1  # existing row corrected (or confirmed)
+                if not token:
+                    break
+        except Exception:
+            log.exception("form-inquiry repair failed for %s", mailbox.value)
+            return fixed  # no flag — retry next startup
+    with db_session() as s:
+        s.add(AppState(key=FORM_REPAIR_STATE_KEY, value={"reseen": fixed}))
+    return fixed
 
 
 def _set_backfill_state(value: dict) -> None:

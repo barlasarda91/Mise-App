@@ -322,3 +322,74 @@ def test_new_mail_queue_absent_on_cold_start(session_factory):
             "w3", "Nina <nina@kcmconnect.co>", _days_ago(0), thread="t-w3"))
         s.commit()
         assert "NEW mail since your last gather" not in build_runtime_context(s, agenda)
+
+
+def test_form_notification_reattributed_to_customer(session_factory):
+    """Website wholesale-form notifications are sent FROM hello@ back into
+    the inbox with the customer in To/Reply-To. They must index as INBOUND
+    mail from the customer — while Boxx's actual replies (same From, same
+    subject, but no INBOX label) stay outbound."""
+    with session_factory() as s:
+        # the notification: from us, INBOX label, customer in To
+        assert mi.upsert_summary(s, "hello", dict(_summary(
+            "f1", "Boxx Coffee Roasters <hello@boxxcoffee.com>", _days_ago(0),
+            thread="t-form", to="Matthew Walker <matt@cobis.la>",
+            subject="New Wholesale Inquiry — Matthew Walker"),
+            label_ids=["IMPORTANT", "CATEGORY_UPDATES", "INBOX"]))
+        # our actual reply on the same thread: SENT only
+        assert mi.upsert_summary(s, "hello", dict(_summary(
+            "f2", "Boxx Coffee Roasters <hello@boxxcoffee.com>", _days_ago(0),
+            thread="t-form", to="matt@cobis.la",
+            subject="New Wholesale Inquiry — Matthew Walker"),
+            label_ids=["SENT"]))
+        # a self-addressed note stays outbound (counterparty is ourselves)
+        assert mi.upsert_summary(s, "hello", dict(_summary(
+            "f3", "hello@boxxcoffee.com", _days_ago(0),
+            thread="t-self", to="hello@boxxcoffee.com", subject="Order record"),
+            label_ids=["SENT", "INBOX"]))
+        s.commit()
+        rows = {r.gmail_msg_id: r for r in s.query(MailMessage)}
+        assert rows["f1"].is_outbound is False
+        assert rows["f1"].from_addr == "matt@cobis.la"
+        assert rows["f1"].from_name == "Matthew Walker"
+        assert rows["f2"].is_outbound is True
+        assert rows["f3"].is_outbound is True
+
+        # and the notification reaches the NEW-mail triage queue
+        since = datetime.now(timezone.utc) - timedelta(days=1)
+        fresh = mi.new_messages_since(s, "hello", since)
+        assert [m["gmail_msg_id"] for m in fresh] == ["f1"]
+        assert fresh[0]["from_addr"] == "matt@cobis.la"
+
+
+def test_form_notification_prefers_reply_to(session_factory):
+    with session_factory() as s:
+        mi.upsert_summary(s, "hello", dict(_summary(
+            "f4", "hello@boxxcoffee.com", _days_ago(0), thread="t-f4",
+            to="hello@boxxcoffee.com",
+            subject="New Wholesale Inquiry — Sarah Abdow"),
+            reply_to="Sarah Abdow <info@everydayeats.co>",
+            label_ids=["INBOX"]))
+        s.commit()
+        row = s.query(MailMessage).one()
+        assert row.is_outbound is False
+        assert row.from_addr == "info@everydayeats.co"
+
+
+def test_reseeing_a_row_repairs_old_attribution(session_factory):
+    """repair_form_inquiries re-sweeps own-sender inbox mail; upsert must
+    correct rows indexed under the old from-address rule."""
+    with session_factory() as s:
+        # old row: indexed as outbound from hello@
+        s.add(MailMessage(mailbox="hello", gmail_msg_id="f5", thread_id="t-f5",
+                          from_addr="hello@boxxcoffee.com", is_outbound=True,
+                          subject="New Wholesale Inquiry — Vanessa Morales"))
+        s.commit()
+        mi.upsert_summary(s, "hello", dict(_summary(
+            "f5", "hello@boxxcoffee.com", _days_ago(10), thread="t-f5",
+            to="vanessa@casasirias.com",
+            subject="New Wholesale Inquiry — Vanessa Morales"),
+            label_ids=["INBOX", "CATEGORY_PERSONAL"]))
+        s.commit()
+        row = s.query(MailMessage).one()
+        assert row.is_outbound is False and row.from_addr == "vanessa@casasirias.com"

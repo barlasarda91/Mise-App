@@ -67,6 +67,14 @@ async def lifespan(app: FastAPI):
             log.info("mail index: reclassified %d colleague rows as inbound", fixed)
     except Exception as exc:
         log.warning("mail index outbound reclassify skipped: %s", exc)
+    try:
+        from app.tools.mail_index import repair_form_inquiries
+
+        reseen = repair_form_inquiries()
+        if reseen:
+            log.info("mail index: re-attributed form-inquiry mail (%d rows re-seen)", reseen)
+    except Exception as exc:
+        log.warning("form inquiry repair skipped: %s", exc)
     # Backfill: attach open, unlinked board tasks to leads by confident name
     # match (new tasks link at creation time).
     try:

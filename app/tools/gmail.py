@@ -172,6 +172,9 @@ def _summarize(message: dict) -> dict:
         "date": headers.get("date", ""),
         "message_id_header": headers.get("message-id", ""),
         "snippet": message.get("snippet", ""),
+        # INBOX-vs-SENT distinguishes a form notification sent from our own
+        # address (BCC'd back to the inbox) from an actual outbound reply.
+        "label_ids": message.get("labelIds", []),
     }
 
 
