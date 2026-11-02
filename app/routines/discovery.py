@@ -1,9 +1,10 @@
 """Lead Discovery routine: finds cafes, restaurants and diners that should be
-serving Boxx, researches them, and drafts the first touch.
+serving Boxx, and researches them. It never writes outreach emails —
+Arda does his own outreach from the Prospects card.
 
 Prospects land in a review queue (the Prospects page), never straight in the
 Pipeline. Arda approves (→ lead at New), rejects (never again), or mutes
-(hidden MUTE_DAYS). The routine only drafts — nothing here can send.
+(hidden MUTE_DAYS). Nothing here can send or draft email.
 
 Importing this module registers the discovery tools and the routine's
 server-side web tools into the engine toolkit.
@@ -170,8 +171,6 @@ def _record_prospect(
     contact_role=None,
     contact_email=None,
     discovered_via=None,
-    email_subject=None,
-    email_body=None,
     dm_script=None,
     walk_in_note=None,
 ):
@@ -181,8 +180,6 @@ def _record_prospect(
         raise ValueError("fit_score must be 1–5")
     if not sources:
         raise ValueError("sources must list the URLs your research relied on")
-    if contact_email and not (email_subject and email_body):
-        raise ValueError("a contact_email needs email_subject and email_body (the first-touch draft)")
     if not contact_email and not (dm_script and walk_in_note):
         raise ValueError(
             "no contact_email found: provide BOTH dm_script (Instagram DM or call opener) "
@@ -271,20 +268,6 @@ def _record_prospect(
     session.flush()
 
     result = {"outcome": "recorded", "prospect_id": prospect.id}
-    if contact_email:
-        from app.routines.tools import _create_email_draft
-
-        mailbox = SEGMENT_MAILBOX[seg]
-        draft = _create_email_draft(
-            session,
-            mailbox=mailbox,
-            to=[contact_email],
-            subject=email_subject,
-            body=email_body,
-            purpose=f"prospect{prospect.id}",
-        )
-        prospect.draft_id = draft.get("draft_id")
-        result["draft"] = {"draft_id": prospect.draft_id, "mailbox": mailbox}
     if matched_closed is not None:
         result["note"] = (
             f"matches a closed Pipeline lead (#{matched_closed.id}, {matched_closed.stage.value}) — "
@@ -330,10 +313,9 @@ register(
             "Record one researched prospect into Arda's review queue. Dedupes against "
             "past prospects (rejected = never, muted = until the mute ends) and open "
             "Pipeline leads, and answers outcome=skipped with the reason when it's "
-            "known — then move on to another business. With contact_email, also writes "
-            "the first-touch email draft (from arda@ for multi_roaster, hello@ for the "
-            "volume segments — write the body in that mailbox's voice, signed Arda). "
-            "Without an email, dm_script AND walk_in_note are both required."
+            "known — then move on to another business. NEVER write an email draft for "
+            "a prospect: Arda does his own outreach from the card. Without a "
+            "contact_email, dm_script AND walk_in_note are both required."
         ),
         input_schema={
             "type": "object",
@@ -385,8 +367,6 @@ register(
                     "description": "A few words: owner, coffee buyer, GM. Context about who they are goes in why_fit.",
                 },
                 "contact_email": {"type": "string"},
-                "email_subject": {"type": "string"},
-                "email_body": {"type": "string"},
                 "dm_script": {
                     "type": "string",
                     "description": "Short Instagram DM (or phone opener) Arda can send by hand.",

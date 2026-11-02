@@ -78,8 +78,6 @@ def _prospect(**over):
         "sources": ["https://example.com/menu"],
         "city": "Riverside",
         "contact_email": "owner@sevilla.example",
-        "email_subject": "Coffee at Sevilla",
-        "email_body": "Hi Ana,\n\nThis is Arda from Boxx Coffee Roasters...\n\nBest\nArda",
     }
     base.update(over)
     return base
@@ -156,19 +154,16 @@ def test_runner_sends_scoped_tools(session_factory, monkeypatch):
 # ---------- record_prospect ----------
 
 
-def test_record_with_email_drafts_from_segment_mailbox(session_factory, run_id):
+def test_record_never_creates_a_draft(session_factory, run_id):
+    """Arda does prospect outreach himself — auto-drafts clogged his queue."""
     result, err = _record(session_factory)
     assert not err and result["outcome"] == "recorded"
-    assert result["draft"]["mailbox"] == "hello"  # volume segment → brand desk
-    multi, _ = _record(session_factory, business_name="Guest Bar", segment="multi_roaster",
-                       contact_email="hi@guestbar.example")
-    assert multi["draft"]["mailbox"] == "arda"
+    assert "draft" not in result
     with session_factory() as s:
-        draft = s.get(EmailDraft, multi["draft"]["draft_id"])
-        assert draft.from_mailbox == FromMailbox.ARDA and draft.to_addrs == ["hi@guestbar.example"]
-        assert draft.status == DraftStatus.COMPOSED and draft.sent_at is None
-        p = s.get(Prospect, multi["prospect_id"])
-        assert p.draft_id == draft.id and p.status == ProspectStatus.NEW and p.run_id == run_id
+        assert s.scalars(select(EmailDraft)).all() == []
+        p = s.get(Prospect, result["prospect_id"])
+        assert p.draft_id is None and p.status == ProspectStatus.NEW and p.run_id == run_id
+        assert p.contact_email == "owner@sevilla.example"  # contact kept on the card
 
 
 def test_record_without_email_requires_dm_and_walk_in(session_factory, run_id):
@@ -304,7 +299,7 @@ def test_context_lists_assignment_and_do_not_resurface(session_factory):
 # ---------- review actions ----------
 
 
-def test_approve_creates_lead_task_and_links_draft(session_factory, run_id):
+def test_approve_creates_lead_and_outreach_task(session_factory, run_id):
     rec, _ = _record(session_factory)
     msg = pv.approve(rec["prospect_id"])
     assert "Pipeline" in msg
@@ -314,14 +309,12 @@ def test_approve_creates_lead_task_and_links_draft(session_factory, run_id):
         assert p.status == ProspectStatus.APPROVED
         assert lead.stage == LeadStage.NEW and lead.lead_source == "discovery"
         assert lead.contact_email == "owner@sevilla.example"
-        assert s.get(EmailDraft, p.draft_id).related_lead_id == lead.id  # send → Contacted
-        # Approve approves the LEAD only: the task asks for a REVIEW of the
-        # still-unsent draft, never a send.
-        task = s.scalar(select(Task).where(Task.title.like("Review first-touch draft%")))
+        # No drafts anywhere: the task hands Arda the contact and the angle.
+        assert s.scalars(select(EmailDraft)).all() == []
+        task = s.scalar(select(Task).where(Task.title.like("First outreach%")))
         assert task.category == TaskCategory.WHOLESALE_LEADS and task.source_ref["lead_id"] == lead.id
-        assert "UNSENT" in task.description
-        assert "did not approve the email" in task.description
-        assert s.get(EmailDraft, p.draft_id).sent_at is None  # nothing was sent
+        assert "owner@sevilla.example" in task.description
+        assert "Angle:" in task.description
     assert "already" in pv.approve(rec["prospect_id"])  # idempotent
 
 
@@ -343,14 +336,23 @@ def test_approve_reuses_existing_open_lead(session_factory, run_id):
         assert len(s.scalars(select(Lead)).all()) == 1
 
 
-def test_reject_and_mute_discard_unsent_draft(session_factory, run_id):
+def test_reject_and_mute_discard_legacy_draft(session_factory, run_id):
     a, _ = _record(session_factory)
     b, _ = _record(session_factory, business_name="Other", contact_email="o@x.example")
+    # legacy prospects from before the no-draft change still carry drafts
+    with session_factory() as s:
+        for rec in (a, b):
+            draft = EmailDraft(subject="s", body="b", from_mailbox=FromMailbox.HELLO,
+                               status=DraftStatus.COMPOSED)
+            s.add(draft)
+            s.flush()
+            s.get(Prospect, rec["prospect_id"]).draft_id = draft.id
+            rec["legacy_draft_id"] = draft.id
     pv.reject(a["prospect_id"])
     pv.mute(b["prospect_id"])
     with session_factory() as s:
-        assert s.get(EmailDraft, a["draft"]["draft_id"]).status == DraftStatus.DISCARDED
-        assert s.get(EmailDraft, b["draft"]["draft_id"]).status == DraftStatus.DISCARDED
+        assert s.get(EmailDraft, a["legacy_draft_id"]).status == DraftStatus.DISCARDED
+        assert s.get(EmailDraft, b["legacy_draft_id"]).status == DraftStatus.DISCARDED
         muted = s.get(Prospect, b["prospect_id"])
         assert muted.muted_until == pv._today() + timedelta(days=disc.MUTE_DAYS)
     pv.unmute(b["prospect_id"])
@@ -495,3 +497,24 @@ def test_tool_db_error_fails_that_call_only(session_factory, run_id, monkeypatch
     with session_factory() as s:
         names = {p.business_name for p in s.scalars(select(Prospect))}
     assert names == {"Cafe Sevilla", "Second Spot"}
+
+
+def test_buckets_group_the_review_queue(session_factory, run_id):
+    a, _ = _record(session_factory)
+    b, _ = _record(session_factory, business_name="Guest Bar", segment="multi_roaster",
+                   contact_email="hi@guestbar.example")
+    c, _ = _record(session_factory, business_name="Corner Diner", contact_email="o@corner.example")
+
+    assert "→ Email first" in pv.set_bucket(a["prospect_id"], "Email first")
+    assert "→ Visit" in pv.set_bucket(b["prospect_id"], "  Visit  ")  # trimmed
+    queue = pv.load_queue()
+    assert queue["buckets"] == ["Email first", "Visit"]
+    assert [g["name"] for g in queue["groups"]] == ["Email first", "Visit"]
+    assert [card["id"] for card in queue["groups"][0]["cards"]] == [a["prospect_id"]]
+    assert [card["id"] for card in queue["ungrouped"]] == [c["prospect_id"]]
+
+    # clearing puts it back with the uncategorized
+    assert "uncategorized" in pv.set_bucket(a["prospect_id"], "")
+    queue = pv.load_queue()
+    assert queue["buckets"] == ["Visit"]
+    assert {card["id"] for card in queue["ungrouped"]} == {a["prospect_id"], c["prospect_id"]}

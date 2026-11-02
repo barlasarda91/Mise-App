@@ -1,9 +1,11 @@
 """Prospects page: the lead discovery review queue.
 
-Approve → a Pipeline lead at New (plus a first-outreach task, and the
-first-touch draft linked to it so sending advances the lead). Reject → never
-surfaced again. Mute → hidden for MUTE_DAYS, then fair game. Rejecting or
-muting discards the prospect's unsent first-touch draft.
+Approve → a Pipeline lead at New plus a first-outreach task (Arda does the
+outreach himself — the routine never drafts email). Reject → never surfaced
+again. Mute → hidden for MUTE_DAYS, then fair game. Arda can also sort
+review-queue prospects into his own categories (buckets) on the page.
+Legacy prospects from before the no-draft change may still carry a draft;
+rejecting or muting discards it.
 """
 
 import re
@@ -82,6 +84,7 @@ def _card(p: Prospect, draft: EmailDraft | None) -> dict:
         "lead_id": p.lead_id,
         "matched_lead_id": p.matched_lead_id,
         "found_on": p.created_at,
+        "bucket": p.bucket,
     }
 
 
@@ -106,9 +109,23 @@ def load_queue() -> dict:
                 else:
                     decided.append(card)
             decided.sort(key=lambda c: c["id"], reverse=True)
-            return {"review": review, "muted": muted, "decided": decided[:RECENT_DECIDED]}
+            buckets = sorted({c["bucket"] for c in review if c["bucket"]})
+            groups = [
+                {"name": name, "cards": [c for c in review if c["bucket"] == name]}
+                for name in buckets
+            ]
+            ungrouped = [c for c in review if not c["bucket"]]
+            return {
+                "review": review,
+                "groups": groups,
+                "ungrouped": ungrouped,
+                "buckets": buckets,
+                "muted": muted,
+                "decided": decided[:RECENT_DECIDED],
+            }
     except Exception:
-        return {"review": [], "muted": [], "decided": []}
+        return {"review": [], "groups": [], "ungrouped": [], "buckets": [],
+                "muted": [], "decided": []}
 
 
 def review_count() -> int:
@@ -175,32 +192,26 @@ def approve(prospect_id: int) -> str:
                 )
             )
 
+        # Legacy drafts (from before the no-auto-draft change) still link so
+        # sending one logs the email and advances the lead.
         draft = s.get(EmailDraft, p.draft_id) if p.draft_id else None
         if draft is not None and draft.related_lead_id is None:
-            # Linked, so sending it logs the email and moves the lead to Contacted.
             draft.related_lead_id = lead.id
 
-        if p.contact_email and draft is not None and draft.status != DraftStatus.DISCARDED:
-            # Approving is a decision about the LEAD, never the email: the
-            # first-touch draft stays unsent in Drafts for its own review.
-            title = f"Review first-touch draft to {p.business_name}"
-            description = (
-                f"Draft #{draft.id} is waiting UNSENT in Drafts — approving the "
-                f"prospect did not approve the email. Review/edit it there and "
-                f"send only if it's right. Angle: {p.outreach_angle}"
-            )
-        else:
-            title = f"First outreach to {p.business_name} — DM / walk-in"
-            parts = [f"Angle: {p.outreach_angle}"]
-            if p.instagram:
-                parts.append(f"Instagram: {p.instagram}")
-            if p.phone:
-                parts.append(f"Phone: {p.phone}")
-            if p.dm_script:
-                parts.append(f"DM:\n{p.dm_script}")
-            if p.walk_in_note:
-                parts.append(f"Walk-in:\n{p.walk_in_note}")
-            description = "\n\n".join(parts)
+        title = f"First outreach to {p.business_name}"
+        parts = [f"Angle: {p.outreach_angle}"]
+        if p.contact_email:
+            parts.append(f"Email: {p.contact_email}"
+                         + (f" ({p.contact_name})" if p.contact_name else ""))
+        if p.instagram:
+            parts.append(f"Instagram: {p.instagram}")
+        if p.phone:
+            parts.append(f"Phone: {p.phone}")
+        if p.dm_script:
+            parts.append(f"DM:\n{p.dm_script}")
+        if p.walk_in_note:
+            parts.append(f"Walk-in:\n{p.walk_in_note}")
+        description = "\n\n".join(parts)
         _create_task_impl(
             s,
             category="wholesale_leads",
@@ -241,6 +252,19 @@ def mute(prospect_id: int) -> str:
         p.muted_until = _today() + timedelta(days=MUTE_DAYS)
         p.decided_at = datetime.now(timezone.utc)
         return f"Muted {p.business_name} until {p.muted_until}." + (" Draft discarded." if discarded else "")
+
+
+def set_bucket(prospect_id: int, bucket: str) -> str:
+    """Move a prospect into one of Arda's own categories ('' clears it)."""
+    bucket = " ".join((bucket or "").split())[:60]
+    with db_session() as s:
+        p = s.get(Prospect, prospect_id)
+        if p is None:
+            return "Prospect not found."
+        p.bucket = bucket or None
+        if bucket:
+            return f"{p.business_name} → {bucket}."
+        return f"{p.business_name} is uncategorized again."
 
 
 def unmute(prospect_id: int) -> str:

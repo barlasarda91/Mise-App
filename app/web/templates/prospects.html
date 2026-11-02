@@ -5,7 +5,7 @@
 
 {% if msg %}<div class="note" style="margin:0 0 14px">▸ {{ msg }}</div>{% endif %}
 
-<div class="note" style="margin:0 0 14px">Found by the Lead Discovery routine (daily, 7:30 AM). <b>Approve</b> approves the <i>lead only</i> — it moves to the Pipeline at New, while the first-touch email stays unsent in Drafts until you review and send it yourself. <b>Mute</b> hides it for 60 days. <b>Reject</b> means it's never suggested again. Rejecting or muting discards its unsent draft. · <a href="/prospects/log">Discovery log &amp; analytics →</a></div>
+<div class="note" style="margin:0 0 14px">Found by the Lead Discovery routine (daily, 7:30 AM). <b>Approve</b> moves the lead to the Pipeline at New with an outreach task — the routine never writes emails; outreach is yours, from the card. Use the category selector on a card to sort the queue into your own groups. <b>Mute</b> hides it for 60 days. <b>Reject</b> means it's never suggested again. Rejecting or muting discards its unsent draft. · <a href="/prospects/log">Discovery log &amp; analytics →</a></div>
 
 {% macro prospect_card(p, actions) %}
 <div class="box">
@@ -41,23 +41,44 @@
     {% endif %}
 
     {% if actions %}
-    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;align-items:center">
       {% for action, label, solid in actions %}
       <form method="post" action="/prospects/{{ p.id }}/{{ action }}"><button class="linkish{% if solid %} solid{% endif %}" type="submit"{% if action == "reject" %} style="color:var(--ember)"{% endif %}>{{ label }}</button></form>
       {% endfor %}
+      <span class="spacer"></span>
+      <form method="post" action="/prospects/{{ p.id }}/bucket" class="bucket-form">
+        <select name="bucket" title="Move to a category" onchange="if(this.value==='__new__'){var n=window.prompt('New category name:');if(n&&n.trim()){var o=document.createElement('option');o.value=n.trim();o.textContent=n.trim();this.appendChild(o);this.value=n.trim();this.form.submit();}else{this.value='{{ p.bucket or "" }}';}}else{this.form.submit();}">
+          <option value=""{% if not p.bucket %} selected{% endif %}>— no category</option>
+          {% for b in queue.buckets %}
+          <option value="{{ b }}"{% if p.bucket == b %} selected{% endif %}>{{ b }}</option>
+          {% endfor %}
+          <option value="__new__">+ New category…</option>
+        </select>
+      </form>
     </div>
     {% endif %}
   </div>
 </div>
 {% endmacro %}
 
+{% set review_actions = [("approve", "Approve → Pipeline", true), ("mute", "Mute 60 days", false), ("reject", "Reject", false)] %}
 <h2 class="note" style="font-size:12px;margin:18px 0 10px">AWAITING REVIEW · {{ "%02d" | format(queue.review | length) }}</h2>
 {% if queue.review %}
+{% if queue.ungrouped %}
 <div class="grid2">
-  {% for p in queue.review %}
-  <div>{{ prospect_card(p, [("approve", "Approve → Pipeline", true), ("mute", "Mute 60 days", false), ("reject", "Reject", false)]) }}</div>
+  {% for p in queue.ungrouped %}
+  <div>{{ prospect_card(p, review_actions) }}</div>
   {% endfor %}
 </div>
+{% endif %}
+{% for g in queue.groups %}
+<h2 class="note" style="font-size:12px;margin:20px 0 10px">▸ {{ g.name | upper }} · {{ "%02d" | format(g.cards | length) }}</h2>
+<div class="grid2">
+  {% for p in g.cards %}
+  <div>{{ prospect_card(p, review_actions) }}</div>
+  {% endfor %}
+</div>
+{% endfor %}
 {% else %}
 <div class="note">Nothing waiting. New prospects arrive after each Lead Discovery run. Enable it, or press Run now, in Settings.</div>
 {% endif %}

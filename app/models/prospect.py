@@ -26,6 +26,8 @@ class Prospect(TimestampMixin, Base):
         db_enum(ProspectStatus), default=ProspectStatus.NEW, index=True
     )
     muted_until: Mapped[date | None] = mapped_column(Date)
+    # Arda's own grouping on the Prospects tab ("Email first", "Visit", …).
+    bucket: Mapped[str | None] = mapped_column(String(60))
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     city: Mapped[str | None] = mapped_column(String(100))
