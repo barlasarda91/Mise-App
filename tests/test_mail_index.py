@@ -422,3 +422,37 @@ def test_customer_order_mail_is_tagged_priority(session_factory):
     assert "[hello@ · msg c2]" in ctx  # still listed, just untagged
     assert "most urgent mail Boxx gets" in ctx
     assert "prepare the reply draft this run" in ctx
+
+
+def test_priority_subjects_bypass_correspondent_test(session_factory):
+    """Backlog triage: customers chasing orders and wholesale inquirers are
+    strangers by definition — their threads must reach the awaiting panel
+    even though Boxx never wrote to them. Everything else keeps the filter."""
+    with session_factory() as s:
+        # customer chasing an order — stranger, order-shaped subject
+        mi.upsert_summary(s, "hello", _summary(
+            "p1", "DuShaun Grant <pprchsr@gmail.com>", _days_ago(3),
+            thread="t-p1", to="hello@boxxcoffee.com", subject="Order # 2682"))
+        # customer reply to a shipment notification — stranger
+        mi.upsert_summary(s, "hello", _summary(
+            "p2", "Dion Wu <the.dion.wu@gmail.com>", _days_ago(4), thread="t-p2",
+            to="hello@boxxcoffee.com",
+            subject="Re: A shipment from order #2674 is on the way"))
+        # fresh wholesale inquiry — stranger
+        mi.upsert_summary(s, "hello", _summary(
+            "p3", "Nina <nina@kcmconnect.co>", _days_ago(6), thread="t-p3",
+            to="hello@boxxcoffee.com", subject="Wholesale Opportunity - Dolce by Tina"))
+        # generic cold pitch — stranger, stays filtered
+        mi.upsert_summary(s, "hello", _summary(
+            "p4", "Claire <claire@hyperkedata.co>", _days_ago(2), thread="t-p4",
+            to="hello@boxxcoffee.com", subject="Store Buyers"))
+        # no-reply machinery with an order-shaped subject — bulk addr wins
+        mi.upsert_summary(s, "hello", _summary(
+            "p5", "ShipStation <no-reply@shipstation.com>", _days_ago(1),
+            thread="t-p5", to="hello@boxxcoffee.com",
+            subject="Your shipment digest"))
+        s.commit()
+        waiting = {t["gmail_msg_id"] for t in mi.awaiting_reply(s)}
+    assert {"p1", "p2", "p3"} <= waiting
+    assert "p4" not in waiting  # cold pitch: correspondent test still applies
+    assert "p5" not in waiting  # automated sender: bulk filter still applies

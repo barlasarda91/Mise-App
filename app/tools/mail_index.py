@@ -258,6 +258,16 @@ _BULK_ADDR = re.compile(
     r"@notify|@account\.|@accounts\."
 )
 
+# Subjects that bypass the correspondent test below: a retail customer
+# chasing an order and a fresh wholesale inquiry both come from senders
+# Boxx has NEVER written to — the test that keeps newsletters out of the
+# awaiting panel was also keeping out its most urgent mail. Bulk filters
+# still apply, so no-reply machinery stays out either way.
+_PRIORITY_SUBJECT = re.compile(
+    r"wholesale|order\s*#?\s*\d+|shipment|shipping|delivered|tracking|refund",
+    re.IGNORECASE,
+)
+
 
 def awaiting_reply(session, limit: int = 15, max_age_days: int = BACKFILL_DAYS) -> list[dict]:
     """Threads whose newest indexed message is inbound with no Boxx reply
@@ -307,7 +317,10 @@ def awaiting_reply(session, limit: int = 15, max_age_days: int = BACKFILL_DAYS) 
         if row.from_addr in excluded or _BULK_ADDR.search(row.from_addr):
             continue
         if key not in threads_with_outbound and row.from_addr not in correspondents:
-            continue  # we've never written to this sender anywhere — not a correspondence
+            # Never written to this sender — not a correspondence, UNLESS the
+            # subject marks it as customer-order or wholesale mail.
+            if not _PRIORITY_SUBJECT.search(row.subject or ""):
+                continue
         dismissed = dismissals.get(key)
         if dismissed is not None and sent <= dismissed:
             continue  # marked Done; a newer message from them would resurface it
