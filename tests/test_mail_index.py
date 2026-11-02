@@ -393,3 +393,32 @@ def test_reseeing_a_row_repairs_old_attribution(session_factory):
         s.commit()
         row = s.query(MailMessage).one()
         assert row.is_outbound is False and row.from_addr == "vanessa@casasirias.com"
+
+
+def test_customer_order_mail_is_tagged_priority(session_factory):
+    from app.engine.context import build_runtime_context
+    from app.models import Routine, SyncState
+    from app.models.enums import SyncSource
+
+    with session_factory() as s:
+        agenda = Routine(key="daily_agenda", name="A", system_prompt="p",
+                         connectors=["gmail_hello"])
+        s.add(agenda)
+        s.flush()
+        s.add(SyncState(routine_id=agenda.id, source=SyncSource.GMAIL_HELLO,
+                        last_run_at=datetime.now(timezone.utc) - timedelta(hours=2)))
+        mi.upsert_summary(s, "hello", _summary(
+            "c1", "Dion Wu <the.dion.wu@gmail.com>", _days_ago(0), thread="t-c1",
+            to="hello@boxxcoffee.com",
+            subject="Re: A shipment from order #2674 is on the way"))
+        mi.upsert_summary(s, "hello", _summary(
+            "c2", "Nina <nina@kcmconnect.co>", _days_ago(0), thread="t-c2",
+            to="hello@boxxcoffee.com", subject="Wholesale Opportunity"))
+        s.commit()
+        ctx = build_runtime_context(s, agenda)
+
+    assert '⚠ CUSTOMER ORDER — [hello@ · msg c1]' in ctx
+    assert '⚠ CUSTOMER ORDER — [hello@ · msg c2]' not in ctx
+    assert "[hello@ · msg c2]" in ctx  # still listed, just untagged
+    assert "most urgent mail Boxx gets" in ctx
+    assert "prepare the reply draft this run" in ctx

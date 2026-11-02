@@ -90,6 +90,16 @@ def build_runtime_context(session, routine: Routine, trigger: str | None = None)
     try:
         from app.tools.mail_index import new_messages_since
 
+        import re as _re
+
+        # A human sender with an order-notification-shaped subject is a
+        # CUSTOMER chasing their order: they reply to Shopify's own emails
+        # ("Re: A shipment from order #2674 is on the way"), so the subject
+        # looks automated while the content is a service request.
+        order_shaped = _re.compile(
+            r"order\s*#?\s*\d+|shipment|shipping|delivered|tracking|refund",
+            _re.IGNORECASE,
+        )
         gather_by_source = {row.source.value: row.last_run_at for row in sync_rows}
         fresh: list[str] = []
         for source, mailbox in (("gmail_arda", "arda"), ("gmail_hello", "hello")):
@@ -100,8 +110,13 @@ def build_runtime_context(session, routine: Routine, trigger: str | None = None)
                 continue  # cold start: the backlog scan covers it
             for m in new_messages_since(session, mailbox, since):
                 stamp = m["sent_at"].astimezone(tz).strftime("%a %H:%M")
+                tag = (
+                    "⚠ CUSTOMER ORDER — "
+                    if order_shaped.search(m["subject"] or "")
+                    else ""
+                )
                 fresh.append(
-                    f"- [{mailbox}@ · msg {m['gmail_msg_id']}] {m['from_name']} "
+                    f"- {tag}[{mailbox}@ · msg {m['gmail_msg_id']}] {m['from_name']} "
                     f"<{m['from_addr']}> — \"{m['subject']}\" · {stamp}"
                 )
         if fresh:
@@ -115,8 +130,13 @@ def build_runtime_context(session, routine: Routine, trigger: str | None = None)
             lines.append(
                 "Work through EVERY message above: read it (get_gmail_message) or "
                 "judge it not-actionable in one line of your report — never skip "
-                "one silently. This list comes from the local index; mail can "
-                "arrive seconds after indexing, so still do your own quick search."
+                "one silently. A ⚠ CUSTOMER ORDER line is a retail customer "
+                "asking about bags, shipping, tracking or a refund — the subject "
+                "only LOOKS automated because they replied to a notification. "
+                "These are the most urgent mail Boxx gets: read each one, lead "
+                "the briefing with it, and prepare the reply draft this run. "
+                "This list comes from the local index; mail can arrive seconds "
+                "after indexing, so still do your own quick search."
             )
     except Exception:
         pass
