@@ -82,6 +82,45 @@ def build_runtime_context(session, routine: Routine, trigger: str | None = None)
             f"scan the past {COLD_START_DAYS} days (~3 months) of backlog across your sources."
         )
 
+    # Deterministic triage queue: every inbound, non-bulk message that
+    # arrived since the last gather, from the local index. The awaiting
+    # panel deliberately filters never-corresponded senders (newsletters) —
+    # which also hides fresh wholesale inquiries, so NEW mail gets its own
+    # unfiltered list that the run must work through.
+    try:
+        from app.tools.mail_index import new_messages_since
+
+        gather_by_source = {row.source.value: row.last_run_at for row in sync_rows}
+        fresh: list[str] = []
+        for source, mailbox in (("gmail_arda", "arda"), ("gmail_hello", "hello")):
+            if source not in (routine.connectors or []):
+                continue
+            since = gather_by_source.get(source)
+            if since is None:
+                continue  # cold start: the backlog scan covers it
+            for m in new_messages_since(session, mailbox, since):
+                stamp = m["sent_at"].astimezone(tz).strftime("%a %H:%M")
+                fresh.append(
+                    f"- [{mailbox}@ · msg {m['gmail_msg_id']}] {m['from_name']} "
+                    f"<{m['from_addr']}> — \"{m['subject']}\" · {stamp}"
+                )
+        if fresh:
+            lines.append(
+                f"\n## NEW mail since your last gather ({len(fresh)}) — your primary "
+                "triage queue, unfiltered (first-time senders included: fresh "
+                "wholesale inquiries and customer orders arrive from strangers "
+                "and OUTRANK everything else this run)"
+            )
+            lines.extend(fresh)
+            lines.append(
+                "Work through EVERY message above: read it (get_gmail_message) or "
+                "judge it not-actionable in one line of your report — never skip "
+                "one silently. This list comes from the local index; mail can "
+                "arrive seconds after indexing, so still do your own quick search."
+            )
+    except Exception:
+        pass
+
     leads = session.scalars(
         select(Lead)
         .where(Lead.stage.in_(OPEN_LEAD_STAGES), Lead.discarded_at.is_(None))

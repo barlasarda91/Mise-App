@@ -252,3 +252,73 @@ def test_colleague_reply_no_longer_auto_resolves_tasks(session_factory):
         s.commit()
         assert resolved == []
         assert s.get(Task, task.id).status != TaskStatus.DONE
+
+
+def test_new_messages_since_surfaces_strangers(session_factory):
+    """Regression for slow wholesale pickup: the awaiting panel's
+    correspondent test hides first-time senders, so runs get an unfiltered
+    NEW-mail queue instead. Strangers are the point."""
+    with session_factory() as s:
+        mi.upsert_summary(s, "hello", _summary(
+            "w1", "Nina <nina@kcmconnect.co>", _days_ago(0),
+            thread="t-w1", to="hello@boxxcoffee.com",
+            subject="Wholesale Opportunity - Dolce by Tina"))
+        mi.upsert_summary(s, "hello", dict(_summary(
+            "n1", "Promo <blast@news.example>", _days_ago(0), thread="t-n1"),
+            bulk=True))
+        mi.upsert_summary(s, "hello", _summary(
+            "nr1", "Robot <noreply@something.example>", _days_ago(0), thread="t-nr"))
+        mi.upsert_summary(s, "hello", _summary(
+            "old1", "Earlier <earlier@x.example>", _days_ago(3), thread="t-old"))
+        mi.upsert_summary(s, "hello", _summary(
+            "out1", "Us <hello@boxxcoffee.com>", _days_ago(0), thread="t-out"))
+        s.commit()
+        since = datetime.now(timezone.utc) - timedelta(days=1)
+        fresh = mi.new_messages_since(s, "hello", since)
+    ids = [m["gmail_msg_id"] for m in fresh]
+    assert ids == ["w1"]  # stranger kept; bulk, noreply-shaped, old, own mail out
+    assert fresh[0]["from_addr"] == "nina@kcmconnect.co"
+
+
+def test_new_mail_queue_reaches_both_routines_context(session_factory):
+    from app.engine.context import build_runtime_context
+    from app.models import Routine, SyncState
+    from app.models.enums import SyncSource
+
+    with session_factory() as s:
+        agenda = Routine(key="daily_agenda", name="A", system_prompt="p",
+                         connectors=["gmail_arda", "gmail_hello", "calendar"])
+        tracker = Routine(key="lead_tracker", name="T", system_prompt="p",
+                          connectors=["gmail_arda", "gmail_hello", "calendar"])
+        s.add_all([agenda, tracker])
+        s.flush()
+        for routine in (agenda, tracker):
+            s.add(SyncState(routine_id=routine.id, source=SyncSource.GMAIL_HELLO,
+                            last_run_at=datetime.now(timezone.utc) - timedelta(hours=2)))
+        mi.upsert_summary(s, "hello", _summary(
+            "w2", "Nina <nina@kcmconnect.co>", _days_ago(0), thread="t-w2",
+            to="hello@boxxcoffee.com", subject="Wholesale Opportunity"))
+        s.commit()
+        a_ctx = build_runtime_context(s, agenda)
+        t_ctx = build_runtime_context(s, tracker)
+
+    for ctx in (a_ctx, t_ctx):
+        assert "NEW mail since your last gather (1)" in ctx
+        assert "nina@kcmconnect.co" in ctx and "Wholesale Opportunity" in ctx
+        assert "OUTRANK everything else this run" in ctx
+        assert "never skip one silently" in ctx
+
+
+def test_new_mail_queue_absent_on_cold_start(session_factory):
+    from app.engine.context import build_runtime_context
+    from app.models import Routine
+
+    with session_factory() as s:
+        agenda = Routine(key="daily_agenda", name="A", system_prompt="p",
+                         connectors=["gmail_arda", "gmail_hello"])
+        s.add(agenda)
+        s.flush()
+        mi.upsert_summary(s, "hello", _summary(
+            "w3", "Nina <nina@kcmconnect.co>", _days_ago(0), thread="t-w3"))
+        s.commit()
+        assert "NEW mail since your last gather" not in build_runtime_context(s, agenda)

@@ -411,7 +411,10 @@ def test_discovery_analytics_aggregates(session_factory, monkeypatch):
     monkeypatch.setattr(da, "db_session", session_factory)
     now = datetime.now(timezone.utc)
     with session_factory() as s:
-        def add(name, status, via, fit, days_ago=1, region="riverside"):
+        def add(name, status, via, fit, days_ago=0, region="riverside"):
+            # days_ago=0 keeps a row inside the CURRENT ISO week whatever
+            # weekday the suite runs on (a Monday run put "1 day ago" in
+            # last week and broke the weekly bucket assertions).
             s.add(Prospect(
                 business_name=name, name_key=name.lower(), fit_score=fit,
                 segment=ProspectSegment.ALL_DAY_CAFE, region=ProspectRegion(region),

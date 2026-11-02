@@ -207,8 +207,13 @@ def test_briefing_today_is_not_marked_stale(session_factory):
         routine = Routine(key="daily_agenda", name="Daily Agenda", system_prompt="p")
         s.add(routine)
         s.flush()
+        day0 = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        # Seed in UTC: SQLite keeps only the naive wall clock, and the loader
+        # reads naive as UTC — an LA-aware value would shift by 8 hours.
+        from datetime import timezone as dt_timezone
+        started = max(day0 + timedelta(minutes=2), now - timedelta(minutes=30)).astimezone(dt_timezone.utc)
         run = Run(routine_id=routine.id, status=RS.COMPLETED,
-                  trigger=RunTrigger.SCHEDULED, started_at=now.replace(hour=7))
+                  trigger=RunTrigger.SCHEDULED, started_at=started)
         s.add(run)
         s.flush()
         s.add(RunMessage(run_id=run.id, role=MessageRole.ASSISTANT,

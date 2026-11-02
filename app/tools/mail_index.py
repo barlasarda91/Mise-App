@@ -266,6 +266,50 @@ def awaiting_reply(session, limit: int = 15, max_age_days: int = BACKFILL_DAYS) 
     return out[:limit]
 
 
+def new_messages_since(session, mailbox: str, since: datetime, limit: int = 30) -> list[dict]:
+    """Inbound, non-bulk messages that arrived after `since` — the runs'
+    deterministic triage queue. Unlike the awaiting-reply panel there is NO
+    correspondent test: a brand-new sender (a fresh wholesale inquiry) is
+    exactly what this list must surface. Muted/disregarded senders stay out."""
+    from app.models import DisregardRule, MutedSender
+
+    if since.tzinfo is None:
+        since = since.replace(tzinfo=timezone.utc)
+    excluded = {e.lower() for e in session.scalars(select(MutedSender.email))}
+    excluded |= {
+        r.contact_email.lower()
+        for r in session.scalars(select(DisregardRule))
+        if r.contact_email
+    }
+    rows = session.scalars(
+        select(MailMessage)
+        .where(
+            MailMessage.mailbox == mailbox,
+            MailMessage.is_outbound.is_(False),
+            MailMessage.is_bulk.is_(False),
+            MailMessage.sent_at.isnot(None),
+        )
+        .order_by(MailMessage.sent_at)
+    ).all()
+    out = []
+    for row in rows:
+        sent = row.sent_at if row.sent_at.tzinfo else row.sent_at.replace(tzinfo=timezone.utc)
+        if sent <= since:
+            continue
+        if not row.from_addr or row.from_addr in excluded or _BULK_ADDR.search(row.from_addr):
+            continue
+        out.append(
+            {
+                "gmail_msg_id": row.gmail_msg_id,
+                "from_name": row.from_name or row.from_addr,
+                "from_addr": row.from_addr,
+                "subject": row.subject or "(no subject)",
+                "sent_at": sent,
+            }
+        )
+    return out[-limit:]
+
+
 def index_status() -> dict:
     out = {"rows": 0, "per_mailbox": {}, "backfill": None}
     try:

@@ -122,9 +122,21 @@ def test_load_todays_briefing_picks_first_run_plus_latest(monkeypatch):
                              content=[{"type": "text", "text": report}]))
             return run.id
 
-        add_run(now - timedelta(days=1), "Yesterday's briefing")  # excluded
-        first_id = add_run(now.replace(hour=7, minute=2), "## Morning briefing\n- Vendors 10:30")
-        latest_id = add_run(now.replace(hour=11, minute=0), "No changes since 10:00.")
+        # Times must be BOTH today (LA) and in the past, whatever the wall
+        # clock is when the suite runs (a 3am run made hour=7 a future time).
+        day0 = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        first_time = max(day0 + timedelta(minutes=2), now - timedelta(minutes=40))
+        latest_time = max(day0 + timedelta(minutes=30), now - timedelta(minutes=10))
+        from datetime import timezone as dt_timezone
+
+        def utc(dt):
+            # SQLite stores the naive wall clock; the loader reads naive as
+            # UTC — seed UTC so the round trip is faithful.
+            return dt.astimezone(dt_timezone.utc)
+
+        add_run(utc(now - timedelta(days=1, hours=3)), "Yesterday's briefing")  # excluded
+        first_id = add_run(utc(first_time), "## Morning briefing\n- Vendors 10:30")
+        latest_id = add_run(utc(latest_time), "No changes since 10:00.")
 
     briefing = rv.load_todays_briefing()
     assert briefing["run_id"] == first_id
