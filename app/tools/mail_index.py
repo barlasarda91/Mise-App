@@ -337,7 +337,7 @@ def awaiting_reply(session, limit: int = 15, max_age_days: int = BACKFILL_DAYS) 
                 "age_days": (now - sent).days,
             }
         )
-    out.sort(key=lambda t: t["age_days"], reverse=True)
+    out.sort(key=lambda t: t["age_days"])  # newest first — fresh mail on top
     return out[:limit]
 
 

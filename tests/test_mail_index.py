@@ -452,7 +452,11 @@ def test_priority_subjects_bypass_correspondent_test(session_factory):
             thread="t-p5", to="hello@boxxcoffee.com",
             subject="Your shipment digest"))
         s.commit()
-        waiting = {t["gmail_msg_id"] for t in mi.awaiting_reply(s)}
+        rows = mi.awaiting_reply(s)
+        waiting = {t["gmail_msg_id"] for t in rows}
     assert {"p1", "p2", "p3"} <= waiting
+    # newest first: fresh mail on top of the panel
+    ages = [t["age_days"] for t in rows]
+    assert ages == sorted(ages)
     assert "p4" not in waiting  # cold pitch: correspondent test still applies
     assert "p5" not in waiting  # automated sender: bulk filter still applies
