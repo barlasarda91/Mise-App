@@ -27,7 +27,13 @@ class Prospect(TimestampMixin, Base):
     )
     muted_until: Mapped[date | None] = mapped_column(Date)
     # Arda's own grouping on the Prospects tab ("Email first", "Visit", …).
+    # Superseded in the UI by the two tag dimensions below; kept for history.
     bucket: Mapped[str | None] = mapped_column(String(60))
+    # Two separate tags, each defaulting from the card (county from the
+    # discovery territory, reach method from whether there's an email) and
+    # overridable by Arda. NULL = derived default still applies.
+    county: Mapped[str | None] = mapped_column(String(60))
+    reach_method: Mapped[str | None] = mapped_column(String(30))
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     city: Mapped[str | None] = mapped_column(String(100))

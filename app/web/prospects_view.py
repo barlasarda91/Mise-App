@@ -2,8 +2,9 @@
 
 Approve → a Pipeline lead at New plus a first-outreach task (Arda does the
 outreach himself — the routine never drafts email). Reject → never surfaced
-again. Mute → hidden for MUTE_DAYS, then fair game. Arda can also sort
-review-queue prospects into his own categories (buckets) on the page.
+again. Mute → hidden for MUTE_DAYS, then fair game. Review cards carry
+two separate tags — county (groups the queue) and reach-out method — each
+derived automatically and overridable by Arda.
 Legacy prospects from before the no-draft change may still carry a draft;
 rejecting or muting discards it.
 """
@@ -31,6 +32,27 @@ from app.routines.discovery import MUTE_DAYS, REGION_LABELS, SEGMENT_LABELS, SEG
 from app.settings import get_settings
 
 RECENT_DECIDED = 20
+
+# Discovery territory -> county default (San Gabriel Valley is LA County).
+REGION_COUNTY = {
+    "los_angeles": "LA County",
+    "san_gabriel_valley": "LA County",
+    "riverside": "Riverside County",
+    "san_diego": "San Diego County",
+    "santa_barbara": "Santa Barbara County",
+}
+REACH_METHODS = ["Email", "DM", "Walk-in", "Phone"]
+
+
+def _effective_county(p: Prospect) -> str:
+    return p.county or REGION_COUNTY.get(p.region.value, "Other")
+
+
+def _effective_reach(p: Prospect) -> str:
+    if p.reach_method:
+        return p.reach_method
+    return "Email" if p.contact_email else "DM"
+
 
 _IG_HANDLE = re.compile(r"^@?([A-Za-z0-9_.]{1,30})$")
 
@@ -85,6 +107,8 @@ def _card(p: Prospect, draft: EmailDraft | None) -> dict:
         "matched_lead_id": p.matched_lead_id,
         "found_on": p.created_at,
         "bucket": p.bucket,
+        "county": _effective_county(p),
+        "reach": _effective_reach(p),
     }
 
 
@@ -109,22 +133,24 @@ def load_queue() -> dict:
                 else:
                     decided.append(card)
             decided.sort(key=lambda c: c["id"], reverse=True)
-            buckets = sorted({c["bucket"] for c in review if c["bucket"]})
+            counties = sorted({c["county"] for c in review})
             groups = [
-                {"name": name, "cards": [c for c in review if c["bucket"] == name]}
-                for name in buckets
+                {"name": name, "cards": [c for c in review if c["county"] == name]}
+                for name in counties
             ]
-            ungrouped = [c for c in review if not c["bucket"]]
+            reaches = REACH_METHODS + sorted(
+                {c["reach"] for c in review} - set(REACH_METHODS)
+            )
             return {
                 "review": review,
                 "groups": groups,
-                "ungrouped": ungrouped,
-                "buckets": buckets,
+                "counties": counties,
+                "reaches": reaches,
                 "muted": muted,
                 "decided": decided[:RECENT_DECIDED],
             }
     except Exception:
-        return {"review": [], "groups": [], "ungrouped": [], "buckets": [],
+        return {"review": [], "groups": [], "counties": [], "reaches": REACH_METHODS,
                 "muted": [], "decided": []}
 
 
@@ -252,6 +278,23 @@ def mute(prospect_id: int) -> str:
         p.muted_until = _today() + timedelta(days=MUTE_DAYS)
         p.decided_at = datetime.now(timezone.utc)
         return f"Muted {p.business_name} until {p.muted_until}." + (" Draft discarded." if discarded else "")
+
+
+def set_tag(prospect_id: int, field: str, value: str) -> str:
+    """Set one of the two tag dimensions ('' returns to the derived
+    default). county groups the queue; reach_method shows as a pill."""
+    if field not in ("county", "reach_method"):
+        return "Unknown tag."
+    value = " ".join((value or "").split())[:60 if field == "county" else 30]
+    with db_session() as s:
+        p = s.get(Prospect, prospect_id)
+        if p is None:
+            return "Prospect not found."
+        setattr(p, field, value or None)
+        label = "county" if field == "county" else "reach-out"
+        if value:
+            return f"{p.business_name}: {label} → {value}."
+        return f"{p.business_name}: {label} back to automatic."
 
 
 def set_bucket(prospect_id: int, bucket: str) -> str:

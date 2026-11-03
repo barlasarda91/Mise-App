@@ -872,12 +872,12 @@ def prospects_log(request: Request):
     return render_page(request, "prospects_log.html", "prospects", a=discovery_analytics())
 
 
-@app.post("/prospects/{prospect_id}/bucket")
-def prospect_bucket(prospect_id: int, bucket: str = Form("")):
-    from app.web.prospects_view import set_bucket
+@app.post("/prospects/{prospect_id}/tag")
+def prospect_tag(prospect_id: int, field: str = Form(""), value: str = Form("")):
+    from app.web.prospects_view import set_tag
 
     try:
-        message = set_bucket(prospect_id, bucket)
+        message = set_tag(prospect_id, field, value)
     except Exception as exc:
         message = f"Error: {exc}"
     return RedirectResponse(f"/prospects?msg={message}", status_code=303)

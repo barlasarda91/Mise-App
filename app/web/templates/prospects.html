@@ -5,13 +5,13 @@
 
 {% if msg %}<div class="note" style="margin:0 0 14px">▸ {{ msg }}</div>{% endif %}
 
-<div class="note" style="margin:0 0 14px">Found by the Lead Discovery routine (daily, 7:30 AM). <b>Approve</b> moves the lead to the Pipeline at New with an outreach task — the routine never writes emails; outreach is yours, from the card. Use the category selector on a card to sort the queue into your own groups. <b>Mute</b> hides it for 60 days. <b>Reject</b> means it's never suggested again. Rejecting or muting discards its unsent draft. · <a href="/prospects/log">Discovery log &amp; analytics →</a></div>
+<div class="note" style="margin:0 0 14px">Found by the Lead Discovery routine (daily, 7:30 AM). <b>Approve</b> moves the lead to the Pipeline at New with an outreach task — the routine never writes emails; outreach is yours, from the card. Each card carries two separate tags: <b>county</b> (groups the queue; defaults from the discovery territory) and <b>reach-out method</b> (the ember pill; defaults to Email when the card has an address, DM otherwise) — change either from the selectors on the card. <b>Mute</b> hides it for 60 days. <b>Reject</b> means it's never suggested again. Rejecting or muting discards its unsent draft. · <a href="/prospects/log">Discovery log &amp; analytics →</a></div>
 
 {% macro prospect_card(p, actions) %}
 <div class="box">
   <div class="box-hd">
     <span class="lbl">{{ p.name }}</span>
-    <span class="ix">{{ p.segment | upper }} · {{ (p.city or p.region) | upper }} · FIT {{ p.fit }}/5</span>
+    <span class="ix">{{ p.segment | upper }} · {{ (p.city or p.region) | upper }} · FIT {{ p.fit }}/5 · <span style="color:var(--ember)">{{ p.reach | upper }}</span></span>
   </div>
   <div class="box-bd" style="font-size:14px">
     <p style="margin:0 0 8px">{{ p.why }}</p>
@@ -46,13 +46,21 @@
       <form method="post" action="/prospects/{{ p.id }}/{{ action }}"><button class="linkish{% if solid %} solid{% endif %}" type="submit"{% if action == "reject" %} style="color:var(--ember)"{% endif %}>{{ label }}</button></form>
       {% endfor %}
       <span class="spacer"></span>
-      <form method="post" action="/prospects/{{ p.id }}/bucket" class="bucket-form">
-        <select name="bucket" title="Move to a category" onchange="if(this.value==='__new__'){var n=window.prompt('New category name:');if(n&&n.trim()){var o=document.createElement('option');o.value=n.trim();o.textContent=n.trim();this.appendChild(o);this.value=n.trim();this.form.submit();}else{this.value='{{ p.bucket or "" }}';}}else{this.form.submit();}">
-          <option value=""{% if not p.bucket %} selected{% endif %}>— no category</option>
-          {% for b in queue.buckets %}
-          <option value="{{ b }}"{% if p.bucket == b %} selected{% endif %}>{{ b }}</option>
+      <form method="post" action="/prospects/{{ p.id }}/tag" class="tag-form">
+        <input type="hidden" name="field" value="county">
+        <select name="value" title="County" onchange="if(this.value==='__new__'){var n=window.prompt('County name:');if(n&&n.trim()){var o=document.createElement('option');o.value=n.trim();o.textContent=n.trim();this.appendChild(o);this.value=n.trim();this.form.submit();}else{this.value='{{ p.county }}';}}else{this.form.submit();}">
+          {% for c in queue.counties %}
+          <option value="{{ c }}"{% if p.county == c %} selected{% endif %}>{{ c }}</option>
           {% endfor %}
-          <option value="__new__">+ New category…</option>
+          <option value="__new__">+ Other county…</option>
+        </select>
+      </form>
+      <form method="post" action="/prospects/{{ p.id }}/tag" class="tag-form">
+        <input type="hidden" name="field" value="reach_method">
+        <select name="value" title="Reach-out method" onchange="this.form.submit()">
+          {% for r in queue.reaches %}
+          <option value="{{ r }}"{% if p.reach == r %} selected{% endif %}>{{ r }}</option>
+          {% endfor %}
         </select>
       </form>
     </div>
@@ -64,13 +72,6 @@
 {% set review_actions = [("approve", "Approve → Pipeline", true), ("mute", "Mute 60 days", false), ("reject", "Reject", false)] %}
 <h2 class="note" style="font-size:12px;margin:18px 0 10px">AWAITING REVIEW · {{ "%02d" | format(queue.review | length) }}</h2>
 {% if queue.review %}
-{% if queue.ungrouped %}
-<div class="grid2">
-  {% for p in queue.ungrouped %}
-  <div>{{ prospect_card(p, review_actions) }}</div>
-  {% endfor %}
-</div>
-{% endif %}
 {% for g in queue.groups %}
 <h2 class="note" style="font-size:12px;margin:20px 0 10px">▸ {{ g.name | upper }} · {{ "%02d" | format(g.cards | length) }}</h2>
 <div class="grid2">

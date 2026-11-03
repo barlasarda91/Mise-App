@@ -499,22 +499,35 @@ def test_tool_db_error_fails_that_call_only(session_factory, run_id, monkeypatch
     assert names == {"Cafe Sevilla", "Second Spot"}
 
 
-def test_buckets_group_the_review_queue(session_factory, run_id):
+def test_county_and_reach_tags(session_factory, run_id):
+    # riverside region, has email -> defaults: Riverside County / Email
     a, _ = _record(session_factory)
+    # no email -> defaults to DM
     b, _ = _record(session_factory, business_name="Guest Bar", segment="multi_roaster",
-                   contact_email="hi@guestbar.example")
-    c, _ = _record(session_factory, business_name="Corner Diner", contact_email="o@corner.example")
+                   region="san_gabriel_valley", contact_email=None,
+                   dm_script="Hey!", walk_in_note="Tue 2-4pm")
 
-    assert "→ Email first" in pv.set_bucket(a["prospect_id"], "Email first")
-    assert "→ Visit" in pv.set_bucket(b["prospect_id"], "  Visit  ")  # trimmed
     queue = pv.load_queue()
-    assert queue["buckets"] == ["Email first", "Visit"]
-    assert [g["name"] for g in queue["groups"]] == ["Email first", "Visit"]
-    assert [card["id"] for card in queue["groups"][0]["cards"]] == [a["prospect_id"]]
-    assert [card["id"] for card in queue["ungrouped"]] == [c["prospect_id"]]
+    by_id = {c["id"]: c for c in queue["review"]}
+    assert by_id[a["prospect_id"]]["county"] == "Riverside County"
+    assert by_id[a["prospect_id"]]["reach"] == "Email"
+    assert by_id[b["prospect_id"]]["county"] == "LA County"  # SGV is LA County
+    assert by_id[b["prospect_id"]]["reach"] == "DM"
+    # queue groups by county, alphabetically
+    assert [g["name"] for g in queue["groups"]] == ["LA County", "Riverside County"]
+    assert queue["reaches"][:4] == ["Email", "DM", "Walk-in", "Phone"]
 
-    # clearing puts it back with the uncategorized
-    assert "uncategorized" in pv.set_bucket(a["prospect_id"], "")
+    # the two tags set independently; override wins over the default
+    assert "county → Orange County" in pv.set_tag(a["prospect_id"], "county", "Orange County")
+    assert "reach-out → Walk-in" in pv.set_tag(a["prospect_id"], "reach_method", "Walk-in")
     queue = pv.load_queue()
-    assert queue["buckets"] == ["Visit"]
-    assert {card["id"] for card in queue["ungrouped"]} == {a["prospect_id"], c["prospect_id"]}
+    card = {c["id"]: c for c in queue["review"]}[a["prospect_id"]]
+    assert card["county"] == "Orange County" and card["reach"] == "Walk-in"
+    assert "Orange County" in [g["name"] for g in queue["groups"]]
+
+    # clearing returns to the derived default; bogus field refused
+    assert "back to automatic" in pv.set_tag(a["prospect_id"], "county", "")
+    assert "Unknown tag" in pv.set_tag(a["prospect_id"], "status", "x")
+    queue = pv.load_queue()
+    card = {c["id"]: c for c in queue["review"]}[a["prospect_id"]]
+    assert card["county"] == "Riverside County" and card["reach"] == "Walk-in"
