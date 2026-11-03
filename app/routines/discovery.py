@@ -164,6 +164,8 @@ def _record_prospect(
     instagram=None,
     phone=None,
     google_place_id=None,
+    lat=None,
+    lng=None,
     rating=None,
     review_count=None,
     current_coffee=None,
@@ -247,6 +249,18 @@ def _record_prospect(
     prospect.instagram = instagram
     prospect.phone = phone
     prospect.google_place_id = google_place_id
+    if lat is not None and lng is not None:
+        prospect.lat, prospect.lng = lat, lng
+    elif prospect.lat is None:
+        # Model didn't pass coordinates: one best-effort geocode so the
+        # prospect lands on the map. Fail-soft and skipped when Places is off.
+        from app.tools.places import geocode_place
+
+        hit = geocode_place(business_name, address or city, reg.value)
+        if hit:
+            prospect.lat, prospect.lng = hit["lat"], hit["lng"]
+            if not prospect.google_place_id:
+                prospect.google_place_id = hit.get("place_id")
     prospect.rating = rating
     prospect.review_count = review_count
     prospect.current_coffee = current_coffee
@@ -355,6 +369,8 @@ register(
                 "instagram": {"type": "string", "description": "handle, e.g. @playcoffee"},
                 "phone": {"type": "string"},
                 "google_place_id": {"type": "string"},
+                "lat": {"type": "number", "description": "Latitude from the search_places result — copy it so the prospect lands on the map."},
+                "lng": {"type": "number"},
                 "rating": {"type": "number"},
                 "review_count": {"type": "integer"},
                 "current_coffee": {

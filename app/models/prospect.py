@@ -43,6 +43,9 @@ class Prospect(TimestampMixin, Base):
     phone: Mapped[str | None] = mapped_column(String(50))
     google_place_id: Mapped[str | None] = mapped_column(String(200), index=True)
     rating: Mapped[float | None] = mapped_column(Numeric(2, 1))
+    # Map pin. From search_places at record time (or the geocode fallback).
+    lat: Mapped[float | None] = mapped_column(Numeric(9, 6))
+    lng: Mapped[float | None] = mapped_column(Numeric(9, 6))
     review_count: Mapped[int | None] = mapped_column(Integer)
 
     contact_name: Mapped[str | None] = mapped_column(String(200))

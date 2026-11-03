@@ -8,7 +8,7 @@
 <div class="note" style="margin:0 0 14px">Found by the Lead Discovery routine (daily, 7:30 AM). <b>Approve</b> moves the lead to the Pipeline at New with an outreach task — the routine never writes emails; outreach is yours, from the card. Each card carries two separate tags: <b>county</b> (groups the queue; defaults from the discovery territory) and <b>reach-out method</b> (the ember pill; defaults to Email when the card has an address, DM otherwise) — change either from the selectors on the card. <b>Mute</b> hides it for 60 days. <b>Reject</b> means it's never suggested again. Rejecting or muting discards its unsent draft. · <a href="/prospects/log">Discovery log &amp; analytics →</a></div>
 
 {% macro prospect_card(p, actions) %}
-<div class="box">
+<div class="box" id="prospect-{{ p.id }}">
   <div class="box-hd">
     <span class="lbl">{{ p.name }}</span>
     <span class="ix">{{ p.segment | upper }} · {{ (p.city or p.region) | upper }} · FIT {{ p.fit }}/5 · <span style="color:var(--ember)">{{ p.reach | upper }}</span></span>
@@ -68,6 +68,43 @@
   </div>
 </div>
 {% endmacro %}
+
+{% set located = queue.review | selectattr("lat") | list %}
+{% if located %}
+<link rel="stylesheet" href="/static/leaflet/leaflet.css">
+<div class="box" style="margin:0 0 16px">
+  <div class="box-hd"><span class="lbl">Map</span><span class="ix">{{ located | length }} OF {{ queue.review | length }} PROSPECTS LOCATED</span></div>
+  <div id="prospectMap" style="height:340px"></div>
+</div>
+<script id="prospectPins" type="application/json">[
+  {% for p in located %}{"name": {{ p.name | tojson }}, "lat": {{ p.lat }}, "lng": {{ p.lng }}, "county": {{ p.county | tojson }}, "reach": {{ p.reach | tojson }}, "fit": {{ p.fit }}, "segment": {{ p.segment | tojson }}, "id": {{ p.id }} }{% if not loop.last %},{% endif %}
+  {% endfor %}
+]</script>
+<script src="/static/leaflet/leaflet.js"></script>
+<script>
+(function () {
+  if (typeof L === "undefined") return;
+  L.Icon.Default.prototype.options.imagePath = "/static/leaflet/images/";
+  var pins = JSON.parse(document.getElementById("prospectPins").textContent);
+  var map = L.map("prospectMap", { scrollWheelZoom: false });
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 18,
+    attribution: "&copy; OpenStreetMap contributors"
+  }).addTo(map);
+  var bounds = [];
+  pins.forEach(function (p) {
+    var marker = L.marker([p.lat, p.lng]).addTo(map);
+    marker.bindPopup(
+      "<b>" + p.name + "</b><br>" + p.segment + " &middot; fit " + p.fit + "/5<br>" +
+      p.county + " &middot; " + p.reach +
+      "<br><a href='#prospect-" + p.id + "'>jump to card &rarr;</a>"
+    );
+    bounds.push([p.lat, p.lng]);
+  });
+  map.fitBounds(bounds, { padding: [30, 30], maxZoom: 13 });
+})();
+</script>
+{% endif %}
 
 {% set review_actions = [("approve", "Approve → Pipeline", true), ("mute", "Mute 60 days", false), ("reject", "Reject", false)] %}
 <h2 class="note" style="font-size:12px;margin:18px 0 10px">AWAITING REVIEW · {{ "%02d" | format(queue.review | length) }}</h2>

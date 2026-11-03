@@ -17,6 +17,7 @@ FIELD_MASK = ",".join(
         "places.id",
         "places.displayName",
         "places.formattedAddress",
+        "places.location",
         "places.nationalPhoneNumber",
         "places.websiteUri",
         "places.googleMapsUri",
@@ -69,10 +70,13 @@ def search_text(query: str, region: str | None = None, max_results: int = 10) ->
 
 def _compact(place: dict) -> dict:
     hours = (place.get("regularOpeningHours") or {}).get("weekdayDescriptions")
+    location = place.get("location") or {}
     return {
         "place_id": place.get("id"),
         "name": (place.get("displayName") or {}).get("text"),
         "address": place.get("formattedAddress"),
+        "lat": location.get("latitude"),
+        "lng": location.get("longitude"),
         "phone": place.get("nationalPhoneNumber"),
         "website": place.get("websiteUri"),
         "maps_url": place.get("googleMapsUri"),
@@ -82,3 +86,18 @@ def _compact(place: dict) -> dict:
         "business_status": place.get("businessStatus"),
         "hours": hours,
     }
+
+
+def geocode_place(name: str, near: str | None, region: str | None) -> dict | None:
+    """Best-effort coordinates for one business — first text-search hit.
+    None when Places is unconfigured, nothing matches, or the call fails."""
+    if not places_configured():
+        return None
+    try:
+        query = ", ".join(x for x in (name, near) if x)
+        results = search_text(query, region, max_results=1)
+    except Exception:
+        return None
+    if not results or results[0].get("lat") is None:
+        return None
+    return results[0]

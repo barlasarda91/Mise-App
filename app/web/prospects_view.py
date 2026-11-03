@@ -109,6 +109,8 @@ def _card(p: Prospect, draft: EmailDraft | None) -> dict:
         "bucket": p.bucket,
         "county": _effective_county(p),
         "reach": _effective_reach(p),
+        "lat": float(p.lat) if p.lat is not None else None,
+        "lng": float(p.lng) if p.lng is not None else None,
     }
 
 
@@ -278,6 +280,36 @@ def mute(prospect_id: int) -> str:
         p.muted_until = _today() + timedelta(days=MUTE_DAYS)
         p.decided_at = datetime.now(timezone.utc)
         return f"Muted {p.business_name} until {p.muted_until}." + (" Draft discarded." if discarded else "")
+
+
+GEOCODE_STATE_KEY = "prospects:geocoded_v1"
+GEOCODE_CAP = 40
+
+
+def geocode_missing_prospects() -> int:
+    """One-time: pin already-recorded review-queue prospects on the map.
+    AppState-gated, capped, fail-soft; needs Places configured."""
+    from app.models import AppState
+    from app.tools.places import geocode_place, places_configured
+
+    if not places_configured():
+        return 0
+    with db_session() as s:
+        if s.get(AppState, GEOCODE_STATE_KEY) is not None:
+            return 0
+        rows = s.scalars(
+            select(Prospect).where(
+                Prospect.lat.is_(None), Prospect.status == ProspectStatus.NEW
+            ).order_by(Prospect.id.desc()).limit(GEOCODE_CAP)
+        ).all()
+        located = 0
+        for p in rows:
+            hit = geocode_place(p.business_name, p.address or p.city, p.region.value)
+            if hit:
+                p.lat, p.lng = hit["lat"], hit["lng"]
+                located += 1
+        s.add(AppState(key=GEOCODE_STATE_KEY, value={"located": located}))
+        return located
 
 
 def set_tag(prospect_id: int, field: str, value: str) -> str:

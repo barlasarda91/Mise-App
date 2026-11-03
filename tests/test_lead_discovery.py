@@ -531,3 +531,60 @@ def test_county_and_reach_tags(session_factory, run_id):
     queue = pv.load_queue()
     card = {c["id"]: c for c in queue["review"]}[a["prospect_id"]]
     assert card["county"] == "Riverside County" and card["reach"] == "Walk-in"
+
+
+def test_places_compact_carries_location():
+    from app.tools.places import _compact
+
+    place = {"id": "pid1", "displayName": {"text": "Cafe"}, "formattedAddress": "1 Main St",
+             "location": {"latitude": 33.98, "longitude": -117.37}}
+    out = _compact(place)
+    assert out["lat"] == 33.98 and out["lng"] == -117.37
+
+
+def test_record_stores_coords_and_geocode_fallback(session_factory, run_id, monkeypatch):
+    # model passes coordinates straight through
+    rec, err = _record(session_factory, lat=33.9533, lng=-117.3962)
+    assert not err
+    with session_factory() as s:
+        p = s.get(Prospect, rec["prospect_id"])
+        assert float(p.lat) == 33.9533 and float(p.lng) == -117.3962
+
+    # model omits them -> one geocode attempt fills the pin
+    import app.tools.places as places
+    monkeypatch.setattr(places, "places_configured", lambda: True)
+    monkeypatch.setattr(places, "search_text",
+                        lambda q, r=None, max_results=1: [{"lat": 34.05, "lng": -118.24,
+                                                           "place_id": "pid9"}])
+    rec2, err = _record(session_factory, business_name="Guest Bar",
+                        contact_email="hi@guestbar.example")
+    assert not err
+    with session_factory() as s:
+        p = s.get(Prospect, rec2["prospect_id"])
+        assert float(p.lat) == 34.05 and p.google_place_id == "pid9"
+
+    # queue card exposes floats for the map
+    queue = pv.load_queue()
+    card = {c["id"]: c for c in queue["review"]}[rec["prospect_id"]]
+    assert card["lat"] == 33.9533 and card["lng"] == -117.3962
+
+
+def test_geocode_backfill_is_one_time(session_factory, monkeypatch):
+    from app.models import ProspectSegment
+
+    import app.tools.places as places
+    monkeypatch.setattr(places, "places_configured", lambda: True)
+    calls = []
+    def fake_search(q, r=None, max_results=1):
+        calls.append(q)
+        return [{"lat": 32.7, "lng": -117.1, "place_id": "p"}]
+    monkeypatch.setattr(places, "search_text", fake_search)
+    with session_factory() as s:
+        s.add(Prospect(business_name="Old Cafe", name_key="old cafe", fit_score=4,
+                       segment=ProspectSegment.ALL_DAY_CAFE, region=ProspectRegion.SAN_DIEGO,
+                       why_fit="w", outreach_angle="a"))
+    assert pv.geocode_missing_prospects() == 1
+    assert pv.geocode_missing_prospects() == 0  # gated
+    assert len(calls) == 1
+    with session_factory() as s:
+        assert float(s.scalars(select(Prospect)).first().lat) == 32.7

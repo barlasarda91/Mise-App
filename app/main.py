@@ -68,6 +68,14 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         log.warning("mail index outbound reclassify skipped: %s", exc)
     try:
+        from app.web.prospects_view import geocode_missing_prospects
+
+        located = geocode_missing_prospects()
+        if located:
+            log.info("geocoded %d prospects for the map", located)
+    except Exception as exc:
+        log.warning("prospect geocode backfill skipped: %s", exc)
+    try:
         from app.tools.mail_index import repair_form_inquiries
 
         reseen = repair_form_inquiries()
@@ -137,7 +145,7 @@ _CSP = (
     "script-src 'self' 'unsafe-inline'; "
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
     "font-src https://fonts.gstatic.com; "
-    "img-src 'self' data:; "
+    "img-src 'self' data: https://tile.openstreetmap.org; "
     "connect-src 'self'; "
     "frame-ancestors 'none'; "
     "form-action 'self'; "
