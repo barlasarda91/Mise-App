@@ -274,3 +274,55 @@
   // Back/forward cache restores the page mid-busy — reset.
   window.addEventListener('pageshow', clearBusy);
 })();
+
+// --- Swipe gestures (phones) ---------------------------------------------
+// A quick horizontal flick. Two uses, both reversible:
+//   · Board: flick the lanes left/right to step between category tabs.
+//   · Inbox: flick an awaiting-reply row right to select it, left to clear
+//     it — selection drives the batch bar, nothing is acted on by the flick.
+(function () {
+  if (!('ontouchstart' in window)) return;
+  var mq = window.matchMedia('(max-width: 760px)');
+  var start = null;
+  document.addEventListener('touchstart', function (e) {
+    if (!mq.matches || e.touches.length !== 1) { start = null; return; }
+    var t = e.touches[0];
+    start = { x: t.clientX, y: t.clientY, at: Date.now(), target: e.target };
+  }, { passive: true });
+  document.addEventListener('touchend', function (e) {
+    if (!start) return;
+    var s = start; start = null;
+    var t = e.changedTouches[0];
+    var dx = t.clientX - s.x, dy = t.clientY - s.y;
+    if (Date.now() - s.at > 500) return;
+    if (Math.abs(dx) < 70 || Math.abs(dy) > Math.abs(dx) * 0.6) return;
+    if (!(s.target instanceof Element)) return;
+    if (s.target.closest('input, textarea, select, .leaflet-container, .mapbox')) return;
+    // A sideways-scrollable ancestor owns the gesture (tables, nav strip).
+    for (var el = s.target; el && el !== document.body; el = el.parentElement) {
+      if (el.scrollWidth > el.clientWidth + 4) {
+        var o = getComputedStyle(el).overflowX;
+        if (o === 'auto' || o === 'scroll') return;
+      }
+    }
+    var row = s.target.closest('.row');
+    var box = row && row.querySelector('input[form="awaitbatch"][name="sel"]');
+    if (box) {
+      var want = dx > 0;
+      if (box.checked !== want) {
+        box.checked = want;
+        box.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      return;
+    }
+    var tabs = document.getElementById('catTabs');
+    if (tabs && s.target.closest('.catboard')) {
+      var sheet = document.getElementById('moveSheet');
+      if (sheet && !sheet.hidden) return;
+      var all = Array.prototype.slice.call(tabs.querySelectorAll('.tab'));
+      var i = all.findIndex(function (x) { return x.classList.contains('on'); });
+      var next = all[i + (dx < 0 ? 1 : -1)];
+      if (next) next.click();
+    }
+  }, { passive: true });
+})();

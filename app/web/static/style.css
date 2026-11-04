@@ -254,6 +254,7 @@ select.busy{opacity:.55;pointer-events:none}
     position:sticky;top:0;height:auto;z-index:100;
     flex-direction:row;align-items:center;gap:0;
     border-right:0;border-bottom:1px solid var(--ink);
+    padding-top:env(safe-area-inset-top, 0px);
   }
   .brand{padding:10px 12px;border-bottom:0;flex:none}
   .brand .sub{display:none}
@@ -293,7 +294,7 @@ select.busy{opacity:.55;pointer-events:none}
 /* ---- mobile (phase 2): move sheet, batch bar, draft bar, prospect fold ---- */
 .sheet{
   position:fixed;left:0;right:0;bottom:0;z-index:200;background:var(--paper);
-  border-top:3px solid var(--ink);padding:12px 14px 18px;
+  border-top:3px solid var(--ink);padding:12px 14px calc(18px + env(safe-area-inset-bottom, 0px));
   transform:translateY(110%);transition:transform .22s;box-shadow:0 -4px 14px rgba(23,21,15,.3);
 }
 .sheet.show{transform:none}
@@ -304,7 +305,7 @@ select.busy{opacity:.55;pointer-events:none}
 .sheet button.kill{color:var(--ember)}
 .batchbar{
   position:fixed;left:0;right:0;bottom:0;z-index:200;background:var(--ink);color:var(--paper);
-  display:flex;align-items:center;gap:10px;padding:11px 14px;
+  display:flex;align-items:center;gap:10px;padding:11px 14px calc(11px + env(safe-area-inset-bottom, 0px));
   font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;
   transform:translateY(110%);transition:transform .2s;
 }
@@ -326,7 +327,7 @@ select.busy{opacity:.55;pointer-events:none}
   /* Drafts: the action row pins to the bottom; Cc/Bcc fold until asked */
   .draft-actions{
     position:fixed;left:0;right:0;bottom:0;z-index:150;background:var(--rail);
-    margin:0!important;padding:10px 12px;gap:8px!important;
+    margin:0!important;padding:10px 12px calc(10px + env(safe-area-inset-bottom, 0px));gap:8px!important;
   }
   .draft-actions .linkish{flex:1;color:var(--paper);border:1px solid var(--rail-soft);min-height:42px}
   .draft-actions form{flex:1;display:flex}
