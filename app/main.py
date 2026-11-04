@@ -145,7 +145,7 @@ _CSP = (
     "script-src 'self' 'unsafe-inline'; "
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
     "font-src https://fonts.gstatic.com; "
-    "img-src 'self' data: https://tile.openstreetmap.org; "
+    "img-src 'self' data: https://*.basemaps.cartocdn.com; "
     "connect-src 'self'; "
     "frame-ancestors 'none'; "
     "form-action 'self'; "

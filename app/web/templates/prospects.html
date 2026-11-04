@@ -98,9 +98,12 @@
   L.Icon.Default.prototype.options.imagePath = "/static/leaflet/images/";
   var pins = JSON.parse(document.getElementById("prospectPins").textContent);
   var map = L.map("prospectMap", { scrollWheelZoom: false });
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 18,
-    attribution: "&copy; OpenStreetMap contributors"
+  // CARTO basemaps — built for app embedding; OSM's volunteer tile
+  // servers block opaque cloud-hosted apps under their usage policy.
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+    subdomains: "abcd",
+    maxZoom: 19,
+    attribution: "&copy; OpenStreetMap contributors &copy; CARTO"
   }).addTo(map);
   var bounds = [];
   pins.forEach(function (p) {
