@@ -246,3 +246,46 @@ select.busy{opacity:.55;pointer-events:none}
 .pin-cluster{background:none;border:none}
 .pin-cluster > div{width:34px;height:34px;border-radius:50%;background:var(--ink);color:var(--paper);border:2px solid var(--paper);display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:12.5px;font-weight:700;box-shadow:0 1px 3px rgba(23,21,15,.5);cursor:pointer}
 .pin-cluster > div:hover{background:var(--ember)}
+
+/* ---- mobile (phase 1): rail becomes a top bar, content single-column ---- */
+@media (max-width: 760px){
+  .app{display:block}
+  .rail{
+    position:sticky;top:0;height:auto;z-index:100;
+    flex-direction:row;align-items:center;gap:0;
+    border-right:0;border-bottom:1px solid var(--ink);
+  }
+  .brand{padding:10px 12px;border-bottom:0;flex:none}
+  .brand .sub{display:none}
+  .mark .word{font-size:16px}
+  .mark .glyph{width:17px;height:17px}
+  .rail nav{
+    display:flex;flex-wrap:nowrap;flex:1;padding:0;overflow-x:auto;
+    -webkit-overflow-scrolling:touch;scrollbar-width:none;
+  }
+  .rail nav::-webkit-scrollbar{display:none}
+  .navbtn{
+    width:auto;padding:14px 11px;white-space:nowrap;
+    border-left:0;border-bottom:3px solid transparent;gap:6px;
+  }
+  .navbtn.active{border-left-color:transparent;border-bottom-color:var(--ember)}
+  .navbtn .ix{display:none}
+  .rail .foot{padding:0 10px;border-top:0;flex:none}
+  .rail .foot .addr{display:none}
+  .rail .foot form{margin-top:0}
+
+  main{padding:14px 12px 70px;max-width:none}
+  .topbar{margin-bottom:14px}
+  .topbar h1{font-size:24px}
+  .topbar .clock{font-size:10px}
+
+  .grid2{grid-template-columns:1fr;gap:12px}
+  .lanes,.lanes.lanes6{grid-template-columns:1fr}
+  .box-bd{overflow-x:auto}
+  .kv{flex-wrap:wrap}
+  /* touch targets */
+  .linkish{padding:6px 8px}
+  button,select{min-height:34px}
+  input[type=checkbox]{width:17px;height:17px}
+  #prospectMap{height:260px!important}
+}
