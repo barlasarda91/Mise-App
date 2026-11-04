@@ -239,3 +239,10 @@ button.busy,.busy button{opacity:.55;pointer-events:none;position:relative}
 button.busy::after{content:"…";display:inline-block;margin-left:4px;animation:busyDots 1s steps(4) infinite;width:1.2em;text-align:left;overflow:hidden;vertical-align:bottom}
 @keyframes busyDots{0%{clip-path:inset(0 100% 0 0)}100%{clip-path:inset(0 0 0 0)}}
 select.busy{opacity:.55;pointer-events:none}
+
+/* ---- prospect map: ink pins + cluster badges ---- */
+.pin-ink{background:none;border:none}
+.pin-ink svg{display:block;filter:drop-shadow(0 1px 2px rgba(23,21,15,.45))}
+.pin-cluster{background:none;border:none}
+.pin-cluster > div{width:34px;height:34px;border-radius:50%;background:var(--ink);color:var(--paper);border:2px solid var(--paper);display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:12.5px;font-weight:700;box-shadow:0 1px 3px rgba(23,21,15,.5);cursor:pointer}
+.pin-cluster > div:hover{background:var(--ember)}

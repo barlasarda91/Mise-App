@@ -117,9 +117,16 @@ window.initProspectMap = function () {
   });
   var bounds = new google.maps.LatLngBounds();
   var info = new google.maps.InfoWindow();
+  var ink = (getComputedStyle(document.documentElement).getPropertyValue("--ink") || "#17150F").trim();
+  var paper = (getComputedStyle(document.documentElement).getPropertyValue("--paper") || "#E8E4DB").trim();
+  var inkPin = {
+    path: "M12 1C6 1 1.2 5.8 1.2 11.8 1.2 20 12 33 12 33s10.8-13 10.8-21.2C22.8 5.8 18 1 12 1z",
+    fillColor: ink, fillOpacity: 1, strokeColor: paper, strokeWeight: 1.5,
+    scale: 1.1, anchor: new google.maps.Point(12, 33)
+  };
   pins.forEach(function (p) {
     var pos = {lat: p.lat, lng: p.lng};
-    var marker = new google.maps.Marker({position: pos, map: map, title: p.name});
+    var marker = new google.maps.Marker({position: pos, map: map, title: p.name, icon: inkPin});
     marker.addListener("click", function () {
       var el = document.createElement("div");
       el.innerHTML = "<b></b><br><span></span><br><a href='#prospect-" + p.id + "'>jump to card \u2192</a>";
@@ -143,7 +150,6 @@ window.initProspectMap = function () {
 <script>
 (function () {
   if (typeof L === "undefined") return;
-  L.Icon.Default.prototype.options.imagePath = "/static/leaflet/images/";
   var pins = JSON.parse(document.getElementById("prospectPins").textContent);
   var map = L.map("prospectMap", { scrollWheelZoom: false });
   // Keyless fallback while GOOGLE_MAPS_BROWSER_KEY is unset. (OSM's
@@ -152,17 +158,58 @@ window.initProspectMap = function () {
     maxZoom: 19,
     attribution: "Tiles &copy; Esri &mdash; Esri, HERE, Garmin, OpenStreetMap contributors"
   }).addTo(map);
-  var bounds = [];
-  pins.forEach(function (p) {
-    var marker = L.marker([p.lat, p.lng]).addTo(map);
-    marker.bindPopup(
-      "<b>" + p.name + "</b><br>" + p.segment + " &middot; fit " + p.fit + "/5<br>" +
-      p.county + " &middot; " + p.reach +
-      "<br><a href='#prospect-" + p.id + "'>jump to card &rarr;</a>"
-    );
-    bounds.push([p.lat, p.lng]);
-  });
-  map.fitBounds(bounds, { padding: [30, 30], maxZoom: 13 });
+
+  // Ink teardrop pin (brand --ink via CSS var; divIcon lives in the DOM).
+  var PIN_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="36" viewBox="0 0 24 34">' +
+    '<path style="fill:var(--ink)" stroke="var(--paper)" stroke-width="1.5" ' +
+    'd="M12 1C6 1 1.2 5.8 1.2 11.8 1.2 20 12 33 12 33s10.8-13 10.8-21.2C22.8 5.8 18 1 12 1z"/>' +
+    '<circle cx="12" cy="11.8" r="4" fill="var(--paper)"/></svg>';
+  function pinIcon() {
+    return L.divIcon({ className: "pin-ink", html: PIN_SVG,
+                       iconSize: [26, 36], iconAnchor: [13, 36], popupAnchor: [0, -34] });
+  }
+  function clusterIcon(n) {
+    return L.divIcon({ className: "pin-cluster", html: "<div>" + n + "</div>",
+                       iconSize: [34, 34], iconAnchor: [17, 17] });
+  }
+
+  // Tiny grid clusterer: at each zoom, pins sharing a ~56px screen cell
+  // collapse into one numbered badge; click zooms into that group. 48 pins
+  // don't need a plugin.
+  var layer = L.layerGroup().addTo(map);
+  function render() {
+    layer.clearLayers();
+    var zoom = map.getZoom();
+    var cells = {};
+    pins.forEach(function (p) {
+      var pt = map.project([p.lat, p.lng], zoom);
+      var key = Math.round(pt.x / 56) + ":" + Math.round(pt.y / 56);
+      (cells[key] = cells[key] || []).push(p);
+    });
+    Object.keys(cells).forEach(function (key) {
+      var group = cells[key];
+      if (group.length === 1) {
+        var p = group[0];
+        L.marker([p.lat, p.lng], { icon: pinIcon(), title: p.name })
+          .bindPopup(
+            "<b>" + p.name + "</b><br>" + p.segment + " &middot; fit " + p.fit + "/5<br>" +
+            p.county + " &middot; " + p.reach +
+            "<br><a href='#prospect-" + p.id + "'>jump to card &rarr;</a>"
+          ).addTo(layer);
+      } else {
+        var bounds = L.latLngBounds(group.map(function (p) { return [p.lat, p.lng]; }));
+        L.marker(bounds.getCenter(), { icon: clusterIcon(group.length),
+                                       title: group.length + " prospects" })
+          .on("click", function () {
+            map.fitBounds(bounds, { padding: [40, 40], maxZoom: Math.min(zoom + 3, 16) });
+          }).addTo(layer);
+      }
+    });
+  }
+  map.on("zoomend", render);
+  map.fitBounds(pins.map(function (p) { return [p.lat, p.lng]; }),
+                { padding: [30, 30], maxZoom: 13 });
+  render();
 })();
 </script>
 {% endif %}
