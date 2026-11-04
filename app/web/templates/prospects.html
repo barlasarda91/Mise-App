@@ -115,8 +115,6 @@ window.initProspectMap = function () {
     zoomControl: true,
     gestureHandling: "cooperative"
   });
-  var bounds = new google.maps.LatLngBounds();
-  var info = new google.maps.InfoWindow();
   var ink = (getComputedStyle(document.documentElement).getPropertyValue("--ink") || "#17150F").trim();
   var paper = (getComputedStyle(document.documentElement).getPropertyValue("--paper") || "#E8E4DB").trim();
   var inkPin = {
@@ -124,23 +122,74 @@ window.initProspectMap = function () {
     fillColor: ink, fillOpacity: 1, strokeColor: paper, strokeWeight: 1.5,
     scale: 1.1, anchor: new google.maps.Point(12, 33)
   };
-  pins.forEach(function (p) {
-    var pos = {lat: p.lat, lng: p.lng};
-    var marker = new google.maps.Marker({position: pos, map: map, title: p.name, icon: inkPin});
-    marker.addListener("click", function () {
-      var el = document.createElement("div");
-      el.innerHTML = "<b></b><br><span></span><br><a href='#prospect-" + p.id + "'>jump to card \u2192</a>";
-      el.querySelector("b").textContent = p.name;
-      el.querySelector("span").textContent = p.segment + " \u00b7 fit " + p.fit + "/5 \u00b7 " + p.county + " \u00b7 " + p.reach;
-      info.setContent(el);
-      info.open(map, marker);
+  var clusterIcon = {
+    path: google.maps.SymbolPath.CIRCLE, scale: 17,
+    fillColor: ink, fillOpacity: 1, strokeColor: paper, strokeWeight: 2
+  };
+  var info = new google.maps.InfoWindow();
+  var markers = [];
+
+  // Same grid clusterer as the fallback map: pins sharing a ~56px screen
+  // cell at the current zoom collapse into one ink badge with the count.
+  function render() {
+    markers.forEach(function (m) { m.setMap(null); });
+    markers = [];
+    var proj = map.getProjection();
+    if (!proj) return;
+    var zoom = map.getZoom();
+    var scale = Math.pow(2, zoom);
+    var cells = {};
+    pins.forEach(function (p) {
+      var wp = proj.fromLatLngToPoint(new google.maps.LatLng(p.lat, p.lng));
+      var key = Math.round(wp.x * scale / 56) + ":" + Math.round(wp.y * scale / 56);
+      (cells[key] = cells[key] || []).push(p);
     });
-    bounds.extend(pos);
-  });
+    Object.keys(cells).forEach(function (key) {
+      var group = cells[key];
+      if (group.length === 1) {
+        var p = group[0];
+        var marker = new google.maps.Marker({
+          position: {lat: p.lat, lng: p.lng}, map: map, title: p.name, icon: inkPin
+        });
+        marker.addListener("click", function () {
+          var el = document.createElement("div");
+          el.innerHTML = "<b></b><br><span></span><br><a href='#prospect-" + p.id + "'>jump to card \u2192</a>";
+          el.querySelector("b").textContent = p.name;
+          el.querySelector("span").textContent = p.segment + " \u00b7 fit " + p.fit + "/5 \u00b7 " + p.county + " \u00b7 " + p.reach;
+          info.setContent(el);
+          info.open(map, marker);
+        });
+        markers.push(marker);
+      } else {
+        var gb = new google.maps.LatLngBounds();
+        group.forEach(function (p) { gb.extend({lat: p.lat, lng: p.lng}); });
+        var badge = new google.maps.Marker({
+          position: gb.getCenter(), map: map, icon: clusterIcon,
+          title: group.length + " prospects",
+          label: {text: String(group.length), color: paper, fontWeight: "700", fontSize: "12px"}
+        });
+        badge.addListener("click", function () {
+          map.fitBounds(gb, 40);
+          var once = google.maps.event.addListener(map, "idle", function () {
+            if (map.getZoom() > 16) map.setZoom(16);
+            google.maps.event.removeListener(once);
+          });
+        });
+        markers.push(badge);
+      }
+    });
+  }
+
+  var bounds = new google.maps.LatLngBounds();
+  pins.forEach(function (p) { bounds.extend({lat: p.lat, lng: p.lng}); });
   map.fitBounds(bounds, 40);
-  var l = google.maps.event.addListener(map, "idle", function () {
+  var first = google.maps.event.addListener(map, "idle", function () {
     if (map.getZoom() > 13) map.setZoom(13);
-    google.maps.event.removeListener(l);
+    google.maps.event.removeListener(first);
+    render();
+  });
+  map.addListener("zoom_changed", function () {
+    google.maps.event.addListenerOnce(map, "idle", render);
   });
 };
 </script>
@@ -201,7 +250,7 @@ window.initProspectMap = function () {
         L.marker(bounds.getCenter(), { icon: clusterIcon(group.length),
                                        title: group.length + " prospects" })
           .on("click", function () {
-            map.fitBounds(bounds, { padding: [40, 40], maxZoom: Math.min(zoom + 3, 16) });
+            map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
           }).addTo(layer);
       }
     });
