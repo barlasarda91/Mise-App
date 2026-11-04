@@ -230,3 +230,12 @@ a.cn:hover{color:var(--ember)}
   .grid4{grid-template-columns:1fr 1fr}
   main{padding:20px 16px 50px}
 }
+
+/* ---- global busy states (app.js v6) ---- */
+#busyBar{position:fixed;top:0;left:0;right:0;height:3px;z-index:9999;display:none;overflow:hidden;background:color-mix(in srgb, var(--ember) 20%, transparent)}
+#busyBar::after{content:"";position:absolute;top:0;left:-40%;width:40%;height:100%;background:var(--ember);animation:busySlide 1s linear infinite}
+@keyframes busySlide{from{left:-40%}to{left:100%}}
+button.busy,.busy button{opacity:.55;pointer-events:none;position:relative}
+button.busy::after{content:"…";display:inline-block;margin-left:4px;animation:busyDots 1s steps(4) infinite;width:1.2em;text-align:left;overflow:hidden;vertical-align:bottom}
+@keyframes busyDots{0%{clip-path:inset(0 100% 0 0)}100%{clip-path:inset(0 0 0 0)}}
+select.busy{opacity:.55;pointer-events:none}

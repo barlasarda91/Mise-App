@@ -48,7 +48,7 @@
       <span class="spacer"></span>
       <form method="post" action="/prospects/{{ p.id }}/tag" class="tag-form">
         <input type="hidden" name="field" value="county">
-        <select name="value" title="County" onchange="if(this.value==='__new__'){var n=window.prompt('County name:');if(n&&n.trim()){var o=document.createElement('option');o.value=n.trim();o.textContent=n.trim();this.appendChild(o);this.value=n.trim();this.form.submit();}else{this.value='{{ p.county }}';}}else{this.form.submit();}">
+        <select name="value" title="County" onchange="if(this.value==='__new__'){var n=window.prompt('County name:');if(n&&n.trim()){var o=document.createElement('option');o.value=n.trim();o.textContent=n.trim();this.appendChild(o);this.value=n.trim();this.form.requestSubmit();}else{this.value='{{ p.county }}';}}else{this.form.requestSubmit();}">
           {% for c in queue.counties %}
           <option value="{{ c }}"{% if p.county == c %} selected{% endif %}>{{ c }}</option>
           {% endfor %}
@@ -57,7 +57,7 @@
       </form>
       <form method="post" action="/prospects/{{ p.id }}/tag" class="tag-form">
         <input type="hidden" name="field" value="reach_method">
-        <select name="value" title="Reach-out method" onchange="this.form.submit()">
+        <select name="value" title="Reach-out method" onchange="this.form.requestSubmit()">
           {% for r in queue.reaches %}
           <option value="{{ r }}"{% if p.reach == r %} selected{% endif %}>{{ r }}</option>
           {% endfor %}

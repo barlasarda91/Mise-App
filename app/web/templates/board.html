@@ -143,7 +143,7 @@
           if (who === null) { liveNote('Move cancelled.'); return; }
           input.value = who.trim();
         }
-        if (form.requestSubmit) form.requestSubmit(); else form.submit();
+        if (form.requestSubmit) form.requestSubmit(); else form.requestSubmit();
       });
     });
   })();
@@ -187,7 +187,7 @@
       }
     } catch (err) {
       form.dataset.fallback = '1';  // don't intercept the retry
-      form.submit();
+      form.requestSubmit();
       return;
     } finally {
       btn.disabled = false;

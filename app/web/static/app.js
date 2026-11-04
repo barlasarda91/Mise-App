@@ -219,3 +219,58 @@
     });
   }
 })();
+
+// ---- 3. global busy states ----
+// The app had no loading feedback at all: a Locate press doing 40 Places
+// calls, a Run now, a batch action — nothing moved until the redirect
+// landed. Every form submit now lights a top progress bar and marks its
+// controls busy. Full-page navigations clear naturally when the new page
+// arrives; fetch-based actions (board/pipeline moves, promote) clear when
+// the last pending fetch settles, via a wrapped window.fetch.
+// Buttons are never disabled before submission (a disabled submit button
+// drops its name/value from the form data) — double submits are blocked
+// by a per-form flag instead.
+(function () {
+  var bar = document.createElement('div');
+  bar.id = 'busyBar';
+  document.body.appendChild(bar);
+  var pendingFetches = 0;
+  var busyEls = [];
+
+  function show() { bar.style.display = 'block'; }
+  function clearBusy() {
+    bar.style.display = 'none';
+    busyEls.forEach(function (el) { el.classList.remove('busy'); });
+    busyEls = [];
+    document.querySelectorAll('form').forEach(function (f) { delete f.dataset.miseSubmitted; });
+  }
+
+  document.addEventListener('submit', function (e) {
+    var form = e.target;
+    if (!(form instanceof HTMLFormElement) || form.hasAttribute('data-no-busy')) return;
+    if (form.dataset.miseSubmitted) { e.preventDefault(); return; }
+    form.dataset.miseSubmitted = '1';
+    show();
+    form.querySelectorAll('button, select').forEach(function (el) {
+      el.classList.add('busy');
+      busyEls.push(el);
+    });
+  }, true);
+
+  var origFetch = window.fetch;
+  window.fetch = function () {
+    // Background GETs (autocomplete, thread previews) stay silent; only
+    // state-changing calls drive the bar.
+    var init = arguments[1] || {};
+    var method = (init.method || 'GET').toUpperCase();
+    if (method === 'GET') return origFetch.apply(this, arguments);
+    pendingFetches++;
+    show();
+    return origFetch.apply(this, arguments).finally(function () {
+      if (--pendingFetches <= 0) clearBusy();
+    });
+  };
+
+  // Back/forward cache restores the page mid-busy — reset.
+  window.addEventListener('pageshow', clearBusy);
+})();

@@ -39,7 +39,7 @@
 <div class="masthead">
   <span class="ed" style="margin-left:0">{{ today_str }}</span>
   <form method="post" action="/coffee/launch" id="coffeeForm" style="display:none"><input type="hidden" name="coffee" id="coffeeName"></form>
-  <button type="button" class="promote-btn" style="margin-left:0" title="Bought a new coffee? Creates the full launch task set: product page, labels, website, Klaviyo, launch." onclick="var n=window.prompt('New coffee — name the coffee/lot. This deploys the whole launch task set:'); if(n&&n.trim()){document.getElementById('coffeeName').value=n.trim();document.getElementById('coffeeForm').submit();}">☕ + COFFEE</button>
+  <button type="button" class="promote-btn" style="margin-left:0" title="Bought a new coffee? Creates the full launch task set: product page, labels, website, Klaviyo, launch." onclick="var n=window.prompt('New coffee — name the coffee/lot. This deploys the whole launch task set:'); if(n&&n.trim()){document.getElementById('coffeeName').value=n.trim();document.getElementById('coffeeForm').requestSubmit();}">☕ + COFFEE</button>
   <span class="ed">
     {% if briefing %}{% if briefing.stale_day %}<span style="color:var(--ember)">LAST EDITION · {{ briefing.stale_day }}</span> · <a href="/runs?run={{ briefing.run_id }}" style="color:inherit">{{ briefing.code }}</a>{% else %}EDITION <a href="/runs?run={{ briefing.run_id }}" style="color:inherit">{{ briefing.code }} · RAN {{ briefing.time }}</a>{% endif %}{% else %}NO EDITION YET{% endif %}
     {% if travel %} · <span style="color:var(--ember)">TRAVEL MODE</span>{% endif %}
@@ -85,7 +85,7 @@
             <form method="post" action="/briefing/check" style="display:contents">
               <input type="hidden" name="task_ids" value="{{ item.task_ids | join(',') }}">
               <input type="hidden" name="done" value="{{ '0' if item.done else '1' }}">
-              <input type="checkbox" onclick="event.stopPropagation()" onchange="this.form.submit()" {% if item.done %}checked{% endif %} style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer" title="Check all {{ item.tasks | length }}">
+              <input type="checkbox" onclick="event.stopPropagation()" onchange="this.form.requestSubmit()" {% if item.done %}checked{% endif %} style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer" title="Check all {{ item.tasks | length }}">
             </form>
             <span class="md" style="font-size:13.5px;{% if item.done %}text-decoration:line-through;color:var(--ink-soft){% endif %}">{{ item.html | safe }}</span>
             <span class="spacer"></span>
@@ -98,7 +98,7 @@
               <form method="post" action="/briefing/check" class="check-item" style="display:contents">
                 <input type="hidden" name="task_ids" value="{{ t.id }}">
                 <input type="hidden" name="done" value="{{ '0' if t.done else '1' }}">
-                <input type="checkbox" onchange="this.form.submit()" {% if t.done %}checked{% endif %} style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer">
+                <input type="checkbox" onchange="this.form.requestSubmit()" {% if t.done %}checked{% endif %} style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer">
                 <a href="/board/task/{{ t.id }}" style="font-size:13px;text-decoration:none;{% if t.done %}text-decoration:line-through;color:var(--ink-soft){% endif %}">{{ t.title }}</a>
               </form>
               <form method="post" action="/tasks/{{ t.id }}/disregard" onsubmit="return confirm('Disregard {{ t.title | e }}? Deletes the task and ignores its sender until you remove the rule in Settings.')">
@@ -116,7 +116,7 @@
             <form method="post" action="/briefing/check" style="display:contents">
               <input type="hidden" name="task_ids" value="{{ item.task_ids | join(',') }}">
               <input type="hidden" name="done" value="{{ '0' if item.done else '1' }}">
-              <input type="checkbox" onclick="event.stopPropagation()" onchange="this.form.submit()" {% if item.done %}checked{% endif %} style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer">
+              <input type="checkbox" onclick="event.stopPropagation()" onchange="this.form.requestSubmit()" {% if item.done %}checked{% endif %} style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer">
             </form>
             <span class="md" style="font-size:13.5px;{% if item.done %}text-decoration:line-through;color:var(--ink-soft){% endif %}">{{ item.html | safe }}</span>
             <span class="spacer"></span>
@@ -142,7 +142,7 @@
             <input type="hidden" name="task_ids" value="{{ item.task_ids | join(',') }}">
             <input type="hidden" name="done" value="{{ '0' if item.done else '1' }}">
             {% if item.task_ids %}
-            <input type="checkbox" onchange="this.form.submit()" {% if item.done %}checked{% endif %} style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer">
+            <input type="checkbox" onchange="this.form.requestSubmit()" {% if item.done %}checked{% endif %} style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer">
             {% else %}
             <span class="code" title="No linked board task — checkbox unavailable" style="min-width:13px;text-align:center">·</span>
             {% endif %}
@@ -259,7 +259,7 @@
       form.method = 'post'; form.action = '/briefing/check'; form.style.display = 'contents';
       form.innerHTML = '<input type="hidden" name="task_ids" value="' + taskId + '">' +
         '<input type="hidden" name="done" value="1">' +
-        '<input type="checkbox" onchange="this.form.submit()" style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer">';
+        '<input type="checkbox" onchange="this.form.requestSubmit()" style="accent-color:var(--ember);transform:translateY(2px);cursor:pointer">';
       const link = document.createElement('a');
       link.href = '/board/task/' + taskId; link.style.cssText = 'font-size:13.5px;text-decoration:none';
       link.textContent = title;

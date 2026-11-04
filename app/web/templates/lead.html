@@ -248,7 +248,7 @@
         }
       } catch (err) {
         form.dataset.fallback = '1';
-        form.submit();
+        form.requestSubmit();
         return;
       } finally {
         btn.disabled = false;
