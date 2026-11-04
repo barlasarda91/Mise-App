@@ -70,12 +70,23 @@
 {% endmacro %}
 
 {% set located = queue.review | selectattr("lat") | list %}
-{% if located %}
+{% if queue.review %}
 <link rel="stylesheet" href="/static/leaflet/leaflet.css">
 <div class="box" style="margin:0 0 16px">
-  <div class="box-hd"><span class="lbl">Map</span><span class="ix">{{ located | length }} OF {{ queue.review | length }} PROSPECTS LOCATED</span></div>
+  <div class="box-hd"><span class="lbl">Map</span><span class="ix" style="display:flex;gap:10px;align-items:center">{{ located | length }} OF {{ queue.review | length }} LOCATED
+    {% if queue.places_on and located | length < queue.review | length %}
+    <form method="post" action="/prospects/locate" style="display:inline"><button class="linkish" type="submit" title="Geocode the unpinned prospects via Google Places">Locate {{ queue.review | length - located | length }} more</button></form>
+    {% endif %}
+  </span></div>
+  {% if located %}
   <div id="prospectMap" style="height:340px"></div>
+  {% elif not queue.places_on %}
+  <div class="box-bd"><span class="note">No prospect has coordinates yet, and Google Places isn't configured — set <b>GOOGLE_PLACES_API_KEY</b> in Railway, redeploy, and press Locate. New discoveries also pin themselves once the key is set.</span></div>
+  {% else %}
+  <div class="box-bd"><span class="note">No prospect has coordinates yet — press <b>Locate</b> above to pin the queue via Google Places.</span></div>
+  {% endif %}
 </div>
+{% if located %}
 <script id="prospectPins" type="application/json">[
   {% for p in located %}{"name": {{ p.name | tojson }}, "lat": {{ p.lat }}, "lng": {{ p.lng }}, "county": {{ p.county | tojson }}, "reach": {{ p.reach | tojson }}, "fit": {{ p.fit }}, "segment": {{ p.segment | tojson }}, "id": {{ p.id }} }{% if not loop.last %},{% endif %}
   {% endfor %}
@@ -104,6 +115,7 @@
   map.fitBounds(bounds, { padding: [30, 30], maxZoom: 13 });
 })();
 </script>
+{% endif %}
 {% endif %}
 
 {% set review_actions = [("approve", "Approve → Pipeline", true), ("mute", "Mute 60 days", false), ("reject", "Reject", false)] %}

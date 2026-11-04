@@ -143,6 +143,12 @@ def load_queue() -> dict:
             reaches = REACH_METHODS + sorted(
                 {c["reach"] for c in review} - set(REACH_METHODS)
             )
+            try:
+                from app.tools.places import places_configured
+
+                places_on = places_configured()
+            except Exception:
+                places_on = False
             return {
                 "review": review,
                 "groups": groups,
@@ -150,10 +156,11 @@ def load_queue() -> dict:
                 "reaches": reaches,
                 "muted": muted,
                 "decided": decided[:RECENT_DECIDED],
+                "places_on": places_on,
             }
     except Exception:
         return {"review": [], "groups": [], "counties": [], "reaches": REACH_METHODS,
-                "muted": [], "decided": []}
+                "muted": [], "decided": [], "places_on": False}
 
 
 def review_count() -> int:
@@ -286,30 +293,43 @@ GEOCODE_STATE_KEY = "prospects:geocoded_v1"
 GEOCODE_CAP = 40
 
 
-def geocode_missing_prospects() -> int:
-    """One-time: pin already-recorded review-queue prospects on the map.
-    AppState-gated, capped, fail-soft; needs Places configured."""
-    from app.models import AppState
+def locate_prospects() -> tuple[int, int]:
+    """Geocode review-queue prospects that have no pin yet (capped per
+    call, fail-soft). Returns (located, still_missing). Safe to repeat —
+    only lat-less rows cost a lookup."""
     from app.tools.places import geocode_place, places_configured
+
+    if not places_configured():
+        return 0, -1  # -1 = Places unconfigured, the page explains
+    with db_session() as s:
+        rows = s.scalars(
+            select(Prospect).where(
+                Prospect.lat.is_(None), Prospect.status == ProspectStatus.NEW
+            ).order_by(Prospect.id.desc())
+        ).all()
+        located = 0
+        for p in rows[:GEOCODE_CAP]:
+            hit = geocode_place(p.business_name, p.address or p.city, p.region.value)
+            if hit:
+                p.lat, p.lng = hit["lat"], hit["lng"]
+                located += 1
+        return located, len(rows) - located
+
+
+def geocode_missing_prospects() -> int:
+    """Startup pass: one-time (AppState-gated) run of locate_prospects, so
+    a deploy pins the existing queue without anyone pressing the button."""
+    from app.models import AppState
+    from app.tools.places import places_configured
 
     if not places_configured():
         return 0
     with db_session() as s:
         if s.get(AppState, GEOCODE_STATE_KEY) is not None:
             return 0
-        rows = s.scalars(
-            select(Prospect).where(
-                Prospect.lat.is_(None), Prospect.status == ProspectStatus.NEW
-            ).order_by(Prospect.id.desc()).limit(GEOCODE_CAP)
-        ).all()
-        located = 0
-        for p in rows:
-            hit = geocode_place(p.business_name, p.address or p.city, p.region.value)
-            if hit:
-                p.lat, p.lng = hit["lat"], hit["lng"]
-                located += 1
-        s.add(AppState(key=GEOCODE_STATE_KEY, value={"located": located}))
-        return located
+        s.add(AppState(key=GEOCODE_STATE_KEY, value={"ran": True}))
+    located, _ = locate_prospects()
+    return located
 
 
 def set_tag(prospect_id: int, field: str, value: str) -> str:

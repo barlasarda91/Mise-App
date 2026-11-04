@@ -880,6 +880,27 @@ def prospects_log(request: Request):
     return render_page(request, "prospects_log.html", "prospects", a=discovery_analytics())
 
 
+@app.post("/prospects/locate")
+def prospects_locate():
+    """Pin unlocated review prospects on the map, on demand."""
+    from app.web.prospects_view import locate_prospects
+
+    try:
+        located, missing = locate_prospects()
+        if missing == -1:
+            message = ("Google Places isn't configured — set GOOGLE_PLACES_API_KEY "
+                       "in Railway to enable the map.")
+        elif located == 0 and missing == 0:
+            message = "Every review prospect is already on the map."
+        else:
+            message = f"Located {located} prospects." + (
+                f" {missing} couldn't be found — press again later or check their addresses."
+                if missing else "")
+    except Exception as exc:
+        message = f"Error: {exc}"
+    return RedirectResponse(f"/prospects?msg={message}", status_code=303)
+
+
 @app.post("/prospects/{prospect_id}/tag")
 def prospect_tag(prospect_id: int, field: str = Form(""), value: str = Form("")):
     from app.web.prospects_view import set_tag

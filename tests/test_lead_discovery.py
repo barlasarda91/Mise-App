@@ -569,7 +569,7 @@ def test_record_stores_coords_and_geocode_fallback(session_factory, run_id, monk
     assert card["lat"] == 33.9533 and card["lng"] == -117.3962
 
 
-def test_geocode_backfill_is_one_time(session_factory, monkeypatch):
+def test_geocode_backfill_is_one_time_but_locate_repeats(session_factory, monkeypatch):
     from app.models import ProspectSegment
 
     import app.tools.places as places
@@ -584,7 +584,23 @@ def test_geocode_backfill_is_one_time(session_factory, monkeypatch):
                        segment=ProspectSegment.ALL_DAY_CAFE, region=ProspectRegion.SAN_DIEGO,
                        why_fit="w", outreach_angle="a"))
     assert pv.geocode_missing_prospects() == 1
-    assert pv.geocode_missing_prospects() == 0  # gated
+    assert pv.geocode_missing_prospects() == 0  # startup pass is gated
     assert len(calls) == 1
     with session_factory() as s:
         assert float(s.scalars(select(Prospect)).first().lat) == 32.7
+
+    # the page button is NOT gated: it geocodes whatever is still unpinned
+    with session_factory() as s:
+        s.add(Prospect(business_name="New Cafe", name_key="new cafe", fit_score=4,
+                       segment=ProspectSegment.ALL_DAY_CAFE, region=ProspectRegion.SAN_DIEGO,
+                       why_fit="w", outreach_angle="a"))
+    assert pv.locate_prospects() == (1, 0)
+    assert pv.locate_prospects() == (0, 0)  # nothing left, no further lookups
+    assert len(calls) == 2  # located rows never re-queried
+
+
+def test_locate_reports_unconfigured_places(session_factory, monkeypatch):
+    import app.tools.places as places
+    monkeypatch.setattr(places, "places_configured", lambda: False)
+    assert pv.locate_prospects() == (0, -1)
+    assert pv.load_queue()["places_on"] is False
