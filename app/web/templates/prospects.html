@@ -98,12 +98,11 @@
   L.Icon.Default.prototype.options.imagePath = "/static/leaflet/images/";
   var pins = JSON.parse(document.getElementById("prospectPins").textContent);
   var map = L.map("prospectMap", { scrollWheelZoom: false });
-  // CARTO basemaps — built for app embedding; OSM's volunteer tile
-  // servers block opaque cloud-hosted apps under their usage policy.
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-    subdomains: "abcd",
+  // Esri World Street Map — keyless with attribution. (OSM's volunteer
+  // servers block cloud-hosted apps; CARTO went key-required.)
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
     maxZoom: 19,
-    attribution: "&copy; OpenStreetMap contributors &copy; CARTO"
+    attribution: "Tiles &copy; Esri &mdash; Esri, HERE, Garmin, OpenStreetMap contributors"
   }).addTo(map);
   var bounds = [];
   pins.forEach(function (p) {
