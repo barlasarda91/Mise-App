@@ -91,6 +91,54 @@
   {% for p in located %}{"name": {{ p.name | tojson }}, "lat": {{ p.lat }}, "lng": {{ p.lng }}, "county": {{ p.county | tojson }}, "reach": {{ p.reach | tojson }}, "fit": {{ p.fit }}, "segment": {{ p.segment | tojson }}, "id": {{ p.id }} }{% if not loop.last %},{% endif %}
   {% endfor %}
 ]</script>
+{% if maps_key %}
+{# Google Maps — same solution as the website's wholesale page. The style
+   below is a warm paper look; paste the website map's style array over
+   MISE_MAP_STYLE to match it exactly. #}
+<script>
+window.initProspectMap = function () {
+  var MISE_MAP_STYLE = [
+    {"elementType": "geometry", "stylers": [{"color": "#f4efe6"}]},
+    {"elementType": "labels.text.fill", "stylers": [{"color": "#6b6456"}]},
+    {"elementType": "labels.text.stroke", "stylers": [{"color": "#f4efe6"}]},
+    {"featureType": "poi", "stylers": [{"visibility": "off"}]},
+    {"featureType": "road", "elementType": "geometry", "stylers": [{"color": "#ffffff"}]},
+    {"featureType": "road.arterial", "elementType": "geometry", "stylers": [{"color": "#e8e0d1"}]},
+    {"featureType": "road.highway", "elementType": "geometry", "stylers": [{"color": "#dfd2b8"}]},
+    {"featureType": "transit", "stylers": [{"visibility": "off"}]},
+    {"featureType": "water", "elementType": "geometry", "stylers": [{"color": "#cfd8d3"}]}
+  ];
+  var pins = JSON.parse(document.getElementById("prospectPins").textContent);
+  var map = new google.maps.Map(document.getElementById("prospectMap"), {
+    styles: MISE_MAP_STYLE,
+    disableDefaultUI: true,
+    zoomControl: true,
+    gestureHandling: "cooperative"
+  });
+  var bounds = new google.maps.LatLngBounds();
+  var info = new google.maps.InfoWindow();
+  pins.forEach(function (p) {
+    var pos = {lat: p.lat, lng: p.lng};
+    var marker = new google.maps.Marker({position: pos, map: map, title: p.name});
+    marker.addListener("click", function () {
+      var el = document.createElement("div");
+      el.innerHTML = "<b></b><br><span></span><br><a href='#prospect-" + p.id + "'>jump to card \u2192</a>";
+      el.querySelector("b").textContent = p.name;
+      el.querySelector("span").textContent = p.segment + " \u00b7 fit " + p.fit + "/5 \u00b7 " + p.county + " \u00b7 " + p.reach;
+      info.setContent(el);
+      info.open(map, marker);
+    });
+    bounds.extend(pos);
+  });
+  map.fitBounds(bounds, 40);
+  var l = google.maps.event.addListener(map, "idle", function () {
+    if (map.getZoom() > 13) map.setZoom(13);
+    google.maps.event.removeListener(l);
+  });
+};
+</script>
+<script async src="https://maps.googleapis.com/maps/api/js?key={{ maps_key }}&callback=initProspectMap"></script>
+{% else %}
 <script src="/static/leaflet/leaflet.js"></script>
 <script>
 (function () {
@@ -98,8 +146,8 @@
   L.Icon.Default.prototype.options.imagePath = "/static/leaflet/images/";
   var pins = JSON.parse(document.getElementById("prospectPins").textContent);
   var map = L.map("prospectMap", { scrollWheelZoom: false });
-  // Esri World Street Map — keyless with attribution. (OSM's volunteer
-  // servers block cloud-hosted apps; CARTO went key-required.)
+  // Keyless fallback while GOOGLE_MAPS_BROWSER_KEY is unset. (OSM's
+  // volunteer servers block cloud-hosted apps; CARTO went key-required.)
   L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
     maxZoom: 19,
     attribution: "Tiles &copy; Esri &mdash; Esri, HERE, Garmin, OpenStreetMap contributors"
@@ -117,6 +165,7 @@
   map.fitBounds(bounds, { padding: [30, 30], maxZoom: 13 });
 })();
 </script>
+{% endif %}
 {% endif %}
 {% endif %}
 

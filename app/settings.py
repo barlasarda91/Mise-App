@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     # Google Places API (New) key for lead discovery. Optional: without it
     # the discovery routine researches on Claude web search alone.
     google_places_api_key: str | None = None
+    # Browser key for the Prospects map (Maps JavaScript API, HTTP-referrer
+    # restricted — a SEPARATE key from the server-side Places one). Unset →
+    # the map falls back to Leaflet + Esri tiles.
+    google_maps_browser_key: str | None = None
 
     # QuickBooks Online (Intuit OAuth2 — separate from the Google SA).
     # QBO_REFRESH_TOKEN is a bootstrap seed only: Intuit rotates refresh

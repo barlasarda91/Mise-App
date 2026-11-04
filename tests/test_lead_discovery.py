@@ -623,3 +623,20 @@ def test_locate_surfaces_places_api_errors(session_factory, monkeypatch):
     located, missing, error = pv.locate_prospects()
     assert located == 0 and missing == 1
     assert "403" in error and "has not been used" in error
+
+
+def test_map_uses_google_when_browser_key_set(session_factory, run_id):
+    from app.main import NAV, templates
+
+    _record(session_factory, lat=33.95, lng=-117.39)
+    queue = pv.load_queue()
+    base = dict(queue=queue, msg=None, nav=NAV, active_view="prospects", clock="", badges={})
+
+    with_key = templates.get_template("prospects.html").render(maps_key="BROWSER-KEY", **base)
+    assert "maps.googleapis.com/maps/api/js?key=BROWSER-KEY" in with_key
+    assert "initProspectMap" in with_key and "MISE_MAP_STYLE" in with_key
+    assert "/static/leaflet/leaflet.js" not in with_key
+
+    without = templates.get_template("prospects.html").render(maps_key=None, **base)
+    assert "/static/leaflet/leaflet.js" in without
+    assert "maps.googleapis.com" not in without

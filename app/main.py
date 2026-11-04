@@ -142,11 +142,12 @@ class AuthGateMiddleware(BaseHTTPMiddleware):
 # injected form from posting off-site; frame-ancestors backs up XFO DENY.
 _CSP = (
     "default-src 'self'; "
-    "script-src 'self' 'unsafe-inline'; "
+    "script-src 'self' 'unsafe-inline' https://maps.googleapis.com; "
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-    "font-src https://fonts.gstatic.com; "
-    "img-src 'self' data: https://server.arcgisonline.com; "
-    "connect-src 'self'; "
+    "font-src https://fonts.gstatic.com data:; "
+    "img-src 'self' data: https://server.arcgisonline.com "
+    "https://maps.googleapis.com https://maps.gstatic.com; "
+    "connect-src 'self' https://maps.googleapis.com; "
     "frame-ancestors 'none'; "
     "form-action 'self'; "
     "base-uri 'self'"
@@ -859,7 +860,10 @@ def lead_create_reminder(lead_id: int, remind_on: str = Form(...), note: str = F
 def prospects(request: Request, msg: str | None = None):
     from app.web.prospects_view import load_queue
 
-    return render_page(request, "prospects.html", "prospects", queue=load_queue(), msg=msg)
+    return render_page(
+        request, "prospects.html", "prospects", queue=load_queue(), msg=msg,
+        maps_key=get_settings().google_maps_browser_key,
+    )
 
 
 @app.post("/coffee/launch")
