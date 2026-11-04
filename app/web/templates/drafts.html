@@ -70,7 +70,7 @@
       {% endif %}
       <div class="note">Sent ✓ from {{ "ardabarlas" if selected.mailbox == "arda" else "hello" }}@boxxcoffee.com — this draft is read-only now. Start a new draft for a follow-up.</div>
       {% else %}
-      <form method="post" action="/drafts/{{ selected.id }}" class="stack" id="editorform">
+      <form method="post" action="/drafts/{{ selected.id }}" class="stack{% if not selected.cc and not selected.bcc %} fold-meta{% endif %}" id="editorform">
         <label>From
           <select name="from_mailbox">
             <option value="arda" {% if selected.mailbox == "arda" %}selected{% endif %}>ardabarlas@boxxcoffee.com</option>
@@ -78,11 +78,13 @@
           </select>
         </label>
         <label>To<input name="to" value="{{ selected.to }}" placeholder="comma-separated"></label>
+        <button type="button" class="linkish meta-toggle" onclick="this.closest('form').classList.add('meta-open');this.remove()">+ Cc · Bcc</button>
+        <div class="meta-extra">
         <label>Cc<input name="cc" value="{{ selected.cc }}" placeholder="comma-separated"></label>
         <label>Bcc<input name="bcc" value="{{ selected.bcc }}" placeholder="comma-separated — recipients won't see each other"></label>
+        </div>
         <label>Subject<input name="subject" value="{{ selected.subject if selected.subject != '(no subject)' else '' }}"></label>
         <label>Body<textarea name="body" rows="14">{{ selected.body }}</textarea></label>
-        <button class="linkish" type="submit">Save changes</button>
       </form>
       <div class="box" style="margin-top:14px">
         <div class="box-hd"><span class="lbl">Attachments</span><span class="ix">{{ selected.attachments | length }}</span></div>
@@ -114,10 +116,11 @@
         </div>
       </div>
 
-      <div style="display:flex;gap:10px;margin-top:14px">
-        <form method="post" action="/drafts/{{ selected.id }}/send" class="carryedit" onsubmit="return confirm('Send this email now from {{ 'ardabarlas' if selected.mailbox == 'arda' else 'hello' }}@boxxcoffee.com? This cannot be undone.')"><button class="linkish solid" type="submit">Send</button></form>
+      <div class="draft-actions" style="display:flex;gap:10px;margin-top:14px">
+        <button class="linkish" type="submit" form="editorform">Save changes</button>
         <form method="post" action="/drafts/{{ selected.id }}/save-to-gmail" class="carryedit"><button class="linkish" type="submit">Save to Gmail</button></form>
-        <form method="post" action="/drafts/{{ selected.id }}/discard"><button class="linkish" type="submit">Discard</button></form>
+        <form method="post" action="/drafts/{{ selected.id }}/send" class="carryedit" onsubmit="return confirm('Send this email now from {{ 'ardabarlas' if selected.mailbox == 'arda' else 'hello' }}@boxxcoffee.com? This cannot be undone.')"><button class="linkish solid" type="submit">Send</button></form>
+        <form method="post" action="/drafts/{{ selected.id }}/discard" class="draft-discard"><button class="linkish" type="submit">Discard</button></form>
       </div>
       <div class="note">Send delivers what's in the editor{% if selected.is_reply %} on its thread{% endif %}, after your confirmation. Save to Gmail parks it as a native draft instead. Routines can only ever draft — sending is yours alone.</div>
       {% endif %}

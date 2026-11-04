@@ -172,8 +172,13 @@ def test_briefing_falls_back_to_last_successful_edition(session_factory):
         s.flush()
 
         def run_at(dt, status, report=None):
+            # Seed in UTC: SQLite stores the naive wall clock and the loader
+            # reads naive as UTC — an LA-aware value shifts by the offset
+            # (this fixture broke at the PST switch).
+            from datetime import timezone as dt_timezone
             run = Run(routine_id=routine.id, status=status,
-                      trigger=RunTrigger.SCHEDULED, started_at=dt)
+                      trigger=RunTrigger.SCHEDULED,
+                      started_at=dt.astimezone(dt_timezone.utc))
             s.add(run)
             s.flush()
             if report:

@@ -455,8 +455,9 @@ def home(request: Request, msg: str | None = None):
 
 
 @app.post("/tasks/{task_id}/stale/{decision}")
-def task_stale_decide(task_id: int, decision: str):
-    """Six-weeks-on-the-board question: still doing it, or kill it."""
+def task_stale_decide(task_id: int, decision: str, next: str = Form("/")):
+    """Do-or-kill on a task: from the Today stale list or the Board's
+    mobile move sheet (which passes next back to the board)."""
     from app.web.board_view import stale_decide
 
     if decision not in ("keep", "kill"):
@@ -465,7 +466,9 @@ def task_stale_decide(task_id: int, decision: str):
         message = stale_decide(task_id, decision)
     except Exception as exc:
         message = f"Error: {exc}"
-    return RedirectResponse(f"/?msg={message}", status_code=303)
+    target = _safe_next(next, "/")
+    sep = "&" if "?" in target else "?"
+    return RedirectResponse(f"{target}{sep}msg={message}", status_code=303)
 
 
 @app.post("/briefing/promote")

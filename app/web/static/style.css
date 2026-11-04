@@ -289,3 +289,63 @@ select.busy{opacity:.55;pointer-events:none}
   input[type=checkbox]{width:17px;height:17px}
   #prospectMap{height:260px!important}
 }
+
+/* ---- mobile (phase 2): move sheet, batch bar, draft bar, prospect fold ---- */
+.sheet{
+  position:fixed;left:0;right:0;bottom:0;z-index:200;background:var(--paper);
+  border-top:3px solid var(--ink);padding:12px 14px 18px;
+  transform:translateY(110%);transition:transform .22s;box-shadow:0 -4px 14px rgba(23,21,15,.3);
+}
+.sheet.show{transform:none}
+.sheet .s-t{font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sheet button{display:flex;width:100%;justify-content:space-between;align-items:center;background:var(--panel);border:1px solid var(--line);padding:13px 12px;font-family:var(--font-body);font-size:14.5px;margin-bottom:7px;cursor:pointer}
+.sheet button[hidden]{display:none}
+.sheet button b{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;color:var(--ink-soft);font-weight:500}
+.sheet button.kill{color:var(--ember)}
+.batchbar{
+  position:fixed;left:0;right:0;bottom:0;z-index:200;background:var(--ink);color:var(--paper);
+  display:flex;align-items:center;gap:10px;padding:11px 14px;
+  font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;
+  transform:translateY(110%);transition:transform .2s;
+}
+.batchbar.show{transform:none}
+.batchbar[hidden]{display:none}
+.batchbar .linkish{color:var(--paper);border:1px solid var(--paper);padding:8px 13px}
+.batchbar .linkish.solid{background:var(--ember);border-color:var(--ember)}
+.statuspill{display:none;cursor:pointer}
+.research-toggle,.map-toggle,.meta-toggle{display:none}
+
+@media (max-width: 760px){
+  /* Board: variant B — one list, lane headers gone, pill opens the sheet */
+  .lane .lane-hd{display:none}
+  .lanes,.lanes.lanes6{gap:0}
+  .card form.cardmove{display:none}
+  .statuspill{display:inline-block;border-color:var(--ink);background:var(--ink);color:var(--paper)}
+  /* Inbox: desktop batch buttons recede, mobile bar takes over */
+  .batchbar .linkish{min-height:40px}
+  /* Drafts: the action row pins to the bottom; Cc/Bcc fold until asked */
+  .draft-actions{
+    position:fixed;left:0;right:0;bottom:0;z-index:150;background:var(--rail);
+    margin:0!important;padding:10px 12px;gap:8px!important;
+  }
+  .draft-actions .linkish{flex:1;color:var(--paper);border:1px solid var(--rail-soft);min-height:42px}
+  .draft-actions form{flex:1;display:flex}
+  .draft-actions form .linkish{flex:1}
+  .draft-actions .linkish.solid{background:var(--ember);border-color:var(--ember)}
+  .draft-actions .draft-discard{flex:0 0 auto}
+  .draft-actions .draft-discard .linkish{color:var(--rail-soft);border-color:transparent}
+  body:has(.draft-actions) main{padding-bottom:120px}
+  #editorform.fold-meta:not(.meta-open) .meta-extra{display:none}
+  #editorform.fold-meta:not(.meta-open) .meta-toggle{display:inline-block;align-self:flex-start}
+  #editorform textarea[name=body]{min-height:46vh}
+  /* Prospects: research folds behind a toggle; map folds behind ▸ MAP */
+  .box:not(.research-open) .research{display:none}
+  .research-toggle{display:inline-block;margin:0 0 8px;font-family:var(--font-mono);font-size:10px;letter-spacing:.1em}
+  .box.research-open .research-toggle{color:var(--ember)}
+  .map-toggle{display:inline-block;font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;color:var(--ember)}
+  .mapbox:not(.map-open) #prospectMap,
+  .mapbox:not(.map-open) .box-bd{display:none}
+  /* Today: bigger touch targets on the checklist */
+  #actTodayList input[type=checkbox]{width:20px;height:20px}
+  .promote-btn,.promote-in,.pin-pill{font-size:10px;padding:4px 8px}
+}

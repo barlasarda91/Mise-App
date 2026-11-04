@@ -128,4 +128,28 @@
 </div>
 
 <div class="note" style="margin-top:14px">Mise reads mail and drafts replies but can't mark messages read — unread clears in Gmail. Muted senders are managed in Settings.</div>
+
+<div class="batchbar" id="mobBatchBar" hidden>
+  <span id="mobBatchCount">0 SELECTED</span>
+  <span style="margin-left:auto"></span>
+  <button class="linkish" type="submit" form="awaitbatch" name="action" value="done">DONE</button>
+  <button class="linkish solid" type="submit" form="awaitbatch" name="action" value="task">→ TASK</button>
+</div>
+<script>
+// Mobile batch bar: rises when awaiting-reply checkboxes are selected.
+(function () {
+  var bar = document.getElementById('mobBatchBar');
+  if (!bar) return;
+  function refresh() {
+    var n = document.querySelectorAll('input[form="awaitbatch"][name="sel"]:checked').length;
+    document.getElementById('mobBatchCount').textContent = n + ' SELECTED';
+    bar.hidden = n === 0;
+    requestAnimationFrame(function () { bar.classList.toggle('show', n > 0); });
+  }
+  document.addEventListener('change', function (e) {
+    if (e.target.matches('input[form="awaitbatch"]')) refresh();
+  });
+  refresh();
+})();
+</script>
 {% endblock %}

@@ -26,6 +26,7 @@
           {% if c.waiting_on %}<span class="waits">waits: {{ c.waiting_on }}</span>{% endif %}
         </div>
         <div class="cbadges">
+          <button type="button" class="pill statuspill" data-task="{{ c.id }}" data-status="{{ c.status }}" data-title="{{ c.title | e }}">{{ c.status }} ▾</button>
           {% if c.overdue %}<span class="pill ember">due {{ c.due }}</span>
           {% elif c.due %}<span class="pill ghost">due {{ c.due }}</span>{% endif %}
           {% if c.priority == "high" %}<span class="pill ember">high</span>{% endif %}
@@ -49,6 +50,15 @@
   </div>
 </div>
 {% endfor %}
+
+<div class="sheet" id="moveSheet" hidden>
+  <div class="s-t" id="moveSheetTitle">Move</div>
+  <button type="button" data-move="todo"><span>→ To do</span><b>BACK TO QUEUE</b></button>
+  <button type="button" data-move="doing"><span>→ Doing</span><b>NOW WORKING IT</b></button>
+  <button type="button" data-move="waiting"><span>→ Waiting…</span><b>NAMES WHO/WHAT</b></button>
+  <button type="button" data-move="done"><span>✓ Done</span><b>CLEARS IN 7 DAYS</b></button>
+  <button type="button" data-move="kill" class="kill"><span>✕ Kill</span><b>DROPPED, ARCHIVED</b></button>
+</div>
 
 <div class="box" style="margin-top:18px;max-width:640px">
   <div class="box-hd"><span class="lbl">Add task</span><span class="ix">MANUAL</span></div>
@@ -193,5 +203,58 @@
       btn.disabled = false;
     }
   });
+</script>
+
+<script>
+// Mobile move sheet (Variant B): the status pill opens the sheet; choices
+// drive the card's existing .cardmove form, so moves ride the same fetch
+// path (and the same DOM re-slotting) as desktop.
+(function () {
+  var sheet = document.getElementById('moveSheet');
+  if (!sheet) return;
+  var current = null; // the card's .cardmove form + pill
+  document.addEventListener('click', function (e) {
+    var pill = e.target.closest('.statuspill');
+    if (pill) {
+      var card = pill.closest('.card');
+      current = { form: card.querySelector('form.cardmove'), pill: pill, task: pill.dataset.task };
+      document.getElementById('moveSheetTitle').textContent = 'Move \u201c' + pill.dataset.title + '\u201d';
+      sheet.querySelectorAll('[data-move]').forEach(function (b) {
+        b.hidden = b.dataset.move === pill.dataset.status;
+      });
+      sheet.hidden = false;
+      requestAnimationFrame(function () { sheet.classList.add('show'); });
+      return;
+    }
+    if (!sheet.hidden && !e.target.closest('#moveSheet')) {
+      sheet.classList.remove('show'); sheet.hidden = true;
+    }
+  });
+  sheet.querySelectorAll('[data-move]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (!current) return;
+      var move = btn.dataset.move;
+      sheet.classList.remove('show'); sheet.hidden = true;
+      if (move === 'kill') {
+        if (!confirm('Kill this task? It closes as deliberately dropped and moves to the archive.')) return;
+        var f = document.createElement('form');
+        f.method = 'post'; f.action = '/tasks/' + current.task + '/stale/kill';
+        var n = document.createElement('input');
+        n.type = 'hidden'; n.name = 'next'; n.value = location.pathname + location.search;
+        f.appendChild(n); document.body.appendChild(f); f.requestSubmit();
+        return;
+      }
+      if (move === 'waiting') {
+        var who = window.prompt('Waiting on whom / what?', current.form.querySelector('[name=waiting_on]').value || '');
+        if (who === null) return;
+        current.form.querySelector('[name=waiting_on]').value = who;
+      }
+      current.form.querySelector('select[name=status]').value = move;
+      current.pill.textContent = move + ' \u25be';
+      current.pill.dataset.status = move;
+      current.form.requestSubmit();
+    });
+  });
+})();
 </script>
 {% endblock %}

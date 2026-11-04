@@ -14,30 +14,31 @@
     <span class="ix">{{ p.segment | upper }} · {{ (p.city or p.region) | upper }} · FIT {{ p.fit }}/5 · <span style="color:var(--ember)">{{ p.reach | upper }}</span></span>
   </div>
   <div class="box-bd" style="font-size:14px">
-    <p style="margin:0 0 8px">{{ p.why }}</p>
+    <p class="research" style="margin:0 0 8px">{{ p.why }}</p>
     <p style="margin:0 0 8px"><b>Angle:</b> {{ p.angle }}</p>
-    {% if p.current_coffee %}<p style="margin:0 0 8px"><b>Serving now:</b> {{ p.current_coffee }}</p>{% endif %}
+    <button type="button" class="linkish research-toggle" onclick="this.closest('.box').classList.toggle('research-open')">▸ Full research</button>
+    {% if p.current_coffee %}<p class="research" style="margin:0 0 8px"><b>Serving now:</b> {{ p.current_coffee }}</p>{% endif %}
     {% if p.matched_lead_id %}<p class="note" style="margin:0 0 8px">Previously in the Pipeline: <a href="/pipeline/lead/{{ p.matched_lead_id }}">lead #{{ p.matched_lead_id }}</a></p>{% endif %}
 
     <div class="kv"><span class="ks">Contact</span><span>{{ p.contact or "—" }}{% if p.contact_email %} · {{ p.contact_email }}{% endif %}</span></div>
     <div class="kv"><span class="ks">Where</span><span>{{ p.address or p.city or p.region }}</span></div>
     {% if p.phone %}<div class="kv"><span class="ks">Phone</span><span>{{ p.phone }}</span></div>{% endif %}
     {% if p.review_count %}<div class="kv"><span class="ks">Reviews</span><span>{{ p.rating or "—" }} ★ · {{ p.review_count }}</span></div>{% endif %}
-    <div class="kv"><span class="ks">Links</span><span style="display:flex;gap:10px;flex-wrap:wrap">
+    <div class="kv research"><span class="ks">Links</span><span style="display:flex;gap:10px;flex-wrap:wrap">
       {% if p.website %}<a href="{{ p.website }}" target="_blank" rel="noopener noreferrer">website</a>{% endif %}
       {% if p.instagram_url %}<a href="{{ p.instagram_url }}" target="_blank" rel="noopener noreferrer">{{ p.instagram }}</a>{% elif p.instagram %}{{ p.instagram }}{% endif %}
       {% for u in p.sources[:6] %}<a href="{{ u }}" target="_blank" rel="noopener noreferrer">src {{ loop.index }}</a>{% endfor %}
     </span></div>
 
-    <div class="kv"><span class="ks">Outreach</span><span>
+    <div class="kv research"><span class="ks">Outreach</span><span>
       {% if p.draft_id %}<a href="/drafts?draft={{ p.draft_id }}">email draft from {{ p.mailbox }}@ →</a> <span class="pill ghost">{{ p.draft_state }}</span>
       {% else %}{{ p.channel }}{% endif %}
     </span></div>
     {% if p.dm_script %}
-    <details style="margin-top:8px"><summary class="note" style="cursor:pointer">DM script</summary><pre style="white-space:pre-wrap;font-family:inherit;margin:6px 0 0">{{ p.dm_script }}</pre></details>
+    <details class="research" style="margin-top:8px"><summary class="note" style="cursor:pointer">DM script</summary><pre style="white-space:pre-wrap;font-family:inherit;margin:6px 0 0">{{ p.dm_script }}</pre></details>
     {% endif %}
     {% if p.walk_in_note %}
-    <details style="margin-top:8px"><summary class="note" style="cursor:pointer">Walk-in note</summary><pre style="white-space:pre-wrap;font-family:inherit;margin:6px 0 0">{{ p.walk_in_note }}</pre></details>
+    <details class="research" style="margin-top:8px"><summary class="note" style="cursor:pointer">Walk-in note</summary><pre style="white-space:pre-wrap;font-family:inherit;margin:6px 0 0">{{ p.walk_in_note }}</pre></details>
     {% endif %}
 
     {% if actions %}
@@ -72,8 +73,8 @@
 {% set located = queue.review | selectattr("lat") | list %}
 {% if queue.review %}
 <link rel="stylesheet" href="/static/leaflet/leaflet.css">
-<div class="box" style="margin:0 0 16px">
-  <div class="box-hd"><span class="lbl">Map</span><span class="ix" style="display:flex;gap:10px;align-items:center">{{ located | length }} OF {{ queue.review | length }} LOCATED
+<div class="box mapbox" style="margin:0 0 16px">
+  <div class="box-hd"><span class="lbl">Map</span><span class="ix" style="display:flex;gap:10px;align-items:center"><button type="button" class="linkish map-toggle" onclick="var b=this.closest('.box');b.classList.toggle('map-open');if(b.classList.contains('map-open')&&window.__pmapFix)setTimeout(window.__pmapFix,60)">▸ MAP</button>{{ located | length }} OF {{ queue.review | length }} LOCATED
     {% if queue.places_on and located | length < queue.review | length %}
     <form method="post" action="/prospects/locate" style="display:inline"><button class="linkish" type="submit" title="Geocode the unpinned prospects via Google Places">Locate {{ queue.review | length - located | length }} more</button></form>
     {% endif %}
@@ -191,6 +192,10 @@ window.initProspectMap = function () {
   map.addListener("zoom_changed", function () {
     google.maps.event.addListenerOnce(map, "idle", render);
   });
+  window.__pmapFix = function () {
+    google.maps.event.trigger(map, "resize");
+    map.fitBounds(bounds, 40);
+  };
 };
 </script>
 <script async src="https://maps.googleapis.com/maps/api/js?key={{ maps_key }}&callback=initProspectMap"></script>
@@ -256,9 +261,13 @@ window.initProspectMap = function () {
     });
   }
   map.on("zoomend", render);
-  map.fitBounds(pins.map(function (p) { return [p.lat, p.lng]; }),
-                { padding: [30, 30], maxZoom: 13 });
+  var allBounds = pins.map(function (p) { return [p.lat, p.lng]; });
+  map.fitBounds(allBounds, { padding: [30, 30], maxZoom: 13 });
   render();
+  window.__pmapFix = function () {
+    map.invalidateSize();
+    map.fitBounds(allBounds, { padding: [30, 30], maxZoom: 13 });
+  };
 })();
 </script>
 {% endif %}
