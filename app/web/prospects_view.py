@@ -293,14 +293,17 @@ GEOCODE_STATE_KEY = "prospects:geocoded_v1"
 GEOCODE_CAP = 40
 
 
-def locate_prospects() -> tuple[int, int]:
+def locate_prospects() -> tuple[int, int, str | None]:
     """Geocode review-queue prospects that have no pin yet (capped per
-    call, fail-soft). Returns (located, still_missing). Safe to repeat —
-    only lat-less rows cost a lookup."""
-    from app.tools.places import geocode_place, places_configured
+    call). Returns (located, still_missing, error). The FIRST lookup is
+    probed un-swallowed: when the Places API itself is broken (key invalid,
+    API not enabled, billing off) every row would fail identically, so that
+    one error surfaces to the page instead of reading as 'nothing found'.
+    Safe to repeat — only lat-less rows cost a lookup."""
+    from app.tools import places
 
-    if not places_configured():
-        return 0, -1  # -1 = Places unconfigured, the page explains
+    if not places.places_configured():
+        return 0, -1, None  # unconfigured: the page explains
     with db_session() as s:
         rows = s.scalars(
             select(Prospect).where(
@@ -308,12 +311,20 @@ def locate_prospects() -> tuple[int, int]:
             ).order_by(Prospect.id.desc())
         ).all()
         located = 0
-        for p in rows[:GEOCODE_CAP]:
-            hit = geocode_place(p.business_name, p.address or p.city, p.region.value)
+        for i, p in enumerate(rows[:GEOCODE_CAP]):
+            if i == 0:
+                try:
+                    query = ", ".join(x for x in (p.business_name, p.address or p.city) if x)
+                    results = places.search_text(query, p.region.value, max_results=1)
+                except Exception as exc:
+                    return 0, len(rows), f"{exc}"[:300]
+                hit = results[0] if results and results[0].get("lat") is not None else None
+            else:
+                hit = places.geocode_place(p.business_name, p.address or p.city, p.region.value)
             if hit:
                 p.lat, p.lng = hit["lat"], hit["lng"]
                 located += 1
-        return located, len(rows) - located
+        return located, len(rows) - located, None
 
 
 def geocode_missing_prospects() -> int:
@@ -328,7 +339,7 @@ def geocode_missing_prospects() -> int:
         if s.get(AppState, GEOCODE_STATE_KEY) is not None:
             return 0
         s.add(AppState(key=GEOCODE_STATE_KEY, value={"ran": True}))
-    located, _ = locate_prospects()
+    located, _, _ = locate_prospects()
     return located
 
 

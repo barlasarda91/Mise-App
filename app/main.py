@@ -886,8 +886,10 @@ def prospects_locate():
     from app.web.prospects_view import locate_prospects
 
     try:
-        located, missing = locate_prospects()
-        if missing == -1:
+        located, missing, error = locate_prospects()
+        if error:
+            message = f"Google Places refused the lookup — nothing located. {error}"
+        elif missing == -1:
             message = ("Google Places isn't configured — set GOOGLE_PLACES_API_KEY "
                        "in Railway to enable the map.")
         elif located == 0 and missing == 0:

@@ -90,13 +90,17 @@ def _compact(place: dict) -> dict:
 
 def geocode_place(name: str, near: str | None, region: str | None) -> dict | None:
     """Best-effort coordinates for one business — first text-search hit.
-    None when Places is unconfigured, nothing matches, or the call fails."""
+    None when Places is unconfigured, nothing matches, or the call fails
+    (failures are logged, never raised)."""
+    import logging
+
     if not places_configured():
         return None
     try:
         query = ", ".join(x for x in (name, near) if x)
         results = search_text(query, region, max_results=1)
-    except Exception:
+    except Exception as exc:
+        logging.getLogger(__name__).warning("geocode failed for %r: %s", name, exc)
         return None
     if not results or results[0].get("lat") is None:
         return None

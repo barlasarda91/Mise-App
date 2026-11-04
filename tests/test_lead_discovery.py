@@ -594,13 +594,32 @@ def test_geocode_backfill_is_one_time_but_locate_repeats(session_factory, monkey
         s.add(Prospect(business_name="New Cafe", name_key="new cafe", fit_score=4,
                        segment=ProspectSegment.ALL_DAY_CAFE, region=ProspectRegion.SAN_DIEGO,
                        why_fit="w", outreach_angle="a"))
-    assert pv.locate_prospects() == (1, 0)
-    assert pv.locate_prospects() == (0, 0)  # nothing left, no further lookups
+    assert pv.locate_prospects() == (1, 0, None)
+    assert pv.locate_prospects() == (0, 0, None)  # nothing left, no lookups
     assert len(calls) == 2  # located rows never re-queried
 
 
 def test_locate_reports_unconfigured_places(session_factory, monkeypatch):
     import app.tools.places as places
     monkeypatch.setattr(places, "places_configured", lambda: False)
-    assert pv.locate_prospects() == (0, -1)
+    assert pv.locate_prospects() == (0, -1, None)
     assert pv.load_queue()["places_on"] is False
+
+
+def test_locate_surfaces_places_api_errors(session_factory, monkeypatch):
+    """A broken key / un-enabled API / missing billing must read as the
+    actual Google error, never as 'nothing found'."""
+    from app.models import ProspectSegment
+
+    import app.tools.places as places
+    monkeypatch.setattr(places, "places_configured", lambda: True)
+    def broken(q, r=None, max_results=1):
+        raise RuntimeError("Places API 403: Places API (New) has not been used in project…")
+    monkeypatch.setattr(places, "search_text", broken)
+    with session_factory() as s:
+        s.add(Prospect(business_name="Cafe X", name_key="cafe x", fit_score=4,
+                       segment=ProspectSegment.ALL_DAY_CAFE, region=ProspectRegion.SAN_DIEGO,
+                       why_fit="w", outreach_angle="a"))
+    located, missing, error = pv.locate_prospects()
+    assert located == 0 and missing == 1
+    assert "403" in error and "has not been used" in error
