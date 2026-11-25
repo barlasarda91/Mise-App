@@ -36,6 +36,13 @@
     {% if p.matched_lead_id %}<p class="note" style="margin:0 0 8px">Previously in the Pipeline: <a href="/pipeline/lead/{{ p.matched_lead_id }}">lead #{{ p.matched_lead_id }}</a></p>{% endif %}
     {% if p.last_visited_on %}<p class="note" style="margin:0 0 8px">Visited {{ p.last_visited_on }}.</p>{% endif %}
     {% if p.notes %}<pre style="white-space:pre-wrap;font-family:inherit;font-size:13.5px;margin:0 0 8px;border-left:3px solid var(--ink);padding-left:10px">{{ p.notes }}</pre>{% endif %}
+    {% for qa in p.qa or [] %}
+    <div style="margin:0 0 8px;border-left:3px solid var(--ember);padding-left:10px">
+      <p style="margin:0;font-size:13.5px"><b>Q:</b> {{ qa.q }}</p>
+      {% if qa.pending %}<p class="note" style="margin:3px 0 0"><span class="pill ember">Claude is digging…</span></p>
+      {% else %}<p style="margin:3px 0 0;font-size:13.5px;white-space:pre-wrap">{{ qa.answer }}</p>{% endif %}
+    </div>
+    {% endfor %}
 
     <div class="kv"><span class="ks">Contact</span><span>{{ p.contact or "—" }}{% if p.contact_email %} · {{ p.contact_email }}{% endif %}</span></div>
     <div class="kv"><span class="ks">Where</span><span>{{ p.address or p.city or p.region }}</span></div>
@@ -383,6 +390,21 @@ window.initProspectMap = function () {
     {% if v.walk_in_note %}
     <details style="margin-top:8px"><summary class="note" style="cursor:pointer">Walk-in note</summary><pre style="white-space:pre-wrap;font-family:inherit;margin:6px 0 0">{{ v.walk_in_note }}</pre></details>
     {% endif %}
+    <div id="prospect-qa-{{ v.id }}" style="margin-top:10px">
+      {% for qa in v.qa %}
+      <div style="margin:0 0 8px;border-left:3px solid var(--ember);padding-left:10px">
+        <p style="margin:0;font-size:13.5px"><b>Q:</b> {{ qa.q }}</p>
+        {% if qa.pending %}<p class="note" style="margin:3px 0 0"><span class="pill ember">Claude is digging…</span> <span style="font-size:11.5px">refresh in a minute or two</span></p>
+        {% else %}<p style="margin:3px 0 0;font-size:13.5px;white-space:pre-wrap">{{ qa.answer }}</p>{% endif %}
+      </div>
+      {% endfor %}
+      <form method="post" action="/prospects/{{ v.id }}/ask" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="hidden" name="tab" value="visits">
+        <input name="text" required maxlength="300" placeholder="Ask Claude about this shop — owner, menu, hours, their coffee…" autocomplete="off"
+               style="flex:1;min-width:200px;border:1px solid var(--ink);background:var(--paper);font-family:var(--font-body);font-size:13.5px;padding:7px 10px">
+        <button class="linkish" type="submit">Ask Claude</button>
+      </form>
+    </div>
     <div id="prospect-note-{{ v.id }}" style="margin-top:10px">
       {% if v.notes %}<pre style="white-space:pre-wrap;font-family:inherit;font-size:13.5px;margin:0 0 8px;border-left:3px solid var(--ink);padding-left:10px">{{ v.notes }}</pre>{% endif %}
       <form method="post" action="/prospects/{{ v.id }}/note" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">

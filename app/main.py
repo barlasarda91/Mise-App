@@ -920,6 +920,18 @@ def prospect_add(name: str = Form(""), visit: str = Form(""), tab: str = Form("q
     return RedirectResponse(f"/prospects?tab={back}&msg={message}", status_code=303)
 
 
+@app.post("/prospects/{prospect_id}/ask")
+def prospect_ask(prospect_id: int, text: str = Form(""), tab: str = Form("visits")):
+    from app.web.prospects_view import ask_question
+
+    try:
+        message = ask_question(prospect_id, text)
+    except Exception as exc:
+        message = f"Error: {exc}"
+    back = "visits" if tab == "visits" else "queue"
+    return RedirectResponse(f"/prospects?tab={back}&msg={message}#prospect-qa-{prospect_id}", status_code=303)
+
+
 @app.post("/prospects/{prospect_id}/note")
 def prospect_note(prospect_id: int, text: str = Form(""), tab: str = Form("visits")):
     from app.web.prospects_view import add_note

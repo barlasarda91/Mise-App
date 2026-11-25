@@ -19,6 +19,7 @@ from app.engine.toolkit import clear_run_context, dispatch, routine_tool_specs, 
 from app.models import MessageRole, Routine, Run, RunMessage, RunStatus, RunTrigger
 import app.routines.tools  # noqa: F401  (registers the routine tools)
 import app.routines.discovery  # noqa: F401  (registers the lead discovery tools)
+import app.routines.prospect_qa  # noqa: F401  (registers the prospect Q&A tool)
 
 log = logging.getLogger(__name__)
 

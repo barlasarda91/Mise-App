@@ -26,7 +26,7 @@ from app.models.enums import (
 from app.models.infra import AppState, DisregardRule, ExternalMutation, MutedSender, TaskRule, User, Vendor
 from app.models.lead import Lead, LeadActivity
 from app.models.mail import AwaitingDismissal, MailMessage
-from app.models.prospect import Prospect
+from app.models.prospect import Prospect, ProspectQuestion
 from app.models.routine import Routine, Run, RunMessage, SyncState
 from app.models.task import Project, Task, TaskActivity
 
@@ -58,6 +58,7 @@ __all__ = [
     "Project",
     "ProjectedUnit",
     "Prospect",
+    "ProspectQuestion",
     "ProspectRegion",
     "ProspectSegment",
     "ProspectStatus",

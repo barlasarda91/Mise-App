@@ -48,6 +48,15 @@ ROUTINE_DEFAULTS = [
         "schedule_cron": "30 7 * * *",
         "connectors": ["web_search", "google_places"],
     },
+    {
+        "key": "prospect_question",
+        "name": "Prospect Q&A",
+        # Never scheduled: fired on demand when Arda asks about a shop from
+        # the visits tab. Enabled from birth — it costs nothing until asked.
+        "schedule_cron": None,
+        "connectors": ["web_search", "google_places"],
+        "enabled_on_create": True,
+    },
 ]
 
 
@@ -74,7 +83,7 @@ def seed_routines(session_factory=db_session) -> int:
                         schedule_cron=spec["schedule_cron"],
                         timezone="America/Los_Angeles",
                         model="opus",
-                        enabled=False,
+                        enabled=spec.get("enabled_on_create", False),
                         connectors=spec["connectors"],
                     )
                 )

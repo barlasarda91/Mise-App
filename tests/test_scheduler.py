@@ -44,8 +44,10 @@ def test_seed_routines_idempotent(session_factory):
     assert seed_routines(session_factory) == 0  # second call adds nothing
     with session_factory() as s:
         routines = s.query(Routine).all()
-        assert {r.key for r in routines} == {"lead_tracker", "daily_agenda", "lead_discovery"}
-        assert all(not r.enabled for r in routines)  # seeded off
+        assert {r.key for r in routines} == {"lead_tracker", "daily_agenda", "lead_discovery", "prospect_question"}
+        # Seeded off, except the on-demand Q&A routine (it only runs when asked).
+        assert all(not r.enabled for r in routines if r.key != "prospect_question")
+        assert next(r for r in routines if r.key == "prospect_question").enabled
         assert all(r.model == "opus" for r in routines)
 
 

@@ -55,6 +55,13 @@ def build_runtime_context(session, routine: Routine, trigger: str | None = None)
     except Exception:
         pass
 
+    if routine.key == "prospect_question":
+        # On-demand Q&A reads nothing but its pending questions.
+        from app.routines.prospect_qa import context_lines as qa_lines
+
+        lines.extend(qa_lines(session))
+        return "\n".join(lines)
+
     if routine.key == "lead_discovery":
         # Discovery reads the web, not the mailboxes: no gather cursors, and
         # the board is irrelevant to it — just its assignment and the

@@ -84,3 +84,21 @@ class Prospect(TimestampMixin, Base):
         ForeignKey("leads.id", ondelete="SET NULL")
     )
     run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id", ondelete="SET NULL"))
+
+
+class ProspectQuestion(Base):
+    """A question Arda asked about a prospect from the visits tab. The
+    on-demand prospect_question routine researches it and writes the answer
+    back; pending rows are that run's work queue."""
+
+    __tablename__ = "prospect_questions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    prospect_id: Mapped[int] = mapped_column(
+        ForeignKey("prospects.id", ondelete="CASCADE"), index=True
+    )
+    question: Mapped[str] = mapped_column(Text)
+    answer: Mapped[str | None] = mapped_column(Text)
+    asked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id", ondelete="SET NULL"))

@@ -150,6 +150,16 @@ def load_queue() -> dict:
                 card["carried_over"] = p.visit_on < today
                 visits.append(card)
             visits.sort(key=lambda c: (c["visit_on"], c["county"], c["name"]))
+            # Arda's questions, oldest first, attached to review + visit cards.
+            from app.models import ProspectQuestion
+
+            qmap: dict[int, list[dict]] = {}
+            for q in s.scalars(select(ProspectQuestion).order_by(ProspectQuestion.id)):
+                qmap.setdefault(q.prospect_id, []).append(
+                    {"id": q.id, "q": q.question, "answer": q.answer, "pending": q.answer is None}
+                )
+            for card in review + visits:
+                card["qa"] = qmap.get(card["id"], [])
             counties = sorted({c["county"] for c in review})
             groups = [
                 {"name": name, "cards": [c for c in review if c["county"] == name]}
@@ -569,3 +579,43 @@ def add_note(prospect_id: int, text: str) -> str:
             )
             mirrored = " — logged on the Pipeline lead too"
         return f"Note saved on {p.business_name}{mirrored}."
+
+
+MAX_QUESTION_CHARS = 300
+
+
+def ask_question(prospect_id: int, text: str) -> str:
+    """Ask-Claude on the visits tab: store the question and fire the
+    on-demand Prospect Q&A run (debounced — rapid questions share a run)."""
+    text = " ".join((text or "").split())[:MAX_QUESTION_CHARS]
+    if not text:
+        return "Type the question first."
+    from app.models import ProspectQuestion
+
+    with db_session() as s:
+        p = s.get(Prospect, prospect_id)
+        if p is None:
+            return "Prospect not found."
+        s.add(ProspectQuestion(
+            prospect_id=p.id, question=text, asked_at=datetime.now(timezone.utc)
+        ))
+        name = p.business_name
+    if _queue_question_run():
+        return f"Asked about {name} — Claude is digging; the answer lands on the card in a few minutes."
+    return (f"Question on {name} saved, but the Prospect Q&A routine is disabled — "
+            "enable it in Settings to get answers.")
+
+
+def _queue_question_run() -> bool:
+    try:
+        from app.models import Routine
+        from app.scheduler import trigger_run_soon
+
+        with db_session() as s:
+            routine = s.scalar(select(Routine).where(Routine.key == "prospect_question"))
+            routine_id = routine.id if routine is not None and routine.enabled else None
+        if routine_id is None:
+            return False
+        return trigger_run_soon(routine_id, delay_seconds=15)
+    except Exception:
+        return False
