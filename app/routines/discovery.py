@@ -222,7 +222,7 @@ def _record_prospect(
     if existing is not None:
         if existing.status == ProspectStatus.REJECTED:
             return {"outcome": "skipped", "reason": "Arda rejected this prospect — never re-surface it."}
-        if existing.status == ProspectStatus.NEW:
+        if existing.status == ProspectStatus.NEW and not existing.needs_research:
             return {"outcome": "skipped", "reason": f"already awaiting Arda's review (prospect #{existing.id})."}
         if existing.status == ProspectStatus.APPROVED:
             return {"outcome": "skipped", "reason": f"already approved into the Pipeline (prospect #{existing.id})."}
@@ -273,7 +273,12 @@ def _record_prospect(
     prospect.dm_script = dm_script
     prospect.walk_in_note = walk_in_note
     prospect.sources = list(sources)[:12]
-    prospect.discovered_via = (discovered_via or "").strip() or None
+    # A hand-added stub keeps its "manual: …" channel — the analytics credit
+    # Arda's own find, not the research pass that filled the card in.
+    filled_stub = bool(prospect.needs_research)
+    if not (filled_stub and (prospect.discovered_via or "").startswith("manual:")):
+        prospect.discovered_via = (discovered_via or "").strip() or None
+    prospect.needs_research = False
     _fit_to_columns(prospect)
     prospect.matched_lead_id = matched_closed.id if matched_closed else None
     prospect.lead_id = None
@@ -282,6 +287,8 @@ def _record_prospect(
     session.flush()
 
     result = {"outcome": "recorded", "prospect_id": prospect.id}
+    if filled_stub:
+        result["note"] = "filled in the card Arda added by hand."
     if matched_closed is not None:
         result["note"] = (
             f"matches a closed Pipeline lead (#{matched_closed.id}, {matched_closed.stage.value}) — "
@@ -459,9 +466,25 @@ def context_lines(session: Session, today: date) -> list[str]:
     )
 
     prospects = session.scalars(select(Prospect).order_by(Prospect.id.desc())).all()
+
+    pending = [p for p in prospects if p.status == ProspectStatus.NEW and p.needs_research]
+    if pending:
+        lines.append("\n## Arda added these by hand — research them FIRST")
+        lines.append(
+            "Give each the same full card as any find: segment, fit, why_fit, angle, contact, "
+            "scripts, sources. Call record_prospect as usual — it fills Arda's stub in place. "
+            "They count toward the run cap and take priority over new hunting; if they fill "
+            "the run, skip the hunt."
+        )
+        for p in pending[:MAX_CONTEXT_NAMES]:
+            where = ", ".join(x for x in (p.address or p.city,) if x)
+            lines.append(f"- {p.business_name}" + (f" ({where})" if where else ""))
+
     groups: dict[str, list[str]] = {"review": [], "approved": [], "rejected": [], "muted": []}
     for p in prospects:
         if p.status == ProspectStatus.NEW:
+            if p.needs_research:
+                continue  # listed above as research-first, not do-not-touch
             groups["review"].append(p.business_name)
         elif p.status == ProspectStatus.APPROVED:
             groups["approved"].append(p.business_name)

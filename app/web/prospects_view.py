@@ -113,6 +113,7 @@ def _card(p: Prospect, draft: EmailDraft | None) -> dict:
         "lng": float(p.lng) if p.lng is not None else None,
         "visit_on": p.visit_on,
         "last_visited_on": p.last_visited_on,
+        "needs_research": p.needs_research,
     }
 
 
@@ -424,10 +425,12 @@ def set_visit(prospect_id: int, action: str) -> str:
 def add_prospect(name: str, visit_today: bool = False) -> str:
     """Manual add from the little box on the Prospects page. Dedup by the
     same name key discovery uses; Google Places (when configured) fills in
-    address, phone, website and the map pin — a lookup failure still adds
-    the bare name. Typing a previously rejected or muted shop deliberately
-    re-opens it."""
+    address, phone, website and the map pin right away, and the stub is
+    flagged needs_research so the Lead Discovery run gives it the same full
+    card every found prospect gets. Typing a previously rejected or muted
+    shop deliberately re-opens it."""
     from app.models import ProspectRegion, ProspectSegment
+    from app.routines.discovery import _lead_match
 
     name = " ".join((name or "").split())[:200]
     if not name:
@@ -449,6 +452,12 @@ def add_prospect(name: str, visit_today: bool = False) -> str:
                 note += " · on today's visits"
             return f"{existing.business_name} is already in Prospects{note}."
 
+        # Already a live Pipeline lead? Point there instead of a stub the
+        # research pass could never fill (record_prospect skips open leads).
+        lead = _lead_match(s, key, None)
+        if lead is not None and lead.discarded_at is None and lead.stage in OPEN_LEAD_STAGES:
+            return f"{lead.business_name} is already an open Pipeline lead (#{lead.id})."
+
         place = None
         try:
             from app.tools.places import places_configured, search_text
@@ -465,10 +474,11 @@ def add_prospect(name: str, visit_today: bool = False) -> str:
             segment=ProspectSegment.ALL_DAY_CAFE,
             region=ProspectRegion.LOS_ANGELES,
             fit_score=3,
-            why_fit="Added by hand from the Prospects page.",
+            why_fit="Added by hand — research queued for the next Lead Discovery pass.",
             outreach_angle="Arda's own find — angle is his call.",
             discovered_via=f"manual: {name}"[:200],
             visit_on=today if visit_today else None,
+            needs_research=True,
         )
         if place:
             p.address = (place.get("address") or "")[:300] or None
@@ -481,6 +491,30 @@ def add_prospect(name: str, visit_today: bool = False) -> str:
             p.lng = place.get("lng")
         s.add(p)
         s.flush()
-        extra = " · on today's visits" if visit_today else ""
+        added_name = p.business_name
         looked_up = " — details from Google Places" if place else ""
-        return f"Added {p.business_name} to the review queue{looked_up}{extra}."
+        extra = " · on today's visits" if visit_today else ""
+    research = (
+        " Research starts in a couple of minutes."
+        if _queue_research()
+        else " The next Lead Discovery run researches it."
+    )
+    return f"Added {added_name} to the review queue{looked_up}{extra}.{research}"
+
+
+def _queue_research() -> bool:
+    """Nudge a debounced Lead Discovery run so hand-added stubs get their
+    research without waiting for tomorrow 7:30. False when the scheduler
+    isn't running (dev/tests) — the daily run covers it then."""
+    try:
+        from app.models import Routine
+        from app.scheduler import trigger_run_soon
+
+        with db_session() as s:
+            routine = s.scalar(select(Routine).where(Routine.key == "lead_discovery"))
+            routine_id = routine.id if routine is not None and routine.enabled else None
+        if routine_id is None:
+            return False
+        return trigger_run_soon(routine_id)
+    except Exception:
+        return False

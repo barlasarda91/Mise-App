@@ -26,7 +26,7 @@
 <div class="box" id="prospect-{{ p.id }}">
   <div class="box-hd">
     <span class="lbl">{{ p.name }}</span>
-    <span class="ix">{{ p.segment | upper }} · {{ (p.city or p.region) | upper }} · FIT {{ p.fit }}/5 · <span style="color:var(--ember)">{{ p.reach | upper }}</span></span>
+    <span class="ix">{% if p.needs_research %}<span style="color:var(--ember)">RESEARCH QUEUED</span> · {{ (p.city or p.region) | upper }}{% else %}{{ p.segment | upper }} · {{ (p.city or p.region) | upper }} · FIT {{ p.fit }}/5{% endif %} · <span style="color:var(--ember)">{{ p.reach | upper }}</span></span>
   </div>
   <div class="box-bd" style="font-size:14px">
     <p class="research" style="margin:0 0 8px">{{ p.why }}</p>

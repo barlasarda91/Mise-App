@@ -39,6 +39,9 @@ class Prospect(TimestampMixin, Base):
     # date he actually did.
     visit_on: Mapped[date | None] = mapped_column(Date)
     last_visited_on: Mapped[date | None] = mapped_column(Date)
+    # Hand-added stub awaiting the Lead Discovery run's research pass —
+    # record_prospect fills the row in place and clears this.
+    needs_research: Mapped[bool] = mapped_column(default=False)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     city: Mapped[str | None] = mapped_column(String(100))

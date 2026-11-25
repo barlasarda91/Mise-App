@@ -749,3 +749,76 @@ def test_visits_tab_renders(session_factory, run_id):
         queue=queue, msg=None, nav=NAV, active_view="prospects", clock="", badges={}, tab="queue"
     )
     assert "visiting" in html_q and "Add a shop by name" in html_q
+
+
+# ---------- hand-added stubs get the research pass ----------
+
+
+def test_add_prospect_queues_research(session_factory, run_id):
+    msg = pv.add_prospect("Canyon Coffee")
+    assert "research" in msg.lower()
+    with session_factory() as s:
+        p = s.scalars(select(Prospect)).first()
+        assert p.needs_research is True
+        assert "research queued" in p.why_fit.lower()
+
+
+def test_record_fills_hand_added_stub_in_place(session_factory, run_id):
+    pv.add_prospect("Cafe Sevilla")
+    with session_factory() as s:
+        stub = s.scalars(select(Prospect)).first()
+        stub_id, via = stub.id, stub.discovered_via
+    assert via == "manual: Cafe Sevilla"
+
+    # The run's record_prospect call updates the stub, not a second row —
+    # and keeps the manual channel for the analytics.
+    result, is_error = _record(session_factory, discovered_via="places: cafes Riverside")
+    assert not is_error and result["outcome"] == "recorded"
+    assert result["prospect_id"] == stub_id
+    assert "hand" in result["note"]
+    with session_factory() as s:
+        rows = s.scalars(select(Prospect)).all()
+        assert len(rows) == 1
+        p = rows[0]
+        assert p.needs_research is False
+        assert p.discovered_via == "manual: Cafe Sevilla"
+        assert p.why_fit.startswith("Brunch line")
+    # Now it's an ordinary review card again: a re-record skips it.
+    again, _ = _record(session_factory)
+    assert again["outcome"] == "skipped"
+
+
+def test_context_puts_hand_added_first_not_do_not_touch(session_factory, run_id):
+    pv.add_prospect("Canyon Coffee")
+    a, _ = _record(session_factory, business_name="Researched Cafe", contact_email="r@x.example")
+    with session_factory() as s:
+        lines = "\n".join(disc.context_lines(s, date(2026, 11, 25)))
+    assert "research them FIRST" in lines and "Canyon Coffee" in lines
+    head, _, tail = lines.partition("Do not research these again")
+    assert "Canyon Coffee" in head and "Canyon Coffee" not in tail
+    assert "Researched Cafe" in tail
+    # Once filled, the mandate disappears.
+    _record(session_factory, business_name="Canyon Coffee", contact_email="c@x.example")
+    with session_factory() as s:
+        lines = "\n".join(disc.context_lines(s, date(2026, 11, 25)))
+    assert "research them FIRST" not in lines
+
+
+def test_add_prospect_blocks_open_pipeline_lead(session_factory, run_id):
+    with session_factory() as s:
+        s.add(Lead(business_name="Open Lead Cafe", stage=LeadStage.CONTACTED))
+    msg = pv.add_prospect("Open Lead Cafe")
+    assert "open Pipeline lead" in msg
+    with session_factory() as s:
+        assert s.scalars(select(Prospect)).all() == []
+
+
+def test_queue_card_shows_research_state(session_factory, run_id):
+    from app.main import NAV, templates
+
+    pv.add_prospect("Canyon Coffee")
+    html = templates.get_template("prospects.html").render(
+        queue=pv.load_queue(), msg=None, nav=NAV, active_view="prospects",
+        clock="", badges={}, tab="queue",
+    )
+    assert "RESEARCH QUEUED" in html

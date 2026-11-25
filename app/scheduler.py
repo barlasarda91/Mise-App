@@ -165,6 +165,30 @@ def sync_jobs(sched: BackgroundScheduler, session_factory=db_session) -> None:
                 pass
 
 
+def trigger_run_soon(
+    routine_id: int, delay_seconds: int = 120, sched: BackgroundScheduler | None = None
+) -> bool:
+    """Queue one run a couple of minutes out, debounced on a fixed job id:
+    repeat calls inside the window just push the same run back, so a batch of
+    hand-added prospects gets researched by a single run. Returns False when
+    the scheduler isn't running (no DB)."""
+    sched = sched or _scheduler
+    if sched is None:
+        return False
+    from datetime import datetime, timedelta, timezone
+
+    sched.add_job(
+        run_routine_job,
+        "date",
+        run_date=datetime.now(timezone.utc) + timedelta(seconds=delay_seconds),
+        args=[routine_id, "manual"],
+        id=f"soon:{routine_id}",
+        name=f"debounced run of routine {routine_id}",
+        replace_existing=True,
+    )
+    return True
+
+
 def trigger_run_now(routine_id: int, sched: BackgroundScheduler | None = None) -> bool:
     """Queue an immediate one-off manual run in the scheduler's thread pool.
     Returns False when the scheduler isn't running (no DB)."""
