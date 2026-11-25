@@ -859,15 +859,53 @@ def lead_create_reminder(lead_id: int, remind_on: str = Form(...), note: str = F
     return RedirectResponse(f"/pipeline/lead/{lead_id}?msg={msg}", status_code=303)
 
 
+def _todays_visits(queue: dict) -> list[dict]:
+    """The routable slice of the visit list: today's and carried-over stops,
+    not ones planned for a future date."""
+    from app.web.prospects_view import _today
+
+    today = _today()
+    return [v for v in queue.get("visits", []) if v.get("visit_on") and v["visit_on"] <= today]
+
+
 @app.get("/prospects", response_class=HTMLResponse)
 def prospects(request: Request, msg: str | None = None, tab: str | None = None):
     from app.web.prospects_view import load_queue
+    from app.web.route_plan import stored_route
 
+    queue = load_queue()
+    active = "visits" if tab == "visits" else "queue"
+    route = stored_route(_todays_visits(queue)) if active == "visits" else None
     return render_page(
-        request, "prospects.html", "prospects", queue=load_queue(), msg=msg,
-        tab="visits" if tab == "visits" else "queue",
+        request, "prospects.html", "prospects", queue=queue, msg=msg,
+        tab=active, route=route,
         maps_key=get_settings().google_maps_browser_key,
     )
+
+
+@app.post("/prospects/route")
+def prospects_route(start: str = Form(""), destination: str = Form(""), depart: str = Form("")):
+    from app.web.prospects_view import load_queue
+    from app.web.route_plan import plan_route, save_route
+
+    try:
+        route, error = plan_route(start, destination, depart, _todays_visits(load_queue()))
+    except Exception as exc:
+        route, error = None, f"Error: {exc}"
+    if error:
+        return RedirectResponse(f"/prospects?tab=visits&msg={error}", status_code=303)
+    save_route(route)
+    stops = len(route["legs"])
+    msg = f"Route set: {stops} stop{'s' if stops != 1 else ''}, ~{route['total_mi']} mi, back out by {route['arrive_end']}."
+    return RedirectResponse(f"/prospects?tab=visits&msg={msg}", status_code=303)
+
+
+@app.post("/prospects/route/clear")
+def prospects_route_clear():
+    from app.web.route_plan import clear_route
+
+    clear_route()
+    return RedirectResponse("/prospects?tab=visits&msg=Route cleared.", status_code=303)
 
 
 @app.post("/prospects/add")

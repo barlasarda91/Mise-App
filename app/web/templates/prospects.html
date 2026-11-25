@@ -328,6 +328,49 @@ window.initProspectMap = function () {
 <div class="note" style="margin:0 0 14px">The day's walk-in route. <b>Visit today</b> on any review card lines a shop up here; a date that slips past stays on, flagged, until you mark it <b>Visited ✓</b> or remove it. Visits don't decide the card — approve or reject from the queue whenever you're ready.</div>
 
 {% if queue.visits %}
+<div class="box" style="margin:0 0 16px;max-width:680px">
+  <div class="box-hd"><span class="lbl">Plan the route</span><span class="ix">ORDERED BY SHORTEST DRIVE</span></div>
+  <div class="box-bd">
+    <form method="post" action="/prospects/route" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <label class="note" style="display:flex;flex-direction:column;gap:4px;font-size:11px;flex:1;min-width:160px">WHERE ARE YOU NOW?
+        <input name="start" required placeholder="Arts District roastery…" autocomplete="off"
+               style="border:1px solid var(--ink);background:var(--paper);font-family:var(--font-body);font-size:13.5px;padding:7px 10px"></label>
+      <label class="note" style="display:flex;flex-direction:column;gap:4px;font-size:11px;flex:1;min-width:160px">WHERE ARE YOU HEADED AFTER?
+        <input name="destination" placeholder="empty = loop back" autocomplete="off"
+               style="border:1px solid var(--ink);background:var(--paper);font-family:var(--font-body);font-size:13.5px;padding:7px 10px"></label>
+      <label class="note" style="display:flex;flex-direction:column;gap:4px;font-size:11px">LEAVING AT
+        <input name="depart" type="time" style="border:1px solid var(--ink);background:var(--paper);font-family:var(--font-mono);font-size:12.5px;padding:6px 8px"></label>
+      <button class="linkish solid" type="submit">Plan route</button>
+    </form>
+  </div>
+</div>
+
+{% if route %}
+<div class="box" style="margin:0 0 16px;max-width:680px">
+  <div class="box-hd"><span class="lbl">Today's route</span>
+    <span class="ix">{{ route.legs | length }} STOPS · ~{{ route.total_mi }} MI · DONE {{ route.arrive_end }}</span></div>
+  <div class="box-bd" style="font-size:14px">
+    <div class="kv"><span class="ks">{{ route.depart }}</span><span>Leave <b>{{ route.start_label }}</b></span></div>
+    {% for l in route.legs %}
+    <div class="kv"><span class="ks">{{ l.arrive }}</span><span>
+      <b>{{ loop.index }}. {{ l.name }}</b> — drive ~{{ l.drive_min }}m · stay ~{{ l.stay_min }}m, out by {{ l.leave }}
+      {% if l.address %}<br><span class="note" style="font-size:12px">{{ l.address }}</span>{% endif %}
+    </span></div>
+    {% endfor %}
+    <div class="kv"><span class="ks">{{ route.arrive_end }}</span><span>Arrive <b>{{ route.end_label }}</b> (~{{ route.final_drive_min }}m drive)</span></div>
+    {% if route.trimmed %}<p class="note" style="margin:8px 0 0">Stops you've since visited or removed were dropped — times are off; replan for a fresh clock.</p>{% endif %}
+    {% if route.unroutable %}<p class="note" style="margin:8px 0 0">Not on the route (no map pin): {% for u in route.unroutable %}{{ u.name }}{% if not loop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
+    <div style="display:flex;gap:10px;margin-top:12px;align-items:center;flex-wrap:wrap">
+      <a class="linkish solid" style="text-decoration:none" href="{{ route.maps_url }}" target="_blank" rel="noopener noreferrer">Navigate in Google Maps ↗</a>
+      <form method="post" action="/prospects/route/clear"><button class="linkish" type="submit">Clear route</button></form>
+    </div>
+    <p class="note" style="margin:10px 0 0">Times are estimates: LA surface-street pace plus parking, and a recommended stay per shop — longer where the fit is strong or the shop's already in the Pipeline.</p>
+  </div>
+</div>
+{% endif %}
+{% endif %}
+
+{% if queue.visits %}
 {% for v in queue.visits %}
 <div class="box" style="margin:0 0 12px;max-width:680px">
   <div class="box-hd"><span class="lbl">{{ v.name }}</span>
