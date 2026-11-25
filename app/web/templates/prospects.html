@@ -4,7 +4,22 @@
 {% block content %}
 
 {% if msg %}<div class="note" style="margin:0 0 14px">▸ {{ msg }}</div>{% endif %}
+{% set tab = tab | default("queue") %}
 
+<div class="tabbar" style="margin:0 0 12px">
+  <a class="tab{% if tab == "queue" %} on{% endif %}" href="/prospects" style="text-decoration:none">Review queue{% if queue.review %} · {{ queue.review | length }}{% endif %}</a>
+  <a class="tab{% if tab == "visits" %} on{% endif %}" href="/prospects?tab=visits" style="text-decoration:none">Today's visits{% if queue.visits %} · {{ queue.visits | length }}{% endif %}</a>
+</div>
+
+<form method="post" action="/prospects/add" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 16px">
+  <input type="hidden" name="tab" value="{{ tab }}">
+  <input name="name" required placeholder="Add a shop by name…" autocomplete="off"
+         style="border:1px solid var(--ink);background:var(--paper);font-family:var(--font-body);font-size:13.5px;padding:7px 10px;flex:1;min-width:180px;max-width:340px">
+  <label class="note" style="display:flex;gap:5px;align-items:center;font-size:12px;margin:0"><input type="checkbox" name="visit" value="1" style="margin:0"> visit today</label>
+  <button class="linkish" type="submit">Add prospect</button>
+</form>
+
+{% if tab == "queue" %}
 <div class="note" style="margin:0 0 14px">Found by the Lead Discovery routine (daily, 7:30 AM). <b>Approve</b> moves the lead to the Pipeline at New with an outreach task — the routine never writes emails; outreach is yours, from the card. Each card carries two separate tags: <b>county</b> (groups the queue; defaults from the discovery territory) and <b>reach-out method</b> (the ember pill; defaults to Email when the card has an address, DM otherwise) — change either from the selectors on the card. <b>Mute</b> hides it for 60 days. <b>Reject</b> means it's never suggested again. Rejecting or muting discards its unsent draft. · <a href="/prospects/log">Discovery log &amp; analytics →</a></div>
 
 {% macro prospect_card(p, actions) %}
@@ -19,6 +34,7 @@
     <button type="button" class="linkish research-toggle" onclick="this.closest('.box').classList.toggle('research-open')">▸ Full research</button>
     {% if p.current_coffee %}<p class="research" style="margin:0 0 8px"><b>Serving now:</b> {{ p.current_coffee }}</p>{% endif %}
     {% if p.matched_lead_id %}<p class="note" style="margin:0 0 8px">Previously in the Pipeline: <a href="/pipeline/lead/{{ p.matched_lead_id }}">lead #{{ p.matched_lead_id }}</a></p>{% endif %}
+    {% if p.last_visited_on %}<p class="note" style="margin:0 0 8px">Visited {{ p.last_visited_on }}.</p>{% endif %}
 
     <div class="kv"><span class="ks">Contact</span><span>{{ p.contact or "—" }}{% if p.contact_email %} · {{ p.contact_email }}{% endif %}</span></div>
     <div class="kv"><span class="ks">Where</span><span>{{ p.address or p.city or p.region }}</span></div>
@@ -44,7 +60,8 @@
     {% if actions %}
     <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;align-items:center">
       {% for action, label, solid in actions %}
-      <form method="post" action="/prospects/{{ p.id }}/{{ action }}"><button class="linkish{% if solid %} solid{% endif %}" type="submit"{% if action == "reject" %} style="color:var(--ember)"{% endif %}>{{ label }}</button></form>
+      {% if action == "visit" and p.visit_on %}<a class="pill ghost" href="/prospects?tab=visits" title="On the visit list">visiting {{ p.visit_on }}</a>
+      {% else %}<form method="post" action="/prospects/{{ p.id }}/{{ action }}"><button class="linkish{% if solid %} solid{% endif %}" type="submit"{% if action == "reject" %} style="color:var(--ember)"{% endif %}>{{ label }}</button></form>{% endif %}
       {% endfor %}
       <span class="spacer"></span>
       <form method="post" action="/prospects/{{ p.id }}/tag" class="tag-form">
@@ -274,7 +291,7 @@ window.initProspectMap = function () {
 {% endif %}
 {% endif %}
 
-{% set review_actions = [("approve", "Approve → Pipeline", true), ("mute", "Mute 60 days", false), ("reject", "Reject", false)] %}
+{% set review_actions = [("approve", "Approve → Pipeline", true), ("visit", "Visit today", false), ("mute", "Mute 60 days", false), ("reject", "Reject", false)] %}
 <h2 class="note" style="font-size:12px;margin:18px 0 10px">AWAITING REVIEW · {{ "%02d" | format(queue.review | length) }}</h2>
 {% if queue.review %}
 {% for g in queue.groups %}
@@ -304,6 +321,38 @@ window.initProspectMap = function () {
   {% if p.status == "approved" and p.lead_id %}<a class="pill green" href="/pipeline/lead/{{ p.lead_id }}">in pipeline →</a>
   {% else %}<span class="pill ghost">{{ p.status }}</span>{% endif %}</div>
 {% endfor %}
+{% endif %}
+
+{% else %}{# ---- Today's visits tab ---- #}
+
+<div class="note" style="margin:0 0 14px">The day's walk-in route. <b>Visit today</b> on any review card lines a shop up here; a date that slips past stays on, flagged, until you mark it <b>Visited ✓</b> or remove it. Visits don't decide the card — approve or reject from the queue whenever you're ready.</div>
+
+{% if queue.visits %}
+{% for v in queue.visits %}
+<div class="box" style="margin:0 0 12px;max-width:680px">
+  <div class="box-hd"><span class="lbl">{{ v.name }}</span>
+    <span class="ix">{{ v.county | upper }} · <span style="color:var(--ember)">{{ v.reach | upper }}</span>{% if v.carried_over %} · <span style="color:var(--ember)">CARRIED OVER — PLANNED {{ v.visit_on }}</span>{% endif %}</span></div>
+  <div class="box-bd" style="font-size:14px">
+    <div class="kv"><span class="ks">Where</span><span>{{ v.address or v.city or v.region }} · <a href="https://www.google.com/maps/dir/?api=1&destination={{ (v.name ~ " " ~ (v.address or v.city or "")) | urlencode }}" target="_blank" rel="noopener noreferrer">directions ↗</a></span></div>
+    {% if v.phone %}<div class="kv"><span class="ks">Phone</span><span>{{ v.phone }}</span></div>{% endif %}
+    {% if v.last_visited_on %}<div class="kv"><span class="ks">History</span><span>last visited {{ v.last_visited_on }}</span></div>{% endif %}
+    {% if v.walk_in_note %}
+    <details style="margin-top:8px"><summary class="note" style="cursor:pointer">Walk-in note</summary><pre style="white-space:pre-wrap;font-family:inherit;margin:6px 0 0">{{ v.walk_in_note }}</pre></details>
+    {% endif %}
+    <div style="display:flex;gap:10px;margin-top:12px;align-items:center;flex-wrap:wrap">
+      <form method="post" action="/prospects/{{ v.id }}/visit"><input type="hidden" name="tab" value="visits"><input type="hidden" name="action" value="done"><button class="linkish solid" type="submit">Visited ✓</button></form>
+      <form method="post" action="/prospects/{{ v.id }}/visit"><input type="hidden" name="tab" value="visits"><input type="hidden" name="action" value="skip"><button class="linkish" type="submit">Remove</button></form>
+      <span class="spacer"></span>
+      {% if v.status == "new" %}<a class="note" href="/prospects#prospect-{{ v.id }}" style="font-size:12px">review card →</a>
+      {% elif v.lead_id %}<a class="note" href="/pipeline/lead/{{ v.lead_id }}" style="font-size:12px">in pipeline →</a>{% endif %}
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="note">Nothing planned for today. Press <b>Visit today</b> on a review card — or add a shop by name above with "visit today" ticked — and it lines up here.</div>
+{% endif %}
+
 {% endif %}
 
 {% endblock %}

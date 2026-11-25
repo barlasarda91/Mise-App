@@ -34,6 +34,11 @@ class Prospect(TimestampMixin, Base):
     # overridable by Arda. NULL = derived default still applies.
     county: Mapped[str | None] = mapped_column(String(60))
     reach_method: Mapped[str | None] = mapped_column(String(30))
+    # Today's-visits planning: the date Arda means to walk in (stays visible,
+    # flagged as carried over, until marked visited or skipped), and the last
+    # date he actually did.
+    visit_on: Mapped[date | None] = mapped_column(Date)
+    last_visited_on: Mapped[date | None] = mapped_column(Date)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     city: Mapped[str | None] = mapped_column(String(100))

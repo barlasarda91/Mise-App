@@ -860,13 +860,38 @@ def lead_create_reminder(lead_id: int, remind_on: str = Form(...), note: str = F
 
 
 @app.get("/prospects", response_class=HTMLResponse)
-def prospects(request: Request, msg: str | None = None):
+def prospects(request: Request, msg: str | None = None, tab: str | None = None):
     from app.web.prospects_view import load_queue
 
     return render_page(
         request, "prospects.html", "prospects", queue=load_queue(), msg=msg,
+        tab="visits" if tab == "visits" else "queue",
         maps_key=get_settings().google_maps_browser_key,
     )
+
+
+@app.post("/prospects/add")
+def prospect_add(name: str = Form(""), visit: str = Form(""), tab: str = Form("queue")):
+    from app.web.prospects_view import add_prospect
+
+    try:
+        message = add_prospect(name, visit_today=bool(visit))
+    except Exception as exc:
+        message = f"Error: {exc}"
+    back = "visits" if (visit or tab == "visits") else "queue"
+    return RedirectResponse(f"/prospects?tab={back}&msg={message}", status_code=303)
+
+
+@app.post("/prospects/{prospect_id}/visit")
+def prospect_visit(prospect_id: int, action: str = Form("plan"), tab: str = Form("queue")):
+    from app.web.prospects_view import set_visit
+
+    try:
+        message = set_visit(prospect_id, action)
+    except Exception as exc:
+        message = f"Error: {exc}"
+    back = "visits" if tab == "visits" else "queue"
+    return RedirectResponse(f"/prospects?tab={back}&msg={message}", status_code=303)
 
 
 @app.post("/coffee/launch")

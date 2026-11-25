@@ -640,3 +640,112 @@ def test_map_uses_google_when_browser_key_set(session_factory, run_id):
     without = templates.get_template("prospects.html").render(maps_key=None, **base)
     assert "/static/leaflet/leaflet.js" in without
     assert "maps.googleapis.com" not in without
+
+
+# ---------- today's visits & manual add ----------
+
+
+def test_visit_lifecycle(session_factory, run_id):
+    from datetime import date, timedelta
+
+    a, _ = _record(session_factory)
+    b, _ = _record(session_factory, business_name="Later Cafe", contact_email="l@x.example")
+
+    assert "today's visits" in pv.set_visit(a["prospect_id"], "plan")
+    assert "already" in pv.set_visit(a["prospect_id"], "plan")
+    queue = pv.load_queue()
+    assert [v["id"] for v in queue["visits"]] == [a["prospect_id"]]
+    assert queue["visits"][0]["carried_over"] is False
+
+    # A planned date that slipped past stays listed, flagged carried-over.
+    with session_factory() as s:
+        p = s.get(Prospect, b["prospect_id"])
+        p.visit_on = date.today() - timedelta(days=2)
+    queue = pv.load_queue()
+    flags = {v["id"]: v["carried_over"] for v in queue["visits"]}
+    assert flags[b["prospect_id"]] is True
+
+    # done → off the list, date remembered; skip → off quietly.
+    assert "visited" in pv.set_visit(a["prospect_id"], "done").lower()
+    pv.set_visit(b["prospect_id"], "skip")
+    queue = pv.load_queue()
+    assert queue["visits"] == []
+    with session_factory() as s:
+        pa = s.get(Prospect, a["prospect_id"])
+        pb = s.get(Prospect, b["prospect_id"])
+        assert pa.visit_on is None and pa.last_visited_on is not None
+        assert pb.visit_on is None and pb.last_visited_on is None
+    # Visiting never decides the card.
+    assert pv.review_count() == 2
+
+
+def test_add_prospect_bare_and_dedup(session_factory, run_id):
+    msg = pv.add_prospect("The Gentle Barn Cafe", visit_today=True)
+    assert "Added The Gentle Barn Cafe" in msg and "today's visits" in msg
+    queue = pv.load_queue()
+    assert queue["review"][0]["name"] == "The Gentle Barn Cafe"
+    assert len(queue["visits"]) == 1
+
+    # Same name again (noise words fold into the same key) → no duplicate.
+    assert "already" in pv.add_prospect("Gentle Barn cafe")
+    with session_factory() as s:
+        assert len(s.scalars(select(Prospect)).all()) == 1
+        p = s.scalars(select(Prospect)).first()
+        assert p.discovered_via.startswith("manual: ")
+        assert p.status == ProspectStatus.NEW
+
+    assert "Type a shop name" in pv.add_prospect("   ")
+
+
+def test_add_prospect_reopens_rejected(session_factory, run_id):
+    a, _ = _record(session_factory)
+    pv.reject(a["prospect_id"])
+    assert pv.review_count() == 0
+    msg = pv.add_prospect("Cafe Sevilla")
+    assert "back in the queue" in msg
+    assert pv.review_count() == 1
+
+
+def test_add_prospect_enriched_by_places(session_factory, run_id, monkeypatch):
+    import app.tools.places as places
+
+    monkeypatch.setattr(places, "places_configured", lambda: True)
+    monkeypatch.setattr(places, "search_text", lambda q, region=None, max_results=10: [{
+        "place_id": "pid-1", "name": "Dayglow", "address": "3206 Sunset Blvd, Los Angeles",
+        "lat": 34.0866, "lng": -118.2807, "phone": "(323) 555-0199",
+        "website": "https://dayglow.example", "rating": 4.8, "review_count": 412,
+    }])
+    msg = pv.add_prospect("dayglow")
+    assert "Google Places" in msg
+    with session_factory() as s:
+        p = s.scalars(select(Prospect)).first()
+        assert p.business_name == "Dayglow" and p.google_place_id == "pid-1"
+        assert p.address and p.lat is not None and p.phone
+
+
+def test_add_prospect_survives_places_failure(session_factory, run_id, monkeypatch):
+    import app.tools.places as places
+
+    monkeypatch.setattr(places, "places_configured", lambda: True)
+    def boom(*a, **k):
+        raise RuntimeError("Places API 500")
+    monkeypatch.setattr(places, "search_text", boom)
+    msg = pv.add_prospect("Quiet Corner")
+    assert "Added Quiet Corner" in msg and "Google Places" not in msg
+
+
+def test_visits_tab_renders(session_factory, run_id):
+    from app.main import NAV, templates
+
+    a, _ = _record(session_factory, contact_email=None, dm_script="hi", walk_in_note="ask for the manager")
+    pv.set_visit(a["prospect_id"], "plan")
+    queue = pv.load_queue()
+    html = templates.get_template("prospects.html").render(
+        queue=queue, msg=None, nav=NAV, active_view="prospects", clock="", badges={}, tab="visits"
+    )
+    assert "Visited ✓" in html and "directions" in html and "Cafe Sevilla" in html
+    # Queue tab shows the on-the-list state instead of a second button.
+    html_q = templates.get_template("prospects.html").render(
+        queue=queue, msg=None, nav=NAV, active_view="prospects", clock="", badges={}, tab="queue"
+    )
+    assert "visiting" in html_q and "Add a shop by name" in html_q

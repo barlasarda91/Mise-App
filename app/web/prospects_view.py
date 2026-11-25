@@ -111,6 +111,8 @@ def _card(p: Prospect, draft: EmailDraft | None) -> dict:
         "reach": _effective_reach(p),
         "lat": float(p.lat) if p.lat is not None else None,
         "lng": float(p.lng) if p.lng is not None else None,
+        "visit_on": p.visit_on,
+        "last_visited_on": p.last_visited_on,
     }
 
 
@@ -135,6 +137,17 @@ def load_queue() -> dict:
                 else:
                     decided.append(card)
             decided.sort(key=lambda c: c["id"], reverse=True)
+            # Today's visits: every prospect with a planned visit, whatever
+            # its review status (an approved lead can still be walked into).
+            # A date that slipped past stays on the list, flagged carried-over.
+            visits = []
+            for p in rows:
+                if p.visit_on is None:
+                    continue
+                card = _card(p, drafts.get(p.draft_id))
+                card["carried_over"] = p.visit_on < today
+                visits.append(card)
+            visits.sort(key=lambda c: (c["visit_on"], c["county"], c["name"]))
             counties = sorted({c["county"] for c in review})
             groups = [
                 {"name": name, "cards": [c for c in review if c["county"] == name]}
@@ -156,11 +169,12 @@ def load_queue() -> dict:
                 "reaches": reaches,
                 "muted": muted,
                 "decided": decided[:RECENT_DECIDED],
+                "visits": visits,
                 "places_on": places_on,
             }
     except Exception:
         return {"review": [], "groups": [], "counties": [], "reaches": REACH_METHODS,
-                "muted": [], "decided": [], "places_on": False}
+                "muted": [], "decided": [], "visits": [], "places_on": False}
 
 
 def review_count() -> int:
@@ -382,3 +396,91 @@ def unmute(prospect_id: int) -> str:
         p.muted_until = None
         p.decided_at = None
         return f"{p.business_name} is back in the review queue."
+
+
+def set_visit(prospect_id: int, action: str) -> str:
+    """Today's-visits lifecycle. plan → on today's list; done → off the list
+    with the visit date remembered on the card; skip → off the list quietly."""
+    if action not in ("plan", "done", "skip"):
+        return "Unknown visit action."
+    today = _today()
+    with db_session() as s:
+        p = s.get(Prospect, prospect_id)
+        if p is None:
+            return "Prospect not found."
+        if action == "plan":
+            if p.visit_on is not None and p.visit_on <= today:
+                return f"{p.business_name} is already on today's visits."
+            p.visit_on = today
+            return f"{p.business_name} → today's visits."
+        if action == "done":
+            p.visit_on = None
+            p.last_visited_on = today
+            return f"{p.business_name}: visited ✓ — decide the card whenever you're ready."
+        p.visit_on = None
+        return f"{p.business_name} came off the visit list."
+
+
+def add_prospect(name: str, visit_today: bool = False) -> str:
+    """Manual add from the little box on the Prospects page. Dedup by the
+    same name key discovery uses; Google Places (when configured) fills in
+    address, phone, website and the map pin — a lookup failure still adds
+    the bare name. Typing a previously rejected or muted shop deliberately
+    re-opens it."""
+    from app.models import ProspectRegion, ProspectSegment
+
+    name = " ".join((name or "").split())[:200]
+    if not name:
+        return "Type a shop name first."
+    key = name_key(name)
+    today = _today()
+    with db_session() as s:
+        existing = s.scalars(select(Prospect).where(Prospect.name_key == key)).first()
+        if existing is not None:
+            note = ""
+            if existing.status != ProspectStatus.NEW:
+                was = existing.status.value
+                existing.status = ProspectStatus.NEW
+                existing.muted_until = None
+                existing.decided_at = None
+                note = f" (was {was} — back in the queue)"
+            if visit_today:
+                existing.visit_on = today
+                note += " · on today's visits"
+            return f"{existing.business_name} is already in Prospects{note}."
+
+        place = None
+        try:
+            from app.tools.places import places_configured, search_text
+
+            if places_configured():
+                hits = search_text(f"{name}, Los Angeles area", max_results=1)
+                place = hits[0] if hits else None
+        except Exception:
+            place = None  # a bare-name prospect still gets added
+
+        p = Prospect(
+            business_name=(place or {}).get("name") or name,
+            name_key=key,
+            segment=ProspectSegment.ALL_DAY_CAFE,
+            region=ProspectRegion.LOS_ANGELES,
+            fit_score=3,
+            why_fit="Added by hand from the Prospects page.",
+            outreach_angle="Arda's own find — angle is his call.",
+            discovered_via=f"manual: {name}"[:200],
+            visit_on=today if visit_today else None,
+        )
+        if place:
+            p.address = (place.get("address") or "")[:300] or None
+            p.phone = (place.get("phone") or "")[:50] or None
+            p.website = (place.get("website") or "")[:300] or None
+            p.google_place_id = place.get("place_id")
+            p.rating = place.get("rating")
+            p.review_count = place.get("review_count")
+            p.lat = place.get("lat")
+            p.lng = place.get("lng")
+        s.add(p)
+        s.flush()
+        extra = " · on today's visits" if visit_today else ""
+        looked_up = " — details from Google Places" if place else ""
+        return f"Added {p.business_name} to the review queue{looked_up}{extra}."
