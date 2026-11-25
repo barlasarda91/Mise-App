@@ -18,6 +18,7 @@ from app.models import (
     DraftStatus,
     EmailDraft,
     Lead,
+    LeadActivity,
     LeadStage,
     Prospect,
     ProspectRegion,
@@ -822,3 +823,65 @@ def test_queue_card_shows_research_state(session_factory, run_id):
         clock="", badges={}, tab="queue",
     )
     assert "RESEARCH QUEUED" in html
+
+
+# ---------- visit notes carry into prospects and the pipeline ----------
+
+
+def test_add_note_appends_timestamped_lines(session_factory, run_id):
+    a, _ = _record(session_factory)
+    assert "Write the note" in pv.add_note(a["prospect_id"], "   ")
+    pv.add_note(a["prospect_id"], "Met Maria, wants samples")
+    pv.add_note(a["prospect_id"], "Prefers washed Ethiopians")
+    with session_factory() as s:
+        p = s.get(Prospect, a["prospect_id"])
+        lines = p.notes.splitlines()
+    assert len(lines) == 2
+    assert lines[0].startswith("[") and "Met Maria" in lines[0]
+    assert "washed Ethiopians" in lines[1]
+    card = next(c for c in pv.load_queue()["review"] if c["id"] == a["prospect_id"])
+    assert "Met Maria" in card["notes"]
+
+
+def test_notes_carry_into_pipeline_on_approve(session_factory, run_id):
+    from app.models import Task
+
+    a, _ = _record(session_factory)
+    pv.add_note(a["prospect_id"], "Owner asked for pricing sheet")
+    pv.approve(a["prospect_id"])
+    with session_factory() as s:
+        p = s.get(Prospect, a["prospect_id"])
+        acts = s.scalars(select(LeadActivity).where(LeadActivity.lead_id == p.lead_id)).all()
+        notes = [x for x in acts if "Arda's visit notes" in (x.detail or "")]
+        assert len(notes) == 1 and "pricing sheet" in notes[0].detail
+        task = s.scalars(select(Task)).all()[-1]
+        assert "Your notes:" in task.description and "pricing sheet" in task.description
+
+
+def test_note_after_approval_mirrors_to_lead(session_factory, run_id):
+    from app.models.enums import LeadActivityType
+
+    a, _ = _record(session_factory)
+    pv.approve(a["prospect_id"])
+    msg = pv.add_note(a["prospect_id"], "Dropped off samples")
+    assert "Pipeline lead" in msg
+    with session_factory() as s:
+        p = s.get(Prospect, a["prospect_id"])
+        acts = s.scalars(select(LeadActivity).where(LeadActivity.lead_id == p.lead_id)).all()
+        visits = [x for x in acts if x.type == LeadActivityType.VISIT]
+        assert len(visits) == 1 and visits[0].detail == "Dropped off samples"
+        # Not double-written into the prospect-notes blob activity.
+        assert sum("Dropped off samples" in (x.detail or "") for x in acts) == 1
+
+
+def test_visits_tab_has_note_composer(session_factory, run_id):
+    from app.main import NAV, templates
+
+    a, _ = _record(session_factory, contact_email=None, dm_script="hi", walk_in_note="ask")
+    pv.set_visit(a["prospect_id"], "plan")
+    pv.add_note(a["prospect_id"], "Busy at 9am, counter staff friendly")
+    html = templates.get_template("prospects.html").render(
+        queue=pv.load_queue(), msg=None, nav=NAV, active_view="prospects",
+        clock="", badges={}, tab="visits", route=None,
+    )
+    assert "Save note" in html and "Busy at 9am" in html

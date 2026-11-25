@@ -42,6 +42,9 @@ class Prospect(TimestampMixin, Base):
     # Hand-added stub awaiting the Lead Discovery run's research pass —
     # record_prospect fills the row in place and clears this.
     needs_research: Mapped[bool] = mapped_column(default=False)
+    # Arda's own running notes (visits tab), timestamped lines. Carried into
+    # the Pipeline: copied on approval, mirrored live once a lead exists.
+    notes: Mapped[str | None] = mapped_column(Text)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     city: Mapped[str | None] = mapped_column(String(100))

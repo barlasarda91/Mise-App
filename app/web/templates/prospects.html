@@ -35,6 +35,7 @@
     {% if p.current_coffee %}<p class="research" style="margin:0 0 8px"><b>Serving now:</b> {{ p.current_coffee }}</p>{% endif %}
     {% if p.matched_lead_id %}<p class="note" style="margin:0 0 8px">Previously in the Pipeline: <a href="/pipeline/lead/{{ p.matched_lead_id }}">lead #{{ p.matched_lead_id }}</a></p>{% endif %}
     {% if p.last_visited_on %}<p class="note" style="margin:0 0 8px">Visited {{ p.last_visited_on }}.</p>{% endif %}
+    {% if p.notes %}<pre style="white-space:pre-wrap;font-family:inherit;font-size:13.5px;margin:0 0 8px;border-left:3px solid var(--ink);padding-left:10px">{{ p.notes }}</pre>{% endif %}
 
     <div class="kv"><span class="ks">Contact</span><span>{{ p.contact or "—" }}{% if p.contact_email %} · {{ p.contact_email }}{% endif %}</span></div>
     <div class="kv"><span class="ks">Where</span><span>{{ p.address or p.city or p.region }}</span></div>
@@ -382,6 +383,16 @@ window.initProspectMap = function () {
     {% if v.walk_in_note %}
     <details style="margin-top:8px"><summary class="note" style="cursor:pointer">Walk-in note</summary><pre style="white-space:pre-wrap;font-family:inherit;margin:6px 0 0">{{ v.walk_in_note }}</pre></details>
     {% endif %}
+    <div id="prospect-note-{{ v.id }}" style="margin-top:10px">
+      {% if v.notes %}<pre style="white-space:pre-wrap;font-family:inherit;font-size:13.5px;margin:0 0 8px;border-left:3px solid var(--ink);padding-left:10px">{{ v.notes }}</pre>{% endif %}
+      <form method="post" action="/prospects/{{ v.id }}/note" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+        <input type="hidden" name="tab" value="visits">
+        <textarea name="text" rows="2" required placeholder="What happened at the shop — who you met, what they said…"
+                  style="flex:1;min-width:200px;border:1px solid var(--ink);background:var(--paper);font-family:var(--font-body);font-size:13.5px;padding:7px 10px"></textarea>
+        <button class="linkish" type="submit">Save note</button>
+      </form>
+      {% if v.lead_id %}<p class="note" style="margin:4px 0 0;font-size:11.5px">Notes log straight onto the Pipeline lead.</p>{% endif %}
+    </div>
     <div style="display:flex;gap:10px;margin-top:12px;align-items:center;flex-wrap:wrap">
       <form method="post" action="/prospects/{{ v.id }}/visit"><input type="hidden" name="tab" value="visits"><input type="hidden" name="action" value="done"><button class="linkish solid" type="submit">Visited ✓</button></form>
       <form method="post" action="/prospects/{{ v.id }}/visit"><input type="hidden" name="tab" value="visits"><input type="hidden" name="action" value="skip"><button class="linkish" type="submit">Remove</button></form>

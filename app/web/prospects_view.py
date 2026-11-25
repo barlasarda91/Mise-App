@@ -114,6 +114,7 @@ def _card(p: Prospect, draft: EmailDraft | None) -> dict:
         "visit_on": p.visit_on,
         "last_visited_on": p.last_visited_on,
         "needs_research": p.needs_research,
+        "notes": p.notes,
     }
 
 
@@ -261,6 +262,8 @@ def approve(prospect_id: int) -> str:
             parts.append(f"DM:\n{p.dm_script}")
         if p.walk_in_note:
             parts.append(f"Walk-in:\n{p.walk_in_note}")
+        if p.notes:
+            parts.append(f"Your notes:\n{p.notes}")
         description = "\n\n".join(parts)
         _create_task_impl(
             s,
@@ -272,6 +275,19 @@ def approve(prospect_id: int) -> str:
             assignee=None,
             source_ref={"lead_id": lead.id},
         )
+
+        # Visit notes jotted before approval ride along as one activity;
+        # notes added after approval mirror themselves live (see add_note).
+        if p.notes:
+            s.add(
+                LeadActivity(
+                    lead_id=lead.id,
+                    type=LeadActivityType.NOTE,
+                    occurred_on=today,
+                    detail=f"Arda's visit notes:\n{p.notes}",
+                    source=ActivitySource.MANUAL,
+                )
+            )
 
         p.status = ProspectStatus.APPROVED
         p.lead_id = lead.id
@@ -518,3 +534,38 @@ def _queue_research() -> bool:
         return trigger_run_soon(routine_id)
     except Exception:
         return False
+
+
+MAX_NOTES_CHARS = 8000
+
+
+def add_note(prospect_id: int, text: str) -> str:
+    """Append a timestamped note to the prospect (visits tab composer). It
+    shows on the review card, rides into the Pipeline on approval, and when
+    the prospect is already a lead it mirrors straight onto the lead's
+    activity timeline as a visit touchpoint."""
+    text = (text or "").strip()
+    if not text:
+        return "Write the note first."
+    text = text[:2000]
+    today = _today()
+    stamp = today.strftime("%b %d")
+    with db_session() as s:
+        p = s.get(Prospect, prospect_id)
+        if p is None:
+            return "Prospect not found."
+        line = f"[{stamp}] {text}"
+        p.notes = (f"{p.notes}\n{line}" if p.notes else line)[-MAX_NOTES_CHARS:]
+        mirrored = ""
+        if p.lead_id:
+            s.add(
+                LeadActivity(
+                    lead_id=p.lead_id,
+                    type=LeadActivityType.VISIT,
+                    occurred_on=today,
+                    detail=text,
+                    source=ActivitySource.MANUAL,
+                )
+            )
+            mirrored = " — logged on the Pipeline lead too"
+        return f"Note saved on {p.business_name}{mirrored}."
