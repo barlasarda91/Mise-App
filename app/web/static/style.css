@@ -311,6 +311,18 @@ select.busy{opacity:.55;pointer-events:none}
 }
 .batchbar.show{transform:none}
 .batchbar[hidden]{display:none}
+body:has(.batchbar:not([hidden])) main{padding-bottom:76px}
+/* Prospects filter bar */
+.fbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 6px;border:1px solid var(--line);background:var(--panel);padding:9px 10px}
+.fbar .flbl{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.14em;color:var(--ink-soft);margin:0 2px 0 6px}
+.fbar .flbl:first-child{margin-left:0}
+.fchip{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--line);background:var(--paper);padding:5px 9px;cursor:pointer;color:var(--ink-soft)}
+.fchip:hover:not(:disabled){border-color:var(--ink);color:var(--ink)}
+.fchip.on{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.fchip:disabled{opacity:.35;cursor:default}
+.fchip .ct{opacity:.65}
+.fchip.fclear{border-color:var(--ember);color:var(--ember)}
+.psel{width:15px;height:15px;accent-color:var(--ink);flex:none}
 .batchbar .linkish{color:var(--paper);border:1px solid var(--paper);padding:8px 13px}
 .batchbar .linkish.solid{background:var(--ember);border-color:var(--ember)}
 .statuspill{display:none;cursor:pointer}

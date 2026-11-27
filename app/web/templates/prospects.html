@@ -23,10 +23,10 @@
 <div class="note" style="margin:0 0 14px">Found by the Lead Discovery routine (daily, 7:30 AM). <b>Approve</b> moves the lead to the Pipeline at New with an outreach task — the routine never writes emails; outreach is yours, from the card. Each card carries two separate tags: <b>county</b> (groups the queue; defaults from the discovery territory) and <b>reach-out method</b> (the ember pill; defaults to Email when the card has an address, DM otherwise) — change either from the selectors on the card. <b>Mute</b> hides it for 60 days. <b>Reject</b> means it's never suggested again. Rejecting or muting discards its unsent draft. · <a href="/prospects/log">Discovery log &amp; analytics →</a></div>
 
 {% macro prospect_card(p, actions) %}
-<div class="box" id="prospect-{{ p.id }}">
+<div class="box pcard" id="prospect-{{ p.id }}" data-pid="{{ p.id }}" data-county="{{ p.county }}" data-reach="{{ p.reach }}" data-segment="{{ p.segment }}" data-fit="{{ p.fit }}">
   <div class="box-hd">
-    <span class="lbl">{{ p.name }}</span>
-    <span class="ix">{% if p.needs_research %}<span style="color:var(--ember)">RESEARCH QUEUED</span> · {{ (p.city or p.region) | upper }}{% else %}{{ p.segment | upper }} · {{ (p.city or p.region) | upper }} · FIT {{ p.fit }}/5{% endif %} · <span style="color:var(--ember)">{{ p.reach | upper }}</span></span>
+    <span class="lbl" style="display:flex;align-items:center;gap:8px">{% if actions %}<input type="checkbox" class="psel" value="{{ p.id }}" title="Select for bulk tagging" style="margin:0">{% endif %}{{ p.name }}</span>
+    <span class="ix">{% if p.needs_research %}<span style="color:var(--ember)">RESEARCH QUEUED</span> · {{ (p.city or p.region) | upper }}{% else %}{{ p.segment | upper }} · {{ (p.city or p.region) | upper }} · FIT {{ p.fit }}/5{% endif %} · <span class="reachpill" style="color:var(--ember)">{{ p.reach | upper }}</span></span>
   </div>
   <div class="box-bd" style="font-size:14px">
     <p class="research" style="margin:0 0 8px">{{ p.why }}</p>
@@ -302,14 +302,188 @@ window.initProspectMap = function () {
 {% set review_actions = [("approve", "Approve → Pipeline", true), ("visit", "Visit today", false), ("mute", "Mute 60 days", false), ("reject", "Reject", false)] %}
 <h2 class="note" style="font-size:12px;margin:18px 0 10px">AWAITING REVIEW · {{ "%02d" | format(queue.review | length) }}</h2>
 {% if queue.review %}
+
+<div class="fbar" id="fbar">
+  <span class="flbl">COUNTY</span>
+  {% for c in queue.counties %}<button type="button" class="fchip" data-f="county" data-v="{{ c }}">{{ c | replace(" County", "") }}<span class="ct"></span></button>{% endfor %}
+  <span class="flbl">REACH</span>
+  {% for r in queue.reaches %}<button type="button" class="fchip" data-f="reach" data-v="{{ r }}">{{ r }}<span class="ct"></span></button>{% endfor %}
+  <span class="flbl">SEGMENT</span>
+  {% for g in queue.segments %}<button type="button" class="fchip" data-f="segment" data-v="{{ g }}">{{ g }}<span class="ct"></span></button>{% endfor %}
+  <button type="button" class="fchip" data-f="fit" data-v="4">Fit 4+<span class="ct"></span></button>
+  <button type="button" class="fchip fclear" id="fclear" hidden>✕ Clear</button>
+  <span class="note" id="fshown" style="font-size:11px"></span>
+</div>
+
 {% for g in queue.groups %}
-<h2 class="note" style="font-size:12px;margin:20px 0 10px">▸ {{ g.name | upper }} · {{ "%02d" | format(g.cards | length) }}</h2>
+<div class="pgroup" data-county="{{ g.name }}">
+<h2 class="note" style="font-size:12px;margin:20px 0 10px">▸ {{ g.name | upper }} · <span class="gct">{{ "%02d" | format(g.cards | length) }}</span></h2>
 <div class="grid2">
   {% for p in g.cards %}
   <div>{{ prospect_card(p, review_actions) }}</div>
   {% endfor %}
 </div>
+</div>
 {% endfor %}
+
+<div class="batchbar" id="pBatchBar" hidden>
+  <span id="pBatchCount">0 SELECTED</span>
+  <form method="post" action="/prospects/tag/batch" id="pBatchForm" style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap">
+    <select id="pBatchChoice" style="font-family:var(--font-mono);font-size:11px;border:1px solid var(--paper);background:var(--ink);color:var(--paper);padding:6px 8px">
+      <optgroup label="Set county">
+        {% for c in queue.counties %}<option value="county|{{ c }}">{{ c }}</option>{% endfor %}
+        <option value="county|__new__">Other county…</option>
+        <option value="county|">Automatic county</option>
+      </optgroup>
+      <optgroup label="Set reach-out">
+        {% for r in queue.reaches %}<option value="reach_method|{{ r }}">{{ r }}</option>{% endfor %}
+        <option value="reach_method|">Automatic reach</option>
+      </optgroup>
+    </select>
+    <input type="hidden" name="field"><input type="hidden" name="value">
+    <button class="linkish solid" type="submit">APPLY</button>
+  </form>
+  <button class="linkish" type="button" id="pBatchClear">CLEAR</button>
+</div>
+
+<script>
+(function () {
+  var cards = function () { return Array.prototype.slice.call(document.querySelectorAll('.pcard')); };
+  var chips = Array.prototype.slice.call(document.querySelectorAll('#fbar .fchip:not(.fclear)'));
+  var state = { county: new Set(), reach: new Set(), segment: new Set(), fit: false };
+
+  function cardMatches(d, skip) {
+    if (skip !== 'county' && state.county.size && !state.county.has(d.county)) return false;
+    if (skip !== 'reach' && state.reach.size && !state.reach.has(d.reach)) return false;
+    if (skip !== 'segment' && state.segment.size && !state.segment.has(d.segment)) return false;
+    if (skip !== 'fit' && state.fit && +d.fit < 4) return false;
+    return true;
+  }
+  function apply() {
+    var shown = 0;
+    cards().forEach(function (c) {
+      var ok = cardMatches(c.dataset, null);
+      var cell = c.closest('.grid2 > div') || c;
+      cell.hidden = !ok;
+      if (ok) shown++;
+    });
+    document.querySelectorAll('.pgroup').forEach(function (g) {
+      var vis = g.querySelectorAll('.grid2 > div:not([hidden])').length;
+      g.hidden = vis === 0;
+      var ct = g.querySelector('.gct');
+      if (ct) ct.textContent = String(vis).padStart(2, '0');
+    });
+    // Chip counts: what picking this chip would show, given the other groups.
+    chips.forEach(function (ch) {
+      var f = ch.dataset.f, v = ch.dataset.v, n = 0;
+      cards().forEach(function (c) {
+        var d = c.dataset;
+        if (!cardMatches(d, f)) return;
+        if (f === 'fit' ? +d.fit >= 4 : d[f] === v) n++;
+      });
+      ch.querySelector('.ct').textContent = ' ' + n;
+      ch.disabled = n === 0 && !ch.classList.contains('on');
+    });
+    var any = state.county.size || state.reach.size || state.segment.size || state.fit;
+    document.getElementById('fclear').hidden = !any;
+    document.getElementById('fshown').textContent = any ? shown + ' shown' : '';
+    var h = [];
+    ['county', 'reach', 'segment'].forEach(function (f) {
+      if (state[f].size) h.push(f + ':' + Array.from(state[f]).map(encodeURIComponent).join(','));
+    });
+    if (state.fit) h.push('fit');
+    history.replaceState(null, '', location.pathname + location.search + (h.length ? '#f=' + h.join(';') : ''));
+  }
+  document.getElementById('fbar').addEventListener('click', function (e) {
+    var ch = e.target.closest('.fchip'); if (!ch) return;
+    if (ch.id === 'fclear') {
+      state = { county: new Set(), reach: new Set(), segment: new Set(), fit: false };
+      chips.forEach(function (c) { c.classList.remove('on'); });
+      apply(); return;
+    }
+    var f = ch.dataset.f;
+    ch.classList.toggle('on');
+    if (f === 'fit') state.fit = ch.classList.contains('on');
+    else if (ch.classList.contains('on')) state[f].add(ch.dataset.v);
+    else state[f].delete(ch.dataset.v);
+    apply();
+  });
+  // Restore filters from the URL hash.
+  (location.hash.match(/^#f=(.+)/) || [])[1] && (location.hash.slice(3).split(';').forEach(function (part) {
+    if (part === 'fit') { state.fit = true; return; }
+    var kv = part.split(':'); if (kv.length !== 2 || !(kv[0] in state)) return;
+    kv[1].split(',').forEach(function (v) { state[kv[0]].add(decodeURIComponent(v)); });
+  }));
+  chips.forEach(function (ch) {
+    var f = ch.dataset.f;
+    if (f === 'fit' ? state.fit : state[f].has && state[f].has(ch.dataset.v)) ch.classList.add('on');
+  });
+  apply();
+
+  // --- Instant tagging: the per-card selects post via fetch, no reload ---
+  document.addEventListener('submit', function (e) {
+    var form = e.target.closest('form.tag-form'); if (!form) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    var field = form.querySelector('[name=field]').value;
+    var value = form.querySelector('[name=value]').value;
+    var card = form.closest('.pcard');
+    fetch(form.action, { method: 'POST', body: new FormData(form), headers: { 'X-Fetch': '1' } })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.ok) { location.reload(); return; }
+        if (field === 'reach_method') {
+          card.dataset.reach = value || card.dataset.reach;
+          var pill = card.querySelector('.reachpill');
+          if (pill && value) pill.textContent = value.toUpperCase();
+          if (!value) { location.reload(); return; } // derived default: let the server recompute
+        } else {
+          var target = document.querySelector('.pgroup[data-county="' + (value || '') + '"] .grid2');
+          if (!value || !target) { location.reload(); return; }
+          card.dataset.county = value;
+          target.appendChild(card.closest('.grid2 > div'));
+        }
+        apply();
+      })
+      .catch(function () { form.submit(); });
+  }, true);
+
+  // --- Bulk tagging bar ---
+  var bar = document.getElementById('pBatchBar');
+  function refreshBar() {
+    var n = document.querySelectorAll('.psel:checked').length;
+    document.getElementById('pBatchCount').textContent = n + ' SELECTED';
+    bar.hidden = n === 0;
+    requestAnimationFrame(function () { bar.classList.toggle('show', n > 0); });
+  }
+  document.addEventListener('change', function (e) {
+    if (e.target.classList && e.target.classList.contains('psel')) refreshBar();
+  });
+  document.getElementById('pBatchClear').addEventListener('click', function () {
+    document.querySelectorAll('.psel:checked').forEach(function (c) { c.checked = false; });
+    refreshBar();
+  });
+  document.getElementById('pBatchForm').addEventListener('submit', function (e) {
+    var form = e.target;
+    var choice = document.getElementById('pBatchChoice').value.split('|');
+    var field = choice[0], value = choice.slice(1).join('|');
+    if (value === '__new__') {
+      value = (window.prompt('County name:') || '').trim();
+      if (!value) { e.preventDefault(); return; }
+    }
+    form.querySelector('[name=field]').value = field;
+    form.querySelector('[name=value]').value = value;
+    form.querySelectorAll('input[name=ids]').forEach(function (i) { i.remove(); });
+    var any = false;
+    document.querySelectorAll('.psel:checked').forEach(function (c) {
+      var i = document.createElement('input');
+      i.type = 'hidden'; i.name = 'ids'; i.value = c.value;
+      form.appendChild(i); any = true;
+    });
+    if (!any) e.preventDefault();
+  });
+})();
+</script>
+
 {% else %}
 <div class="note">Nothing waiting. New prospects arrive after each Lead Discovery run. Enable it, or press Run now, in Settings.</div>
 {% endif %}

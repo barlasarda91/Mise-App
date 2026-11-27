@@ -885,3 +885,38 @@ def test_visits_tab_has_note_composer(session_factory, run_id):
         clock="", badges={}, tab="visits", route=None,
     )
     assert "Save note" in html and "Busy at 9am" in html
+
+
+# ---------- queue filtering & tagging ergonomics ----------
+
+
+def test_set_tag_batch(session_factory, run_id):
+    a, _ = _record(session_factory)
+    b, _ = _record(session_factory, business_name="Other Spot", contact_email="o@x.example")
+    msg = pv.set_tag_batch([a["prospect_id"], b["prospect_id"], 999], "reach_method", "Walk-in")
+    assert msg == "2 prospects: reach-out → Walk-in."
+    cards = {c["id"]: c for c in pv.load_queue()["review"]}
+    assert cards[a["prospect_id"]]["reach"] == "Walk-in"
+    assert cards[b["prospect_id"]]["reach"] == "Walk-in"
+    # '' returns them to the derived default (email present → Email).
+    pv.set_tag_batch([a["prospect_id"]], "reach_method", "")
+    assert pv.load_queue()["review"] and {c["id"]: c for c in pv.load_queue()["review"]}[a["prospect_id"]]["reach"] == "Email"
+    assert "Unknown tag" in pv.set_tag_batch([a["prospect_id"]], "fit_score", "5")
+    assert "No prospects selected" in pv.set_tag_batch([], "county", "LA County")
+
+
+def test_queue_renders_filter_bar_and_bulk_bar(session_factory, run_id):
+    from app.main import NAV, templates
+
+    _record(session_factory)
+    _record(session_factory, business_name="Diner Row", segment="volume_diner",
+            contact_email=None, dm_script="hi", walk_in_note="ask", fit_score=5)
+    queue = pv.load_queue()
+    assert queue["segments"] and len(queue["segments"]) == 2
+    html = templates.get_template("prospects.html").render(
+        queue=queue, msg=None, nav=NAV, active_view="prospects", clock="", badges={}, tab="queue"
+    )
+    assert 'class="fbar"' in html and 'data-f="reach"' in html and ">Fit 4+" in html
+    assert 'data-county="Riverside County"' in html and 'data-fit="4"' in html
+    assert 'id="pBatchBar"' in html and 'action="/prospects/tag/batch"' in html
+    assert 'class="psel"' in html

@@ -997,14 +997,29 @@ def prospects_locate():
     return RedirectResponse(f"/prospects?msg={message}", status_code=303)
 
 
+@app.post("/prospects/tag/batch")
+def prospect_tag_batch(ids: list[int] = Form([]), field: str = Form(""), value: str = Form("")):
+    from app.web.prospects_view import set_tag_batch
+
+    try:
+        message = set_tag_batch(ids, field, value)
+    except Exception as exc:
+        message = f"Error: {exc}"
+    return RedirectResponse(f"/prospects?msg={message}", status_code=303)
+
+
 @app.post("/prospects/{prospect_id}/tag")
-def prospect_tag(prospect_id: int, field: str = Form(""), value: str = Form("")):
+def prospect_tag(request: Request, prospect_id: int, field: str = Form(""), value: str = Form("")):
     from app.web.prospects_view import set_tag
 
     try:
         message = set_tag(prospect_id, field, value)
+        ok = not message.startswith(("Unknown", "Prospect not found", "Error"))
     except Exception as exc:
-        message = f"Error: {exc}"
+        message, ok = f"Error: {exc}", False
+    # The queue's tag selects ride fetch so a tag change never reloads the page.
+    if request.headers.get("X-Fetch"):
+        return JSONResponse({"ok": ok, "msg": message})
     return RedirectResponse(f"/prospects?msg={message}", status_code=303)
 
 

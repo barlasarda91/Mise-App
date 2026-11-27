@@ -168,6 +168,7 @@ def load_queue() -> dict:
             reaches = REACH_METHODS + sorted(
                 {c["reach"] for c in review} - set(REACH_METHODS)
             )
+            segments = sorted({c["segment"] for c in review})
             try:
                 from app.tools.places import places_configured
 
@@ -179,6 +180,7 @@ def load_queue() -> dict:
                 "groups": groups,
                 "counties": counties,
                 "reaches": reaches,
+                "segments": segments,
                 "muted": muted,
                 "decided": decided[:RECENT_DECIDED],
                 "visits": visits,
@@ -186,7 +188,7 @@ def load_queue() -> dict:
             }
     except Exception:
         return {"review": [], "groups": [], "counties": [], "reaches": REACH_METHODS,
-                "muted": [], "decided": [], "visits": [], "places_on": False}
+                "segments": [], "muted": [], "decided": [], "visits": [], "places_on": False}
 
 
 def review_count() -> int:
@@ -619,3 +621,26 @@ def _queue_question_run() -> bool:
         return trigger_run_soon(routine_id, delay_seconds=15)
     except Exception:
         return False
+
+
+def set_tag_batch(ids: list[int], field: str, value: str) -> str:
+    """Bulk tagging from the queue's selection bar: one county or reach-out
+    value across every selected card ('' returns them to the derived
+    default)."""
+    if field not in ("county", "reach_method"):
+        return "Unknown tag."
+    value = " ".join((value or "").split())[:60 if field == "county" else 30]
+    label = "county" if field == "county" else "reach-out"
+    changed = 0
+    with db_session() as s:
+        for pid in ids:
+            p = s.get(Prospect, pid)
+            if p is None:
+                continue
+            setattr(p, field, value or None)
+            changed += 1
+    if not changed:
+        return "No prospects selected."
+    if value:
+        return f"{changed} prospect{'s' if changed != 1 else ''}: {label} → {value}."
+    return f"{changed} prospect{'s' if changed != 1 else ''}: {label} back to automatic."
